@@ -23,11 +23,13 @@ const (
 // Session holds what a server uses besides its configuration.
 type Session struct {
 	Store *store.Store
+	// UserID is the user every connection acts as, from store.EnsureLocalUser.
+	UserID int64
 }
 
 // New creates the MCP server with all tools registered.
 func New(cfg config.Config, sess Session) *mcp.Server {
-	d := &tools.Deps{Cfg: cfg, Store: sess.Store}
+	d := &tools.Deps{Cfg: cfg, Store: sess.Store, UserID: sess.UserID}
 	impl := &mcp.Implementation{Name: "agent-lounge-mcp", Title: "agent-lounge-mcp", Version: version.Version}
 	registry := tools.Prepare(d)
 	s := mcp.NewServer(impl, &mcp.ServerOptions{Instructions: tools.Instructions(d)})

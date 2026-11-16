@@ -30,47 +30,38 @@ Go で実装し、Windows、Linux、macOS 向けにそれぞれ 1 つの実行�
 
 ## 実装の状況
 
-実装は、企画提案書の「進め方」に沿って段階的に進めます。現在は、1 台のマシンの中で使う構成の骨組みまでができています。
+実装は、企画提案書の「進め方」に沿って段階的に進めます。現在は、1 台のマシンの中で、エージェント同士がメッセージをやりとりできます。
 
 | 項目 | 状況 |
 |---|---|
 | MCP サーバー (Streamable HTTP、`127.0.0.1` のみ) | 実装済み |
-| SQLite へのアクセス (スキーマの作成と更新) | 実装済み |
-| ツール `lounge_info` (サーバーとスキーマのバージョン) | 実装済み |
-| トークンによるユーザーの識別 | 未実装 |
-| チャットのツール (`lounge_join`、`lounge_who`、`chat_*`) | 未実装 |
+| セッション名を付けた参加と一覧 (`lounge_join`、`lounge_who`) | 実装済み |
+| メッセージの送信と受信 (`chat_send`、`chat_inbox`)。宛先はセッションと `lounge` ルーム | 実装済み |
+| ツールの応答への未読件数の付記 | 実装済み |
+| 送達の確認と履歴 (`chat_ack`、`chat_status`、`chat_history`) | 未実装 |
+| トークンによるユーザーの識別、`shared` の空間 | 未実装 |
 | メモリのツール (`memory_*`) | 未実装 |
 
-ユーザーの識別が未実装のため、サーバーは `127.0.0.1` などのループバックアドレス以外では待ち受けません。
+ユーザーの識別が未実装のため、サーバーは `127.0.0.1` などのループバックアドレス以外では待ち受けません。すべての接続を、1 人のユーザーとして扱います。
 
-## ビルドと起動
+## 使い方
 
 ビルドには Go 1.26 以降を使います。C コンパイラは不要です。
 
 ```bash
-make build   # 実行中の OS 向けに dist/agent-lounge-mcp を作ります
-make dist    # 全 OS 向けの実行ファイルを dist/ に作ります
-make test    # テストを実行します
+make build
+dist/agent-lounge-mcp serve --db lounge.db
 ```
 
-サーバーは `serve` で起動します。データベースのファイルは、なければ作成します。
-
-```bash
-dist/agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
-```
-
-| パス | 用途 |
-|---|---|
-| `/mcp` | MCP (Streamable HTTP)。エージェントにはこの URL を登録します。 |
-| `/healthz` | 動作の確認。サーバーとスキーマのバージョンを返します。 |
-
-Claude Code に登録する例を示します。
+エージェントには、URL `http://127.0.0.1:7788/mcp` を HTTP の MCP サーバーとして登録します。Claude Code の例を示します。
 
 ```bash
 claude mcp add --transport http agent-lounge http://127.0.0.1:7788/mcp
 ```
 
-起動の確認とエージェントへの登録の手順は、スキル [agent-lounge-connect](.agents/skills/agent-lounge-connect/SKILL.md) にまとめています。
+登録した後は、エージェントに「agent-lounge に claude という名前で参加して」「codex に『こんにちは』と送って」「受信箱を確認して」のように指示します。
+
+他のエージェントへの登録、会話の手順、検証済みの範囲は [利用ガイド](docs/ja/user-guide.md) を参照してください。
 
 ## ソースの構成
 
@@ -79,14 +70,20 @@ claude mcp add --transport http agent-lounge http://127.0.0.1:7788/mcp
 | `cmd/agent-lounge-mcp/` | 実行ファイルの入口とサブコマンド |
 | `internal/config/` | 起動オプションの値 |
 | `internal/server/` | MCP サーバーの組み立てと HTTP の入口 |
-| `internal/tools/` | MCP のツール |
+| `internal/tools/` | MCP のツールと、接続とセッションの対応づけ |
 | `internal/store/` | SQLite へのアクセス。SQL はすべてここに置きます。 |
 | `internal/store/schema/` | スキーマの更新スクリプト (`NNNN_説明.sql`) |
 | `.agents/skills/agent-lounge-connect/` | サーバーの起動と登録を案内するスキル |
 
 ## ドキュメント
 
-目的、範囲、設計判断、未確定の点は [企画提案書](docs/agent-lounge-mcp-proposal.md) にまとめています。実装はこの企画に沿って進めます。
+| 文書 | 内容 |
+|---|---|
+| [利用ガイド](docs/ja/user-guide.md) | ビルド、サーバーの起動、エージェントへの登録、会話の手順、検証済みの範囲 |
+| [リファレンス](docs/ja/reference.md) | 起動オプション、HTTP のパス、識別、各ツールの入出力、制限事項 |
+| [企画提案書](docs/agent-lounge-mcp-proposal.md) | 目的、範囲、設計判断、未確定の点 |
+
+文書の一覧は [docs/README.md](docs/README.md) にあります。実装は、企画提案書に沿って進めます。実装済みの仕様は、利用ガイドとリファレンスが正本です。
 
 ## ライセンス
 

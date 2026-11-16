@@ -1,11 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"io"
+	"log"
 	"net"
+	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -46,6 +51,10 @@ func TestParseServeFlags(t *testing.T) {
 
 // Starts the server as the serve subcommand does, calls a tool over HTTP and stops it.
 func TestServe(t *testing.T) {
+	logged := &syncBuffer{}
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
 	cfg := config.Default()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.DBPath = filepath.Join(t.TempDir(), "lounge.db")
@@ -71,8 +80,11 @@ func TestServe(t *testing.T) {
 		t.Fatalf("got %+v", out)
 	}
 
-	// The client keeps an event stream open; the server still stops within the timeout.
+	// The client keeps an event stream open; the server still stops within the timeout, and
+	// announces the shutdown before it waits.
 	cancel()
+	testutil.WaitFor(t, func() bool { return strings.Contains(logged.String(), "shutting down (waiting up to 100ms") },
+		"the shutdown is announced")
 	select {
 	case err := <-done:
 		if err != nil {
@@ -81,4 +93,22 @@ func TestServe(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("serve did not stop")
 	}
+}
+
+// syncBuffer collects log output written from the server's goroutine.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }

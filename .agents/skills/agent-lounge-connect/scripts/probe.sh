@@ -47,10 +47,12 @@ session=$(tr -d '\r' <"$tmp/headers" | awk -F': ' 'tolower($1) == "mcp-session-i
 
 rpc '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
 tools=$(rpc '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
-case $tools in
-*'"lounge_info"'*) ;;
-*) ng "tools/list does not contain lounge_info: $tools" ;;
-esac
+for tool in lounge_join lounge_who chat_send chat_inbox lounge_info; do
+	case $tools in
+	*"\"name\":\"$tool\""*) ;;
+	*) ng "tools/list does not contain $tool: $tools" ;;
+	esac
+done
 names=$(printf '%s' "$tools" | grep -o '"name":"[^"]*"' | cut -d'"' -f4 | tr '\n' ' ')
 echo "OK: tools ${names% }"
 

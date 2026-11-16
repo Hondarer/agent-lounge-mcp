@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -97,4 +98,16 @@ func ToolSet(t *testing.T, cs *mcp.ClientSession) map[string]bool {
 		set[tool.Name] = true
 	}
 	return set
+}
+
+// WaitFor polls cond every 5ms until it holds, failing the test with msg after 5 seconds.
+func WaitFor(t *testing.T, cond func() bool, msg string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatal(msg)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }

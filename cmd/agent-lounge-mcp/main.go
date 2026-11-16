@@ -86,13 +86,18 @@ func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error 
 		return err
 	}
 	defer st.Close()
+	// Requests are not authenticated: every connection acts as the one local user.
+	userID, err := st.EnsureLocalUser(ctx)
+	if err != nil {
+		return err
+	}
 
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
 		return err
 	}
-	sess := server.Session{Store: st}
+	sess := server.Session{Store: st, UserID: userID}
 	hs := &http.Server{Handler: server.Handler(server.New(cfg, sess), sess)}
 
 	log.Printf("version %s, database %s", version.Version, cfg.DBPath)
@@ -108,6 +113,10 @@ func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error 
 		return err
 	case <-ctx.Done():
 	}
+
+	// Agents keep an event stream open, so stopping usually takes the whole timeout: say so at
+	// once, or the operator cannot tell whether the signal was received.
+	log.Printf("shutting down (waiting up to %s for open connections)", cfg.ShutdownTimeout)
 
 	// Let in-flight requests finish, then drop what remains (such as open event streams).
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)

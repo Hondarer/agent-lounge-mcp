@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite" // pure Go driver registered as "sqlite"; no C compiler needed
 )
@@ -15,6 +16,8 @@ import (
 // Store is a handle to the database file. It is safe for concurrent use.
 type Store struct {
 	db *sql.DB
+	// now is the clock; tests replace it.
+	now func() time.Time
 }
 
 // pragmas are applied to every connection of the pool.
@@ -46,7 +49,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	s := &Store{db: db}
+	s := &Store{db: db, now: time.Now}
 	if err := s.migrate(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("open %s: %w", path, err)

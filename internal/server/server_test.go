@@ -26,7 +26,11 @@ func newServer(t *testing.T) (*mcp.Server, Session) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	sess := Session{Store: st}
+	userID, err := st.EnsureLocalUser(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := Session{Store: st, UserID: userID}
 	return New(cfg, sess), sess
 }
 
@@ -54,7 +58,7 @@ type info struct {
 func TestListTools(t *testing.T) {
 	cs := connect(t)
 	names := testutil.ToolSet(t, cs)
-	for _, want := range []string{"lounge_info"} {
+	for _, want := range []string{"lounge_join", "lounge_who", "chat_send", "chat_inbox", "lounge_info"} {
 		if !names[want] {
 			t.Errorf("tool %q is not registered", want)
 		}
