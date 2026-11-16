@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"io"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,9 +16,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
 	"github.com/hondarer/agent-lounge-mcp/internal/server"
 	"github.com/hondarer/agent-lounge-mcp/internal/testutil"
+	"github.com/hondarer/agent-lounge-mcp/internal/tools"
 )
 
 func parse(args ...string) (config.Config, error) {
@@ -34,15 +39,19 @@ func TestParseServeFlags(t *testing.T) {
 		t.Errorf("no options: got %+v, want the defaults", cfg)
 	}
 
-	cfg, err = parse("--listen", "127.0.0.1:9000", "--db", "/tmp/x.db")
+	cfg, err = parse("--listen", "127.0.0.1:9000", "--db", "/tmp/x.db", "--inbox-wait-max", "2m")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Listen != "127.0.0.1:9000" || cfg.DBPath != "/tmp/x.db" {
+	if cfg.Listen != "127.0.0.1:9000" || cfg.DBPath != "/tmp/x.db" || cfg.InboxWaitMax != 2*time.Minute {
 		t.Errorf("got %+v", cfg)
 	}
+	if cfg, err = parse("--inbox-wait-max", "0"); err != nil || cfg.InboxWaitMax != 0 {
+		t.Errorf("--inbox-wait-max 0: %+v %v", cfg, err)
+	}
 
-	for _, args := range [][]string{{"--listen", "0.0.0.0:7788"}, {"--db", ""}, {"extra"}, {"--unknown"}} {
+	for _, args := range [][]string{{"--listen", "0.0.0.0:7788"}, {"--db", ""}, {"extra"}, {"--unknown"},
+		{"--inbox-wait-max", "11m"}, {"--inbox-wait-max", "-1s"}, {"--inbox-wait-max", "60"}} {
 		if _, err := parse(args...); err == nil {
 			t.Errorf("%v was accepted", args)
 		}
@@ -92,6 +101,179 @@ func TestServe(t *testing.T) {
 		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("serve did not stop")
+	}
+}
+
+// Stops the server while a client waits in chat_inbox: the waiting call returns the shutdown
+// error, the client receives the log notification, and the server stops within the timeout.
+func TestServeStopsWhileWaiting(t *testing.T) {
+	logged := &syncBuffer{}
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	cfg := config.Default()
+	cfg.Listen = "127.0.0.1:0"
+	cfg.DBPath = filepath.Join(t.TempDir(), "lounge.db")
+	cfg.ShutdownTimeout = 500 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ready := make(chan net.Addr, 1)
+	done := make(chan error, 1)
+	go func() { done <- serve(ctx, cfg, ready) }()
+	var addr net.Addr
+	select {
+	case addr = <-ready:
+	case err := <-done:
+		t.Fatalf("serve stopped early: %v", err)
+	}
+
+	logs := make(chan *mcp.LoggingMessageParams, 1)
+	cs := testutil.ConnectHTTPWith(t, "http://"+addr.String()+server.MCPPath, &mcp.ClientOptions{
+		LoggingMessageHandler: func(_ context.Context, req *mcp.LoggingMessageRequest) { logs <- req.Params },
+	})
+	if err := cs.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "warning"}); err != nil {
+		t.Fatal(err)
+	}
+	testutil.Call[struct{}](t, cs, "lounge_join", map[string]any{"name": "waiter"})
+
+	waited := make(chan *mcp.CallToolResult, 1)
+	go func() {
+		res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "chat_inbox", Arguments: map[string]any{"wait_seconds": 30}})
+		if err != nil {
+			res = &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}
+		}
+		waited <- res
+	}()
+	// Let the call start waiting. If it has not yet, it fails with the same error on arrival.
+	time.Sleep(200 * time.Millisecond)
+
+	cancel()
+	select {
+	case res := <-waited:
+		if !res.IsError || testutil.Text(res) != tools.ShutdownMessage {
+			t.Errorf("waiting chat_inbox returned %q", testutil.Text(res))
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the waiting chat_inbox did not return")
+	}
+	select {
+	case p := <-logs:
+		if p.Level != "warning" || p.Data != tools.ShutdownMessage {
+			t.Errorf("log notification = %+v", p)
+		}
+	case <-time.After(5 * time.Second):
+		t.Error("no log notification")
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("serve did not stop")
+	}
+	if out := logged.String(); !strings.Contains(out, "shutting down") || !strings.Contains(out, "stopped") {
+		t.Errorf("log output:\n%s", out)
+	}
+}
+
+// startServe runs serve in the background with cfg on a free loopback port. It returns the
+// address, the function that stops the server (as a signal does), and the result of serve.
+func startServe(t *testing.T, cfg config.Config) (net.Addr, context.CancelFunc, <-chan error) {
+	t.Helper()
+	cfg.Listen = "127.0.0.1:0"
+	cfg.DBPath = filepath.Join(t.TempDir(), "lounge.db")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	ready := make(chan net.Addr, 1)
+	done := make(chan error, 1)
+	go func() { done <- serve(ctx, cfg, ready) }()
+	select {
+	case addr := <-ready:
+		return addr, cancel, done
+	case err := <-done:
+		t.Fatalf("serve stopped early: %v", err)
+		return nil, nil, nil
+	}
+}
+
+// healthState returns the state reported by /healthz, or "" when it does not answer.
+func healthState(addr net.Addr) string {
+	res, err := http.Get("http://" + addr.String() + server.HealthPath)
+	if err != nil {
+		return ""
+	}
+	defer res.Body.Close()
+	var body struct {
+		State string `json:"state"`
+	}
+	if res.StatusCode != http.StatusOK || json.NewDecoder(res.Body).Decode(&body) != nil {
+		return ""
+	}
+	return body.State
+}
+
+// While an agent stays connected, the server keeps answering after the stop begins: a new tool
+// call gets the shutdown error and /healthz reports "stopping". It stops within the timeout.
+func TestServeGracePeriod(t *testing.T) {
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	cfg := config.Default()
+	cfg.ShutdownTimeout = 500 * time.Millisecond
+	addr, stop, done := startServe(t, cfg)
+
+	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
+	testutil.Call[struct{}](t, cs, "lounge_join", map[string]any{"name": "agent"})
+	if got := healthState(addr); got != "ok" {
+		t.Fatalf("health before the stop = %q", got)
+	}
+
+	start := time.Now()
+	stop()
+	testutil.WaitFor(t, func() bool { return healthState(addr) == "stopping" }, "/healthz does not report stopping")
+	if msg := testutil.CallErr(t, cs, "lounge_who", nil); msg != tools.ShutdownMessage {
+		t.Errorf("tool call while stopping: %q", msg)
+	}
+	if elapsed := time.Since(start); elapsed >= cfg.ShutdownTimeout {
+		t.Fatalf("the checks took %s, longer than the grace period", elapsed)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve did not stop")
+	}
+	if elapsed := time.Since(start); elapsed > cfg.ShutdownTimeout+time.Second {
+		t.Errorf("stopping took %s, want about %s", elapsed, cfg.ShutdownTimeout)
+	}
+}
+
+// Without connected agents, the server stops at once instead of waiting for the timeout.
+func TestServeStopsPromptlyWithoutClients(t *testing.T) {
+	log.SetOutput(io.Discard)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	cfg := config.Default()
+	cfg.ShutdownTimeout = 5 * time.Second
+	addr, stop, done := startServe(t, cfg)
+	if got := healthState(addr); got != "ok" {
+		t.Fatalf("health = %q", got)
+	}
+
+	start := time.Now()
+	stop()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("serve did not stop")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Errorf("stopping without clients took %s", elapsed)
 	}
 }
 

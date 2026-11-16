@@ -45,6 +45,8 @@ type Sent struct {
 	MessageID  int64
 	SentAt     time.Time
 	Recipients []string // session names
+	// RecipientIDs are the session IDs of Recipients, in the same order.
+	RecipientIDs []int64
 }
 
 // InboxMessage is a message handed to its recipient.
@@ -246,7 +248,7 @@ func (s *Store) SendToSession(ctx context.Context, sender Session, to, body stri
 			"INSERT INTO deliveries (message_id, recipient_session_id, queued_at) VALUES (?, ?, ?)", id, recipient, millis(now)); err != nil {
 			return err
 		}
-		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: []string{to}}
+		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: []string{to}, RecipientIDs: []int64{recipient}}
 		return nil
 	})
 	if err != nil {
@@ -286,21 +288,24 @@ func (s *Store) SendToRoom(ctx context.Context, sender Session, room, body strin
 			return err
 		}
 		rows, err := tx.QueryContext(ctx, `
-			SELECT s.name FROM deliveries d JOIN sessions s ON s.id = d.recipient_session_id
+			SELECT s.id, s.name FROM deliveries d JOIN sessions s ON s.id = d.recipient_session_id
 			WHERE d.message_id = ? ORDER BY s.name`, id)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
 		recipients := []string{}
+		var recipientIDs []int64
 		for rows.Next() {
+			var recipientID int64
 			var name string
-			if err := rows.Scan(&name); err != nil {
+			if err := rows.Scan(&recipientID, &name); err != nil {
 				return err
 			}
 			recipients = append(recipients, name)
+			recipientIDs = append(recipientIDs, recipientID)
 		}
-		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: recipients}
+		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: recipients, RecipientIDs: recipientIDs}
 		return rows.Err()
 	})
 	if err != nil {

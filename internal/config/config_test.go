@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestValidate(t *testing.T) {
 	if err := Default().Validate(); err != nil {
@@ -25,6 +28,20 @@ func TestValidate(t *testing.T) {
 		cfg.DBPath = db
 		if err := cfg.Validate(); err == nil {
 			t.Errorf("--db %q was accepted", db)
+		}
+	}
+	for _, wait := range []time.Duration{0, time.Second, MaxInboxWaitMax} {
+		cfg := Default()
+		cfg.InboxWaitMax = wait
+		if err := cfg.Validate(); err != nil {
+			t.Errorf("--inbox-wait-max %s: %v", wait, err)
+		}
+	}
+	for _, wait := range []time.Duration{-time.Second, MaxInboxWaitMax + time.Second} {
+		cfg := Default()
+		cfg.InboxWaitMax = wait
+		if err := cfg.Validate(); err == nil {
+			t.Errorf("--inbox-wait-max %s was accepted", wait)
 		}
 	}
 }

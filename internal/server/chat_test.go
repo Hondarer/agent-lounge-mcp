@@ -58,7 +58,7 @@ func clients(t *testing.T, names ...string) []*mcp.ClientSession {
 	s, _ := newServer(t)
 	var out []*mcp.ClientSession
 	for _, name := range names {
-		cs := testutil.Connect(t, s, nil)
+		cs := testutil.Connect(t, s.MCP, nil)
 		testutil.Call[joined](t, cs, "lounge_join", map[string]any{"name": name, "agent": name + "-agent"})
 		out = append(out, cs)
 	}
@@ -75,14 +75,14 @@ func unreadOf(t *testing.T, p *int) int {
 
 func TestJoinAndWho(t *testing.T) {
 	s, _ := newServer(t)
-	alice := testutil.Connect(t, s, nil)
+	alice := testutil.Connect(t, s.MCP, nil)
 
 	j := testutil.Call[joined](t, alice, "lounge_join", map[string]any{"name": "alice", "agent": "claude-code@host-a"})
 	if j.Name != "alice" || j.Agent != "claude-code@host-a" || j.User != "local" || j.Resumed || !slices.Equal(j.Rooms, []string{"lounge"}) || unreadOf(t, j.Unread) != 0 {
 		t.Fatalf("join = %+v", j)
 	}
 
-	bob := testutil.Connect(t, s, nil)
+	bob := testutil.Connect(t, s.MCP, nil)
 	auto := testutil.Call[joined](t, bob, "lounge_join", nil)
 	if !strings.HasPrefix(auto.Name, "session-") {
 		t.Errorf("generated name = %q", auto.Name)
@@ -101,7 +101,7 @@ func TestJoinAndWho(t *testing.T) {
 
 func TestJoinRejectsInvalidArguments(t *testing.T) {
 	s, _ := newServer(t)
-	cs := testutil.Connect(t, s, nil)
+	cs := testutil.Connect(t, s.MCP, nil)
 	for _, name := range []string{"has space", "日本語", strings.Repeat("a", 65), "a/b"} {
 		if msg := testutil.CallErr(t, cs, "lounge_join", map[string]any{"name": name}); !strings.Contains(msg, "invalid name") {
 			t.Errorf("name %q: %s", name, msg)
@@ -118,7 +118,7 @@ func TestJoinRejectsInvalidArguments(t *testing.T) {
 
 func TestToolsRequireJoin(t *testing.T) {
 	s, _ := newServer(t)
-	cs := testutil.Connect(t, s, nil)
+	cs := testutil.Connect(t, s.MCP, nil)
 	for name, args := range map[string]map[string]any{
 		"lounge_who": nil,
 		"chat_send":  {"to": "x", "body": "hi"},
@@ -243,10 +243,12 @@ func TestUnreadLineInText(t *testing.T) {
 	alice, bob := cs[0], cs[1]
 	testutil.Call[sent](t, alice, "chat_send", map[string]any{"to": "bob", "body": "x"})
 
-	for name, wantLine := range map[string]string{
-		"lounge_info": "Unread messages: 1 (call chat_inbox to read them)",
-		"chat_inbox":  "Unread messages: 0",
+	// In this order: chat_inbox reads the message that lounge_info reports.
+	for _, tc := range []struct{ name, wantLine string }{
+		{"lounge_info", "Unread messages: 1 (call chat_inbox to read them)"},
+		{"chat_inbox", "Unread messages: 0"},
 	} {
+		name, wantLine := tc.name, tc.wantLine
 		res, err := bob.CallTool(context.Background(), &mcp.CallToolParams{Name: name})
 		if err != nil || res.IsError {
 			t.Fatalf("%s: %v %v", name, err, res)
@@ -273,9 +275,9 @@ func TestUnreadLineInText(t *testing.T) {
 
 func TestRejoinContinuesSession(t *testing.T) {
 	s, _ := newServer(t)
-	alice := testutil.Connect(t, s, nil)
+	alice := testutil.Connect(t, s.MCP, nil)
 	testutil.Call[joined](t, alice, "lounge_join", map[string]any{"name": "alice"})
-	bob := testutil.Connect(t, s, nil)
+	bob := testutil.Connect(t, s.MCP, nil)
 	testutil.Call[joined](t, bob, "lounge_join", map[string]any{"name": "bob", "agent": "codex"})
 	testutil.Call[sent](t, alice, "chat_send", map[string]any{"to": "bob", "body": "while you were away"})
 
@@ -291,7 +293,7 @@ func TestRejoinContinuesSession(t *testing.T) {
 	}, "bob is still shown as connected after its connection ended")
 
 	// A new connection is not joined until it joins again with the same name.
-	bob2 := testutil.Connect(t, s, nil)
+	bob2 := testutil.Connect(t, s.MCP, nil)
 	if msg := testutil.CallErr(t, bob2, "chat_inbox", nil); !strings.Contains(msg, "not joined") {
 		t.Errorf("inbox before rejoining: %s", msg)
 	}
@@ -307,9 +309,9 @@ func TestRejoinContinuesSession(t *testing.T) {
 
 func TestLaterJoinTakesNameOver(t *testing.T) {
 	s, _ := newServer(t)
-	first := testutil.Connect(t, s, nil)
+	first := testutil.Connect(t, s.MCP, nil)
 	testutil.Call[joined](t, first, "lounge_join", map[string]any{"name": "worker"})
-	second := testutil.Connect(t, s, nil)
+	second := testutil.Connect(t, s.MCP, nil)
 	if j := testutil.Call[joined](t, second, "lounge_join", map[string]any{"name": "worker"}); !j.Resumed {
 		t.Errorf("second join = %+v", j)
 	}

@@ -36,7 +36,13 @@ func Connect(t *testing.T, srv *mcp.Server, copts *mcp.ClientOptions) *mcp.Clien
 // closed when the test ends.
 func ConnectHTTP(t *testing.T, endpoint string) *mcp.ClientSession {
 	t.Helper()
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).
+	return ConnectHTTPWith(t, endpoint, nil)
+}
+
+// ConnectHTTPWith is ConnectHTTP with client options.
+func ConnectHTTPWith(t *testing.T, endpoint string, copts *mcp.ClientOptions) *mcp.ClientSession {
+	t.Helper()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, copts).
 		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: endpoint}, nil)
 	if err != nil {
 		t.Fatal(err)

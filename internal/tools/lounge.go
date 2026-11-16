@@ -17,21 +17,25 @@ const (
 	maxSessionsList = 200
 )
 
+// sessionNameRule describes sessionNameRE to agents.
+const sessionNameRule = "1 to 64 characters from A-Z a-z 0-9 . _ - @"
+
 // sessionNameRE is the form of a session name.
 var sessionNameRE = regexp.MustCompile(`^[A-Za-z0-9._@-]{1,64}$`)
 
 func registerLounge(r *Registry, d *Deps) {
 	add(r, groupChat, &mcp.Tool{
-		Name:  "lounge_join",
+		Name:  toolJoin,
 		Title: "Join the lounge",
 		Description: "Join the lounge under a session name. Call this first: the chat tools work only after joining. " +
 			"Other sessions address messages to this name. Joining with a name used before continues that session and its unread messages " +
-			"(if another connection is using the name, it loses the session). After a reconnect, join again with the same name.",
+			"(if another connection is using the name, it loses the session). After a reconnect, join again with the same name. " +
+			"If you do not know how to use the lounge, call lounge_help first.",
 		Annotations: additive(true),
 	}, d.loungeJoin)
 
 	add(r, groupChat, &mcp.Tool{
-		Name:        "lounge_who",
+		Name:        toolWho,
 		Title:       "List sessions and rooms",
 		Description: "List the sessions that joined (name, agent, whether connected now, last activity) and the rooms. Use a session name as the 'to' of chat_send.",
 		Annotations: readOnly(),
@@ -56,7 +60,7 @@ type JoinOutput struct {
 
 func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in JoinInput) (*mcp.CallToolResult, JoinOutput, error) {
 	if in.Name != "" && !sessionNameRE.MatchString(in.Name) {
-		return nil, JoinOutput{}, fmt.Errorf("invalid name %q: use 1 to 64 characters from A-Z a-z 0-9 . _ - @", in.Name)
+		return nil, JoinOutput{}, fmt.Errorf("invalid name %q: use %s", in.Name, sessionNameRule)
 	}
 	if in.Agent != nil && utf8.RuneCountInString(*in.Agent) > maxAgentLen {
 		return nil, JoinOutput{}, fmt.Errorf("agent is too long: %d characters, at most %d", utf8.RuneCountInString(*in.Agent), maxAgentLen)
@@ -69,7 +73,7 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	if err != nil {
 		return nil, JoinOutput{}, err
 	}
-	d.presence.bind(req.Session, sess)
+	d.notify.wake(d.presence.bind(req.Session, sess)...)
 	return nil, JoinOutput{Name: sess.Name, Agent: sess.Agent, User: store.LocalUser, Resumed: resumed, Rooms: rooms}, nil
 }
 

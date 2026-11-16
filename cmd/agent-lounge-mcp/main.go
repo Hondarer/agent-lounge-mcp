@@ -60,7 +60,7 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--db FILE]  (start the server; see agent-lounge-mcp serve -h)")
+	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--db FILE] [--inbox-wait-max DURATION]  (start the server; see agent-lounge-mcp serve -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
@@ -69,6 +69,9 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 	cfg := config.Default()
 	fs.StringVar(&cfg.Listen, "listen", cfg.Listen, "loopback TCP address to listen on")
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database file (created when missing)")
+	fs.DurationVar(&cfg.InboxWaitMax, "inbox-wait-max", cfg.InboxWaitMax,
+		"longest time chat_inbox may wait for a message (0 disables waiting, at most "+config.MaxInboxWaitMax.String()+
+			"); keep it below the agents' tool-call time limit")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -98,7 +101,8 @@ func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error 
 		return err
 	}
 	sess := server.Session{Store: st, UserID: userID}
-	hs := &http.Server{Handler: server.Handler(server.New(cfg, sess), sess)}
+	srv := server.New(cfg, sess)
+	hs := &http.Server{Handler: server.Handler(srv, sess)}
 
 	log.Printf("version %s, database %s", version.Version, cfg.DBPath)
 	log.Printf("serving MCP at http://%s%s", ln.Addr(), server.MCPPath)
@@ -118,9 +122,16 @@ func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error 
 	// once, or the operator cannot tell whether the signal was received.
 	log.Printf("shutting down (waiting up to %s for open connections)", cfg.ShutdownTimeout)
 
-	// Let in-flight requests finish, then drop what remains (such as open event streams).
+	// Tell agents first: tool calls fail with the shutdown error from now on, waiting chat_inbox
+	// calls return it, and clients that set a log level receive it as a log notification. Keep
+	// accepting requests while agents remain connected, so that their calls get that error and
+	// /healthz reports "stopping" instead of the connection being refused. Then close the
+	// listener, let in-flight requests finish, and drop what remains (such as open event
+	// streams). All of it shares one deadline of ShutdownTimeout.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 	defer cancel()
+	srv.BeginShutdown(shutdownCtx)
+	srv.WaitForSessions(shutdownCtx)
 	if err := hs.Shutdown(shutdownCtx); err != nil {
 		hs.Close()
 	}

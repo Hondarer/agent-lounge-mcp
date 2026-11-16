@@ -143,7 +143,7 @@ func TestSendToSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sent.MessageID == 0 || !slices.Equal(sent.Recipients, []string{"bob"}) {
+	if sent.MessageID == 0 || !slices.Equal(sent.Recipients, []string{"bob"}) || !slices.Equal(sent.RecipientIDs, []int64{bob.ID}) {
 		t.Fatalf("sent = %+v", sent)
 	}
 	if n := unread(t, s, bob); n != 1 {
@@ -223,6 +223,9 @@ func TestSendToRoom(t *testing.T) {
 	}
 	if !slices.Equal(sent.Recipients, []string{"bob", "carol"}) {
 		t.Errorf("recipients = %v, want [bob carol]", sent.Recipients)
+	}
+	if !slices.Equal(sent.RecipientIDs, []int64{bob.ID, carol.ID}) {
+		t.Errorf("recipient IDs = %v, want [%d %d]", sent.RecipientIDs, bob.ID, carol.ID)
 	}
 	// A session that joins later does not receive earlier room messages.
 	dave := join(t, s, user, "dave")

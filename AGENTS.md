@@ -8,6 +8,7 @@ Instructions for coding agents working in this repository.
 - Run `go vet ./...` and `go test ./...` before reporting a change as complete.
 - Keep all SQL in `internal/store/`. Add schema changes as a new script in `internal/store/schema/`; do not edit a released script.
 - Write comments in Go files, shell scripts, Makefiles, workflows, and `SKILL.md` in English. Tool names, descriptions, and error messages are in English.
+- The usage guide returned by `lounge_help` is the source of truth for how agents use the server: make usage changes in `internal/tools/help.go` first.
 
 ## Documentation policy
 

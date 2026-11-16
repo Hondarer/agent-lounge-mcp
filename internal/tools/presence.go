@@ -41,15 +41,20 @@ func newPresence() *presence {
 // bind makes conn the owner of sess. The connection that owned sess before, if any, is no
 // longer joined: when two connections join with one name, the later one takes the session over.
 // A session conn joined before is released.
-func (p *presence) bind(conn *mcp.ServerSession, sess store.Session) {
+//
+// bind returns the IDs of the sessions whose owner changed. chat_inbox calls waiting for these
+// sessions must be woken, so that a call of a connection that lost its session stops waiting.
+func (p *presence) bind(conn *mcp.ServerSession, sess store.Session) (changed []int64) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if prev, ok := p.bySession[sess.ID]; ok && prev != conn {
 		delete(p.byConn, prev)
 		p.takenOver[prev] = sess.Name
+		changed = append(changed, sess.ID)
 	}
 	if old, ok := p.byConn[conn]; ok && old.ID != sess.ID {
 		delete(p.bySession, old.ID)
+		changed = append(changed, old.ID)
 	}
 	p.byConn[conn] = sess
 	p.bySession[sess.ID] = conn
@@ -61,6 +66,7 @@ func (p *presence) bind(conn *mcp.ServerSession, sess store.Session) {
 			p.release(conn)
 		}()
 	}
+	return changed
 }
 
 // release forgets conn. Its session and unread messages stay in the database.
@@ -94,10 +100,12 @@ func (p *presence) caller(conn *mcp.ServerSession) (store.Session, error) {
 	}
 	if name, ok := p.takenOver[conn]; ok {
 		return store.Session{}, fmt.Errorf("not joined: another connection joined as %q and took the session over. "+
-			"Call lounge_join again: with a different name to keep both connections, or with %q to take it back", name, name)
+			"Call lounge_join again: with a different name to keep both connections, or with %q to take it back. "+
+			"Call lounge_help for the usage guide", name, name)
 	}
 	return store.Session{}, fmt.Errorf("not joined: call lounge_join first. " +
-		"Pass the name used before to continue that session and receive its unread messages")
+		"Pass the name used before to continue that session and receive its unread messages. " +
+		"Call lounge_help for the usage guide")
 }
 
 // connected reports whether a connection currently owns the session.

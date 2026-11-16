@@ -10,7 +10,7 @@ import (
 
 func registerCore(r *Registry, d *Deps) {
 	add(r, groupCore, &mcp.Tool{
-		Name:        "lounge_info",
+		Name:        toolInfo,
 		Title:       "Server information",
 		Description: "Get the agent-lounge-mcp server version and its database schema version. Use it to check that the server and its database respond; it works before lounge_join.",
 		Annotations: readOnly(),

@@ -17,9 +17,14 @@ import (
 )
 
 // newServer creates a server backed by a database in a temporary directory.
-func newServer(t *testing.T) (*mcp.Server, Session) {
+func newServer(t *testing.T) (*Server, Session) {
 	t.Helper()
-	cfg := config.Default()
+	return newServerWith(t, config.Default())
+}
+
+// newServerWith is newServer with a given configuration (its DBPath is replaced).
+func newServerWith(t *testing.T, cfg config.Config) (*Server, Session) {
+	t.Helper()
 	cfg.DBPath = filepath.Join(t.TempDir(), "lounge.db")
 	st, err := store.Open(context.Background(), cfg.DBPath)
 	if err != nil {
@@ -38,7 +43,7 @@ func newServer(t *testing.T) (*mcp.Server, Session) {
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	s, _ := newServer(t)
-	return testutil.Connect(t, s, nil)
+	return testutil.Connect(t, s.MCP, nil)
 }
 
 // serveHTTP serves a server on a loopback port and returns its base URL.
@@ -58,10 +63,13 @@ type info struct {
 func TestListTools(t *testing.T) {
 	cs := connect(t)
 	names := testutil.ToolSet(t, cs)
-	for _, want := range []string{"lounge_join", "lounge_who", "chat_send", "chat_inbox", "lounge_info"} {
+	for _, want := range toolNames {
 		if !names[want] {
 			t.Errorf("tool %q is not registered", want)
 		}
+	}
+	if len(names) != len(toolNames) {
+		t.Errorf("%d tools are registered, want %d", len(names), len(toolNames))
 	}
 }
 

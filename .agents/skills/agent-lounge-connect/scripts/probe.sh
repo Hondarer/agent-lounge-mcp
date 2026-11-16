@@ -24,6 +24,7 @@ health=$(curl -fsS --max-time "$WAIT" "$BASE/healthz" 2>"$tmp/err") ||
 	ng "$BASE/healthz did not answer ($(cat "$tmp/err")). Is the server running?"
 case $health in
 *'"state":"ok"'*) echo "OK: health $health" ;;
+*'"state":"stopping"'*) ng "the server is stopping: $health" ;;
 *) ng "unexpected health response: $health" ;;
 esac
 
@@ -47,7 +48,7 @@ session=$(tr -d '\r' <"$tmp/headers" | awk -F': ' 'tolower($1) == "mcp-session-i
 
 rpc '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
 tools=$(rpc '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
-for tool in lounge_join lounge_who chat_send chat_inbox lounge_info; do
+for tool in lounge_help lounge_join lounge_who chat_send chat_inbox lounge_info; do
 	case $tools in
 	*"\"name\":\"$tool\""*) ;;
 	*) ng "tools/list does not contain $tool: $tools" ;;

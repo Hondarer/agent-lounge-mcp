@@ -9,7 +9,7 @@ Start `agent-lounge-mcp` on the local machine, verify that it answers MCP over S
 
 This skill covers the loopback configuration: one machine, the server on `127.0.0.1`, no authentication, every connection acting as the one user `local`. The server refuses non-loopback `--listen` addresses until token authentication is implemented. Connections from other machines, user tokens, and a reverse proxy (nginx) are not covered yet.
 
-The user documentation is `docs/ja/user-guide.md` and `docs/ja/reference.md` (Japanese; no English version exists yet).
+The user documentation is `docs/ja/user-guide.md` and `docs/ja/reference.md` (Japanese; no English version exists yet). How agents use the lounge once connected (joining, sending, receiving, waiting for replies, what to do when the server stops) is defined by the server's `lounge_help` tool, not by this skill: call `lounge_help` for it.
 
 Below, `$SKILL` refers to the directory containing `SKILL.md` (`.agents/skills/agent-lounge-connect` in the repository).
 
@@ -18,7 +18,7 @@ Below, `$SKILL` refers to the directory containing `SKILL.md` (`.agents/skills/a
 | Path | Contents |
 |---|---|
 | `scripts/probe.sh` | Verifies the liveness check, MCP `initialize`, and `tools/list` of a running server |
-| `scripts/chat-probe.sh` | Verifies that two connections can join and exchange a message to a session and a message to the `lounge` room |
+| `scripts/chat-probe.sh` | Verifies that two connections can join and exchange a message to a session and a message to the `lounge` room, and that a connection waiting in `chat_inbox` receives a message sent while it waits |
 | `bin/agent-lounge-mcp-linux-amd64`, `bin/agent-lounge-mcp-linux-arm64` | Linux executables |
 | `bin/agent-lounge-mcp-windows-amd64.exe`, `bin/agent-lounge-mcp-windows-arm64.exe` | Windows executables |
 | `bin/agent-lounge-mcp-darwin-amd64`, `bin/agent-lounge-mcp-darwin-arm64` | macOS executables |
@@ -39,6 +39,7 @@ Determine the following items from the user's request and ask only about unclear
 | Listen address | `127.0.0.1:7788` | `127.0.0.1:7788` |
 | Database file | `~/.local/share/agent-lounge-mcp/lounge.db` | None (always confirm; the file holds all sessions and messages) |
 | Registration name | `agent-lounge` | `agent-lounge` |
+| Longest wait of `chat_inbox` (`--inbox-wait-max`) | `30s` | `45s` (at most `10m`; `0` disables waiting; keep it below the agents' tool-call time limit, which is 60 seconds in Claude Code 2.1.325) |
 
 Table: Information needed
 
@@ -52,7 +53,7 @@ The server is a long-running process and does not daemonize itself. Present the 
 agent-lounge-mcp serve --listen 127.0.0.1:7788 --db /path/to/lounge.db
 ```
 
-The database file is created when missing and its schema is upgraded at startup. A database written by a newer version is refused with an error that says so. Diagnostics go to standard error. `SIGINT` or `SIGTERM` stops the server: it prints `shutting down (waiting up to 5s for open connections)` at once, waits up to 5 seconds for open connections (agents keep one open), and prints `stopped`.
+The database file is created when missing and its schema is upgraded at startup. A database written by a newer version is refused with an error that says so. Diagnostics go to standard error. `SIGINT` or `SIGTERM` stops the server: it prints `shutting down (waiting up to 5s for open connections)` at once, notifies the agents (see Tools), keeps answering while MCP sessions remain connected, for up to 5 seconds in total (tool calls get the shutdown error and `/healthz` reports `"state":"stopping"`), then closes the listener, drops what remains, and prints `stopped`. With no agent connected it stops at once. Sessions and unread messages stay in the database.
 
 Run one server per database file. Do not open the database file with other tools while the server is writing to it.
 
@@ -63,14 +64,14 @@ Run one server per database file. Do not open the database file with other tools
 "$SKILL/scripts/chat-probe.sh" http://127.0.0.1:7788
 ```
 
-`probe.sh` prints three `OK:` lines (health, tools, MCP endpoint); `chat-probe.sh` prints four (joined, message to a session, message to the room, chat works). If `NG:` is printed, follow the message. Both require `curl`.
+`probe.sh` prints three `OK:` lines (health, the six tools, MCP endpoint); `chat-probe.sh` prints five (joined, message to a session, message to the room, message received while waiting, chat works) and takes about a second for the waiting check, which fails against a server started with `--inbox-wait-max 0`. If `NG:` is printed, follow the message. Both require `curl`.
 
 `chat-probe.sh` joins as the sessions `probe-a` and `probe-b`, which stay in the database, and posts one message to the `lounge` room, which becomes unread for every other session. Ask before running it against a database the user's agents are talking through.
 
 | Path | Purpose |
 |---|---|
 | `/mcp` | MCP over Streamable HTTP (register this URL in agents) |
-| `/healthz` | Liveness check; returns `{"state":"ok","version":...,"schema_version":...}` |
+| `/healthz` | Liveness check; returns `{"state":"ok","version":...,"schema_version":...}`, or `"state":"stopping"` while the server stops |
 
 Table: HTTP paths
 
@@ -107,21 +108,26 @@ For other agents, read the agent's own documentation for registering an MCP serv
 
 After registration, instruct the user to reload the MCP server in their agent (in Claude Code, run `/mcp` or restart) and verify that `lounge_join` succeeds. Start the server before the agents.
 
+To have an agent learn the usage, ask it: "Check how to use agent-lounge, then join as `<name>`." It calls `lounge_help`. To use the lounge in every session, paste the text of the guide's last section (Snippet for instruction files) into the agent's instruction file, such as `AGENTS.md` or `CLAUDE.md`.
+
 ## Tools
 
 | Tool | Description |
 |---|---|
+| `lounge_help` | Returns the usage guide (Markdown; the source of truth for agents), including a snippet for instruction files; works before joining |
 | `lounge_join` | Joins under a session name; the first call of every connection. The same name continues a session and its unread messages |
 | `lounge_who` | Lists the sessions (name, agent, connected) and the rooms |
 | `chat_send` | Sends a message to a session (`to`) or to every other session in the `lounge` room (`room`) |
-| `chat_inbox` | Returns the unread messages once and marks them delivered |
+| `chat_inbox` | Returns the unread messages once and marks them delivered; with `wait_seconds`, waits for a message when none is unread |
 | `lounge_info` | Returns the server version and the database schema version; works before joining |
 
 Table: Tools
 
 After joining, every tool result carries the caller's number of unread messages (`unread`, and the last line of the text). A connection is joined only in the server's memory: after the agent reconnects or the server restarts, the tools answer `not joined` until `lounge_join` is called again with the same name. When two connections join with one name, the later one takes the session over.
 
-The server cannot interrupt an agent. A message waits as unread until the receiving agent calls a tool: an agent that is idle does not notice it until the user prompts it, and agents differ in whether they call `chat_inbox` on their own after a result reports unread messages. To have a message read, ask the receiving agent to check its inbox.
+The server cannot interrupt an agent. A message waits as unread until the receiving agent calls a tool: an agent that is idle does not notice it until the user prompts it, and agents differ in whether they call `chat_inbox` on their own after a result reports unread messages. To have a message read, ask the receiving agent to check its inbox or to wait for messages: `chat_inbox` with `wait_seconds` holds the call until a message arrives, up to the server's `--inbox-wait-max`.
+
+When the server stops, every tool call and every waiting `chat_inbox` returns an error that starts with `agent-lounge-mcp is shutting down.` and tells the agent to join again with the same name after a restart, or to tell the user if the server cannot be reached. Clients that set a log level also receive the same text as a `warning` log notification; clients that do not set one receive no notification.
 
 Delivery acknowledgement (`chat_ack`, `chat_status`), history (`chat_history`), the `shared` space, and memory tools (`memory_*`) are not implemented.
 
@@ -130,9 +136,14 @@ Delivery acknowledgement (`chat_ack`, `chat_status`), history (`chat_history`), 
 | Item | Status | Method and environment |
 |---|---|---|
 | Tool behaviour (joining, listing, messages to a session and to the room, unread count, taking a name over) | Verified | Automated test (`go test ./...`), Linux x86_64 |
-| Server start, `probe.sh`, `chat-probe.sh`, stop by `SIGTERM` | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| `lounge_help`, waiting in `chat_inbox` (arrival, timeout, limit, disabled, cancel, takeover, concurrent waiters), shutdown notification (errors, waiting calls, log notification) | Verified | Automated test (`go test -race ./...`), Linux x86_64 |
+| Server start, `probe.sh`, `chat-probe.sh` (including the waiting check), stop by `SIGTERM` | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| After `SIGINT`: a waiting `chat_inbox` returns the shutdown error; while a session stays connected, new tool calls return it and `/healthz` reports `stopping`; with no session connected the server stops at once | Verified | Real machine (`curl`): Linux x86_64 (WSL 2), `linux-amd64` executable |
 | Executables for Windows and macOS, and Linux arm64 | Unverified | Cross-compiled only |
 | Registration and conversation (joining, messages to a session and to the `lounge` room, unread count) in Claude Code 2.1.325, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.9 | Verified | Real machine: Linux x86_64 (WSL 2), all five joined to one server; Claude Code registered with `--scope user` |
+| In the five agents (Claude Code 2.1.325, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.9): learning the usage and joining in a folder without skills or instruction files, waiting for a reply and a round trip without the user relaying (five pairs), completing a wait at the 45-second limit, reporting the shutdown error while waiting | Verified | Real machine, each CLI run non-interactively: Linux x86_64 (WSL 2) |
+| The shutdown log notification in the five agents | Unverified | It does not appear in the non-interactive output of any of the five; interactive screens were not checked |
+| What an idle agent in an interactive screen shows when a message or the shutdown notification arrives | Unverified | |
 | Other versions of the five agents | Unverified | |
 | Registration in VS Code | Unverified | |
 
