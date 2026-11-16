@@ -1,0 +1,20 @@
+# Build outputs
+/dist/
+/.agents/skills/agent-lounge-connect/bin/
+*.exe
+
+# Databases (SQLite file and its write-ahead log files)
+*.db
+*.db-shm
+*.db-wal
+
+# Tests and coverage
+*.test
+*.out
+coverage.*
+
+# Editors and OS
+.idea/
+*.swp
+.DS_Store
+Thumbs.db

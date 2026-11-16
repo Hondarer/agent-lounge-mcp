@@ -1,0 +1,120 @@
+// agent-lounge-mcp is an MCP server that lets coding agents share conversations and short-lived
+// memories. It serves MCP over Streamable HTTP and keeps all data in one SQLite file:
+//
+//	agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
+//
+// Diagnostics go to standard error.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"github.com/hondarer/agent-lounge-mcp/internal/config"
+	"github.com/hondarer/agent-lounge-mcp/internal/server"
+	"github.com/hondarer/agent-lounge-mcp/internal/store"
+	"github.com/hondarer/agent-lounge-mcp/internal/version"
+)
+
+func main() {
+	log.SetOutput(os.Stderr)
+	log.SetPrefix("agent-lounge-mcp: ")
+	log.SetFlags(0)
+
+	if len(os.Args) < 2 {
+		usage(os.Stderr)
+		os.Exit(2)
+	}
+	switch os.Args[1] {
+	case "serve":
+		cfg, err := parseServeFlags(flag.NewFlagSet("agent-lounge-mcp serve", flag.ContinueOnError), os.Args[2:])
+		switch {
+		case errors.Is(err, flag.ErrHelp):
+			return
+		case err != nil:
+			log.Fatal(err)
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		if err := serve(ctx, cfg, nil); err != nil {
+			log.Fatal(err)
+		}
+	case "version", "--version", "-version":
+		fmt.Println("agent-lounge-mcp", version.Version)
+	case "help", "--help", "-help", "-h":
+		usage(os.Stdout)
+	default:
+		log.Printf("unknown command %q", os.Args[1])
+		usage(os.Stderr)
+		os.Exit(2)
+	}
+}
+
+func usage(w io.Writer) {
+	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--db FILE]  (start the server; see agent-lounge-mcp serve -h)")
+	fmt.Fprintln(w, "       agent-lounge-mcp version")
+}
+
+// parseServeFlags builds the server configuration from the command line of the serve subcommand.
+func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
+	cfg := config.Default()
+	fs.StringVar(&cfg.Listen, "listen", cfg.Listen, "loopback TCP address to listen on")
+	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database file (created when missing)")
+	if err := fs.Parse(args); err != nil {
+		return cfg, err
+	}
+	if fs.NArg() > 0 {
+		return cfg, fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
+	return cfg, cfg.Validate()
+}
+
+// serve runs the HTTP server until ctx is cancelled. When ready is not nil, it receives the
+// address the server listens on (useful with port 0).
+func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error {
+	st, err := store.Open(ctx, cfg.DBPath)
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", cfg.Listen)
+	if err != nil {
+		return err
+	}
+	sess := server.Session{Store: st}
+	hs := &http.Server{Handler: server.Handler(server.New(cfg, sess), sess)}
+
+	log.Printf("version %s, database %s", version.Version, cfg.DBPath)
+	log.Printf("serving MCP at http://%s%s", ln.Addr(), server.MCPPath)
+	if ready != nil {
+		ready <- ln.Addr()
+	}
+
+	served := make(chan error, 1)
+	go func() { served <- hs.Serve(ln) }()
+	select {
+	case err := <-served:
+		return err
+	case <-ctx.Done():
+	}
+
+	// Let in-flight requests finish, then drop what remains (such as open event streams).
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
+	if err := hs.Shutdown(shutdownCtx); err != nil {
+		hs.Close()
+	}
+	log.Print("stopped")
+	return nil
+}
