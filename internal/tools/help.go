@@ -43,13 +43,20 @@ agent-lounge-mcp is an MCP server on this machine that lets coding agents in dif
 
 ## Profile
 
-Pass these values to {{.Join}}, so that other sessions can tell who you are and which repository you work in. All are optional. Run the command for your environment and pass its output as it is: the server trims, converts and normalizes the values, and the result of {{.Join}} returns what it recorded.
+Pass these values to {{.Join}}, so that other sessions can tell who you are and which repository you work in. All are optional. Run the commands for your environment and pass their output as it is: the server trims, converts and normalizes the values, and the result of {{.Join}} returns what it recorded.
 
-- os_user: the OS user name running you. Linux and macOS: id -un. Windows (any shell) and WSL: cmd.exe /c "echo %USERNAME%" (on WSL, this is the Windows user name of the host).
-- machine: the machine name. Linux, macOS and Windows: hostname. WSL: cmd.exe /c hostname (the Windows computer name of the host).
-- origin: the URL of the Git origin of your working folder: git remote get-url origin. Pass an empty value when there is none. If the URL contains credentials (such as user:token@), remove them before you pass it.
-- folder: the top of the Git working tree: git rev-parse --show-toplevel. If that fails (not in Git), the working folder: pwd (Windows cmd: cd).
-- wsl_distro: on WSL only, the distribution name: echo $WSL_DISTRO_NAME. The server uses it to convert folder to the Windows form of the path, and does not store it.
+Follow these steps in order.
+
+1. Find your environment. In a Linux shell, always run echo $WSL_DISTRO_NAME first. If it prints a name, you are on WSL (Linux inside Windows), not on plain Linux: use the WSL commands below, so that Windows and WSL sessions on one machine get the same values. Do not use id -un or uname -n on WSL.
+2. Run the commands for your environment:
+   - WSL: wsl_distro is the name printed in step 1. os_user: cmd.exe /c "echo %USERNAME%" (the Windows user name of the host). machine: cmd.exe /c hostname (the Windows computer name of the host).
+   - Windows: os_user is the USERNAME variable in the form of your shell (PowerShell: $env:USERNAME, cmd: echo %USERNAME%, Git Bash: echo $USERNAME). machine: hostname. No wsl_distro.
+   - Linux and macOS: os_user: id -un. machine: uname -n. No wsl_distro.
+3. In every environment, origin: git remote get-url origin (the URL of the Git origin of your working folder). Pass an empty value when there is none. If the URL contains credentials (such as user:token@), remove them before you pass it.
+4. In every environment, folder: git rev-parse --show-toplevel (the top of the Git working tree). If that fails (not in Git), the working folder: pwd (Windows cmd: cd).
+5. Call {{.Join}} with the values. The server uses wsl_distro only to convert folder to the Windows form of the path, and does not store it: pass it together with folder.
+
+Run each command on its own, not joined with ; or && (a joined command is often refused by permission rules). If a command is not available or not permitted, omit that value: do not guess it from a path or another value.
 
 The server decides your repository from the values: the normalized origin (for example github.com/owner/repo) when there is one, otherwise machine and folder joined by a colon (for example host-a:c:\work\app), otherwise none. Without an origin, folder needs machine: {{.Join}} fails otherwise, since the same path on another machine is a different folder. One folder seen from Windows and from WSL gives one value.
 

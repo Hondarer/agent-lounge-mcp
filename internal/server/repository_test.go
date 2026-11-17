@@ -298,7 +298,7 @@ func TestHelpDescribesProfileAndRepository(t *testing.T) {
 	out := testutil.Call[help](t, cs, "lounge_help", nil)
 	for _, want := range []string{
 		"## Profile", "## Repository space", "os_user", "machine", "origin", "folder", "wsl_distro",
-		"id -un", `cmd.exe /c "echo %USERNAME%"`, "cmd.exe /c hostname", "git remote get-url origin",
+		"id -un", "uname -n", "you are on WSL", "$env:USERNAME", "echo $USERNAME", `cmd.exe /c "echo %USERNAME%"`, "cmd.exe /c hostname", "git remote get-url origin",
 		"git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
 		"before you call other tools", "not verified", "not carried over", "/mnt/<drive letter>",
 	} {
@@ -337,4 +337,26 @@ func mapsEqual(a, b map[string]bool) bool {
 		}
 	}
 	return true
+}
+
+// A Linux path as folder gets the hint to check for WSL; a converted or Windows path does not.
+func TestJoinHint(t *testing.T) {
+	s, _ := newServer(t)
+	cs := testutil.Connect(t, s.MCP, nil)
+	type hinted struct {
+		Hint string `json:"hint"`
+	}
+	j := testutil.Call[hinted](t, cs, "lounge_join", map[string]any{"name": "a", "machine": "m", "folder": "/home/u/app"})
+	if !strings.Contains(j.Hint, "WSL_DISTRO_NAME") {
+		t.Errorf("Linux path: hint %q", j.Hint)
+	}
+	for _, args := range []map[string]any{
+		{"name": "a", "machine": "m", "folder": "/home/u/app", "wsl_distro": "Ubuntu"},
+		{"name": "a", "machine": "m", "folder": `C:\work`},
+		{"name": "a", "origin": "", "folder": ""},
+	} {
+		if j := testutil.Call[hinted](t, cs, "lounge_join", args); j.Hint != "" {
+			t.Errorf("%v: hint %q", args, j.Hint)
+		}
+	}
 }

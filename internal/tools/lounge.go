@@ -58,11 +58,11 @@ type JoinInput struct {
 	Agent *string `json:"agent,omitempty" jsonschema:"what you are, shown to other sessions, for example claude-code@host-a (up to 128 characters). Omit to keep the recorded value"`
 	// Profile. agent, os_user and machine: omit to keep the recorded value, "" to clear it.
 	// origin, folder and wsl_distro: see joinParams.
-	OSUser    *string `json:"os_user,omitempty" jsonschema:"OS user name running you, as printed by the command lounge_help lists (on WSL, the Windows user name of the host). Omit to keep the recorded value, empty to clear it"`
-	Machine   *string `json:"machine,omitempty" jsonschema:"machine name, as printed by hostname (on WSL, cmd.exe /c hostname). Omit to keep the recorded value, empty to clear it"`
+	OSUser    *string `json:"os_user,omitempty" jsonschema:"OS user name running you, as printed by the command lounge_help lists for your environment (on WSL and Windows, the Windows user name). Omit to keep the recorded value, empty to clear it"`
+	Machine   *string `json:"machine,omitempty" jsonschema:"machine name, as printed by the command lounge_help lists (on WSL, cmd.exe /c hostname: the Windows computer name of the host). Omit to keep the recorded value, empty to clear it"`
 	Origin    *string `json:"origin,omitempty" jsonschema:"URL of the Git origin of your working folder, as printed by git remote get-url origin, without credentials; empty when there is none. origin and folder are replaced together: omit origin, folder and wsl_distro to keep the recorded ones"`
 	Folder    *string `json:"folder,omitempty" jsonschema:"top of the Git working tree (git rev-parse --show-toplevel), or the working folder outside Git (pwd). origin and folder are replaced together"`
-	WSLDistro *string `json:"wsl_distro,omitempty" jsonschema:"on WSL, the distribution name (echo $WSL_DISTRO_NAME); omit elsewhere. Used only to convert folder, not stored"`
+	WSLDistro *string `json:"wsl_distro,omitempty" jsonschema:"on WSL (echo $WSL_DISTRO_NAME prints a name), that distribution name; omit elsewhere. Used only to convert folder, not stored"`
 }
 
 // JoinOutput is the result of the lounge_join tool.
@@ -78,6 +78,8 @@ type JoinOutput struct {
 	Origin     string `json:"origin" jsonschema:"recorded origin, normalized to host/path (empty for none)"`
 	Folder     string `json:"folder" jsonschema:"recorded folder, normalized (empty for none)"`
 	Repository string `json:"repository" jsonschema:"your repository, decided by the server: the origin, else machine:folder, else empty (the repository space is not available)"`
+	// Hint is set when the declared values suggest a step of the usage guide was skipped.
+	Hint string `json:"hint,omitempty" jsonschema:"what to check about the declared profile, when something may be missing"`
 	unreadField
 }
 
@@ -134,6 +136,21 @@ func joinParams(userID int64, in JoinInput) (store.JoinParams, error) {
 	return p, nil
 }
 
+// wslHint asks an agent that declared a Linux path to check that it is not on WSL. The server
+// cannot tell plain Linux from WSL, and agents on WSL tend to take the plain Linux commands.
+const wslHint = "folder is a Linux or macOS path. If echo $WSL_DISTRO_NAME prints a name, you are on WSL: " +
+	"call " + toolJoin + " again with the same name, wsl_distro (that name), folder, origin, " +
+	"os_user (cmd.exe /c \"echo %USERNAME%\") and machine (cmd.exe /c hostname), " +
+	"so that Windows and WSL sessions on one machine get the same values. If it prints nothing, ignore this hint."
+
+// joinHint returns the hint for the recorded profile, or "".
+func joinHint(sess store.Session) string {
+	if strings.HasPrefix(sess.Folder, "/") {
+		return wslHint
+	}
+	return ""
+}
+
 // normalized applies normalize to an optional value; nil stays nil (keep the recorded value).
 func normalized(v *string, normalize func(string) (string, error)) (*string, error) {
 	if v == nil {
@@ -154,7 +171,7 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	sess, resumed, err := d.Store.JoinSession(ctx, p)
 	switch {
 	case errors.Is(err, store.ErrMachineRequired):
-		return nil, JoinOutput{}, errors.New("folder without origin needs machine: pass machine (the output of hostname; on WSL, cmd.exe /c hostname), " +
+		return nil, JoinOutput{}, errors.New("folder without origin needs machine: pass machine (on WSL the output of cmd.exe /c hostname, on Windows of hostname, on Linux and macOS of uname -n), " +
 			"so that the same path on another machine is not taken for the same repository")
 	case err != nil:
 		return nil, JoinOutput{}, err
@@ -167,6 +184,7 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	return nil, JoinOutput{
 		Name: sess.Name, Agent: sess.Agent, User: store.LocalUser, Resumed: resumed, Rooms: rooms,
 		OSUser: sess.OSUser, Machine: sess.Machine, Origin: sess.Origin, Folder: sess.Folder, Repository: sess.Repository,
+		Hint: joinHint(sess),
 	}, nil
 }
 
