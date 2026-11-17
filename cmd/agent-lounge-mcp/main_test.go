@@ -63,8 +63,23 @@ func TestParseServeFlags(t *testing.T) {
 		t.Errorf("non-loopback without --allow-remote: %v", err)
 	}
 
+	cfg, err = parse("--expire-after", "1d12h", "--retain-for", "0", "--session-idle", "90m", "--cleanup-interval", "1s",
+		"--max-body-bytes", "1048576", "--max-unread", "1", "--max-sessions-per-user", "2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ExpireAfter != 36*time.Hour || cfg.RetainFor != 0 || cfg.SessionIdle != 90*time.Minute || cfg.CleanupInterval != time.Second ||
+		cfg.MaxBodyBytes != 1048576 || cfg.MaxUnread != 1 || cfg.MaxSessionsPerUser != 2 {
+		t.Errorf("cleanup and limit options: %+v", cfg)
+	}
+	if cfg, err = parse("--expire-after", "14d"); err != nil || cfg.ExpireAfter != 14*24*time.Hour {
+		t.Errorf("--expire-after 14d: %+v %v", cfg, err)
+	}
+
 	for _, args := range [][]string{{"--listen", "0.0.0.0:7788"}, {"--db", ""}, {"--allowed-host", "x:1"}, {"extra"}, {"--unknown"},
-		{"--inbox-wait-max", "11m"}, {"--inbox-wait-max", "-1s"}, {"--inbox-wait-max", "60"}} {
+		{"--inbox-wait-max", "11m"}, {"--inbox-wait-max", "-1s"}, {"--inbox-wait-max", "60"},
+		{"--expire-after", "-1d"}, {"--retain-for", "1w"}, {"--session-idle", "x"}, {"--cleanup-interval", "999ms"}, {"--cleanup-interval", "0"},
+		{"--max-body-bytes", "0"}, {"--max-body-bytes", "1048577"}, {"--max-unread", "0"}, {"--max-sessions-per-user", "0"}, {"--max-unread", "x"}} {
 		if _, err := parse(args...); err == nil {
 			t.Errorf("%v was accepted", args)
 		}

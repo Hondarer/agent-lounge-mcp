@@ -8,7 +8,7 @@ import (
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
 )
 
-var finalToolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "lounge_info"}
+var finalToolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history", "lounge_info"}
 
 func TestFinalToolNames(t *testing.T) {
 	catalog := Catalog()
@@ -46,5 +46,29 @@ func TestGuide(t *testing.T) {
 	cfg.InboxWaitMax = 0
 	if g := guide(cfg); !strings.Contains(g, "Waiting is disabled on this server") || strings.Contains(g, "at most 0 seconds") {
 		t.Error("guide does not say that waiting is disabled")
+	}
+}
+
+// The guide states the retention periods and the limits in effect.
+func TestGuideRetentionAndLimits(t *testing.T) {
+	g := guide(config.Default())
+	for _, want := range []string{"within 14d of being sent", "deleted 30d after its last change", "not used for 60d", "documents of the repository",
+		"at most 65536 bytes", "at most 1000 unread", "at most 500 sessions", "up to 100 IDs", "chat_ack", "unacked: true"} {
+		if !strings.Contains(g, want) {
+			t.Errorf("guide does not contain %q", want)
+		}
+	}
+	cfg := config.Default()
+	cfg.ExpireAfter, cfg.RetainFor, cfg.SessionIdle = 0, 36*time.Hour, 0
+	cfg.MaxBodyBytes = 1024
+	g = guide(cfg)
+	for _, want := range []string{"Unread messages do not expire.", "deleted 1d12h after", "Unused sessions are not deleted automatically.", "at most 1024 bytes"} {
+		if !strings.Contains(g, want) {
+			t.Errorf("guide with changed options does not contain %q", want)
+		}
+	}
+	cfg.RetainFor = 0
+	if g := guide(cfg); !strings.Contains(g, "Messages are not deleted for their age.") {
+		t.Error("guide does not say that messages are kept")
 	}
 }

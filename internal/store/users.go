@@ -204,14 +204,7 @@ func countUserData(ctx context.Context, tx *sql.Tx, name string) (UserData, erro
 	case err != nil:
 		return UserData{}, err
 	}
-	var d UserData
-	err = tx.QueryRowContext(ctx, `
-		WITH own AS (SELECT id FROM sessions WHERE user_id = ?),
-		msgs AS (SELECT id FROM messages WHERE sender_session_id IN own OR to_session_id IN own)
-		SELECT (SELECT count(*) FROM own), (SELECT count(*) FROM msgs),
-			(SELECT count(*) FROM deliveries WHERE message_id IN msgs OR recipient_session_id IN own)`, id).
-		Scan(&d.Sessions, &d.Messages, &d.Deliveries)
-	return d, err
+	return countSessionData(ctx, tx, "SELECT id FROM sessions WHERE user_id = ?", id)
 }
 
 // RemoveUser deletes the user with its sessions, the messages they sent or that were addressed

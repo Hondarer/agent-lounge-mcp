@@ -16,9 +16,16 @@ import (
 // Store is a handle to the database file. It is safe for concurrent use.
 type Store struct {
 	db *sql.DB
-	// now is the clock; tests replace it.
+	// now is the clock; tests replace it (SetClock).
 	now func() time.Time
+	// limits bound new messages and sessions (SetLimits).
+	limits Limits
 }
+
+// SetClock replaces the clock that stamps the times the store records and that the cleanup
+// measures ages against. It exists for tests, which advance time instead of waiting; call it
+// before the store is used concurrently.
+func (s *Store) SetClock(now func() time.Time) { s.now = now }
 
 // pragmas are applied to every connection of the pool.
 //   - busy_timeout: wait for a competing writer instead of failing with SQLITE_BUSY.
@@ -62,7 +69,7 @@ func openUnmigrated(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	return &Store{db: db, now: time.Now}, nil
+	return &Store{db: db, now: time.Now, limits: DefaultLimits()}, nil
 }
 
 // Close releases the database. It checkpoints the write-ahead log when it is the last connection.
@@ -78,6 +85,17 @@ func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 // tx runs fn in a write transaction: it commits when fn returns nil and rolls back otherwise.
 func (s *Store) tx(ctx context.Context, fn func(tx *sql.Tx) error) error {
 	return txOn(ctx, s.db, fn)
+}
+
+// readTx runs fn in a read transaction, which sees the database as of its first read and does
+// not block writers (the database is in WAL mode). It always rolls back.
+func (s *Store) readTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	return fn(tx)
 }
 
 // txBeginner is implemented by *sql.DB and *sql.Conn.

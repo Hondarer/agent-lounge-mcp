@@ -15,7 +15,7 @@ type help struct {
 	Unread *int   `json:"unread"`
 }
 
-var toolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "lounge_info"}
+var toolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history", "lounge_info"}
 
 func TestHelpBeforeJoining(t *testing.T) {
 	cs := connect(t)

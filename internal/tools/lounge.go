@@ -178,7 +178,7 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 			"so that the same path on another machine is not taken for the same repository")
 	case errors.Is(err, store.ErrTooManySessions):
 		return nil, JoinOutput{}, fmt.Errorf("your user has %d sessions, the most allowed: join with the name of an existing session (%s lists them)",
-			store.MaxSessionsPerUser, toolWho)
+			d.Cfg.MaxSessionsPerUser, toolWho)
 	case err != nil:
 		return nil, JoinOutput{}, err
 	}
