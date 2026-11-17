@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"io"
 	"log"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -35,7 +37,7 @@ func TestParseServeFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg != config.Default() {
+	if !reflect.DeepEqual(cfg, config.Default()) {
 		t.Errorf("no options: got %+v, want the defaults", cfg)
 	}
 
@@ -50,7 +52,18 @@ func TestParseServeFlags(t *testing.T) {
 		t.Errorf("--inbox-wait-max 0: %+v %v", cfg, err)
 	}
 
-	for _, args := range [][]string{{"--listen", "0.0.0.0:7788"}, {"--db", ""}, {"extra"}, {"--unknown"},
+	cfg, err = parse("--listen", "0.0.0.0:7788", "--allow-remote", "--require-token", "--allowed-host", "Lounge.Example.com", "--allowed-host", "b.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.AllowRemote || !cfg.RequireToken || !reflect.DeepEqual(cfg.AllowedHosts, []string{"lounge.example.com", "b.example"}) {
+		t.Errorf("got %+v", cfg)
+	}
+	if _, err := parse("--listen", "0.0.0.0:7788"); !errors.Is(err, config.ErrRemoteNotAllowed) {
+		t.Errorf("non-loopback without --allow-remote: %v", err)
+	}
+
+	for _, args := range [][]string{{"--listen", "0.0.0.0:7788"}, {"--db", ""}, {"--allowed-host", "x:1"}, {"extra"}, {"--unknown"},
 		{"--inbox-wait-max", "11m"}, {"--inbox-wait-max", "-1s"}, {"--inbox-wait-max", "60"}} {
 		if _, err := parse(args...); err == nil {
 			t.Errorf("%v was accepted", args)

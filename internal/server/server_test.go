@@ -31,11 +31,11 @@ func newServerWith(t *testing.T, cfg config.Config) (*Server, Session) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
-	userID, err := st.EnsureLocalUser(context.Background())
+	local, err := st.EnsureLocalUser(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	sess := Session{Store: st, UserID: userID}
+	sess := Session{Store: st, LocalUser: local}
 	return New(cfg, sess), sess
 }
 

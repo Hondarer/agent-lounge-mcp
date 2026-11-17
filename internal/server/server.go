@@ -27,26 +27,28 @@ const (
 // Session holds what a server uses besides its configuration.
 type Session struct {
 	Store *store.Store
-	// UserID is the user every connection acts as, from store.EnsureLocalUser.
-	UserID int64
+	// LocalUser is the user of requests without a token on a server that does not require
+	// one (see store.EnsureLocalUser).
+	LocalUser store.User
 }
 
 // Server is the MCP server of agent-lounge-mcp with its tools.
 type Server struct {
 	MCP *mcp.Server
 	d   *tools.Deps
+	cfg config.Config
 }
 
 // New creates the MCP server with all tools registered.
 func New(cfg config.Config, sess Session) *Server {
-	d := &tools.Deps{Cfg: cfg, Store: sess.Store, UserID: sess.UserID}
+	d := &tools.Deps{Cfg: cfg, Store: sess.Store, LocalUser: sess.LocalUser}
 	impl := &mcp.Implementation{Name: "agent-lounge-mcp", Title: "agent-lounge-mcp", Version: version.Version}
 	registry := tools.Prepare(d)
 	// With no Capabilities option the SDK declares the logging capability, which clients need
 	// to set a log level and so to receive the shutdown notification.
 	s := mcp.NewServer(impl, &mcp.ServerOptions{Instructions: tools.Instructions(d)})
 	registry.Register(s)
-	return &Server{MCP: s, d: d}
+	return &Server{MCP: s, d: d, cfg: cfg}
 }
 
 // BeginShutdown tells agents that the server is stopping. The HTTP server must keep accepting
@@ -91,9 +93,17 @@ func (s *Server) WaitForSessions(ctx context.Context) {
 
 // Handler serves s over Streamable HTTP at MCPPath and a liveness check at HealthPath.
 // All MCP sessions share the one server.
+//
+// A request to MCPPath passes, in order: the cross-origin check, the Host check (checkHost),
+// authentication (authenticate), and the binding of the MCP connection to its user (bindUser),
+// before it reaches the SDK. HealthPath needs no token: it reports no user data.
 func Handler(s *Server, sess Session) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle(MCPPath, mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.MCP }, nil))
+	// The SDK's own Host check (DNS rebinding protection) accepts only loopback names on a
+	// loopback connection, which would reject a reverse proxy's Host; checkHost replaces it.
+	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.MCP },
+		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true})
+	mux.Handle(MCPPath, checkHost(s.cfg, authenticate(s.cfg, sess, bindUser(mcpHandler))))
 	mux.HandleFunc("GET "+HealthPath, func(w http.ResponseWriter, r *http.Request) {
 		health(r.Context(), w, sess, s.d.Stopping(), s.d.WaitingCalls())
 	})

@@ -1,15 +1,21 @@
 #!/bin/sh
 # Verify that an agent-lounge-mcp server answers: the liveness check (with the schema version
 # and the number of waiting calls), then MCP initialize and tools/list over Streamable HTTP,
-# including the profile arguments of lounge_join and the scope argument of chat_send.
+# including the profile arguments of lounge_join, the scope argument of chat_send, and the
+# outputs of scopes and addresses (scopes, address, scope_id, reply_to, from_user).
 #
 # usage: probe.sh [BASE_URL]      (default: http://127.0.0.1:7788)
+# The token of a user, when the server requires one or to probe as that user, is read from the
+# environment variable AGENT_LOUNGE_TOKEN and sent as "Authorization: Bearer <token>". Without
+# it, the probe sends no token (the user local, on a server that does not require a token).
+# The token is never printed.
 # Prints "OK: ..." lines and exits 0, or prints "NG: ..." to standard error and exits 1.
 set -eu
 
 BASE=${1:-http://127.0.0.1:7788}
 BASE=${BASE%/}
 WAIT=${PROBE_WAIT:-5}
+TOKEN=${AGENT_LOUNGE_TOKEN:-}
 
 ng() {
 	echo "NG: $*" >&2
@@ -28,9 +34,9 @@ case $health in
 *'"state":"stopping"'*) ng "the server is stopping: $health" ;;
 *) ng "unexpected health response: $health" ;;
 esac
-# This version of the scripts expects schema version 2 or later (profiles, repository space).
+# This version of the scripts expects schema version 3 or later (users, scopes with ids).
 schema=$(printf '%s' "$health" | sed -n 's/.*"schema_version":\([0-9][0-9]*\).*/\1/p')
-[ -n "$schema" ] && [ "$schema" -ge 2 ] || ng "schema version 2 or later expected (an older server?): $health"
+[ -n "$schema" ] && [ "$schema" -ge 3 ] || ng "schema version 3 or later expected (an older server?): $health"
 case $health in
 *'"waiting":'*) ;;
 *) ng "the health response has no waiting field (an older server?): $health" ;;
@@ -38,11 +44,23 @@ esac
 
 # rpc BODY: POST one JSON-RPC message; the response body goes to standard output.
 rpc() {
-	curl -fsS --max-time "$WAIT" -D "$tmp/headers" \
+	code=$(curl -sS --max-time "$WAIT" -D "$tmp/headers" -o "$tmp/body" -w '%{http_code}' \
 		-H 'Content-Type: application/json' \
 		-H 'Accept: application/json, text/event-stream' \
+		${TOKEN:+-H "Authorization: Bearer $TOKEN"} \
 		${session:+-H "Mcp-Session-Id: $session"} \
-		--data "$1" "$BASE/mcp" 2>"$tmp/err" || ng "POST $BASE/mcp failed ($(cat "$tmp/err"))"
+		--data "$1" "$BASE/mcp" 2>"$tmp/err") || ng "POST $BASE/mcp failed ($(cat "$tmp/err"))"
+	case $code in
+	2??) cat "$tmp/body" ;;
+	401)
+		if [ -n "$TOKEN" ]; then
+			ng "the server rejected the token in AGENT_LOUNGE_TOKEN (401: $(cat "$tmp/body"))"
+		else
+			ng "the server requires a token: set AGENT_LOUNGE_TOKEN (401: $(cat "$tmp/body"))"
+		fi
+		;;
+	*) ng "POST $BASE/mcp returned HTTP $code: $(cat "$tmp/body")" ;;
+	esac
 }
 
 session=
@@ -71,7 +89,22 @@ for arg in os_user machine origin folder wsl_distro scope; do
 	esac
 done
 echo "OK: profile arguments of lounge_join and scope of chat_send"
+# Output fields of scopes and addresses (in the output schemas of lounge_who, chat_send and chat_inbox).
+for field in scopes address scope_id reply_to from_user skipped; do
+	case $tools in
+	*"\"$field\":{"*) ;;
+	*) ng "tools/list does not contain the output field $field (an older server?)" ;;
+	esac
+done
+case $tools in
+*'"same_repository":{'*) ng "tools/list still has same_repository (an older server?)" ;;
+esac
+echo "OK: output fields of scopes and addresses"
 
 # End the probe's MCP session.
-curl -fsS --max-time "$WAIT" -X DELETE -H "Mcp-Session-Id: $session" "$BASE/mcp" >/dev/null 2>&1 || true
-echo "OK: MCP endpoint $BASE/mcp"
+curl -fsS --max-time "$WAIT" -X DELETE ${TOKEN:+-H "Authorization: Bearer $TOKEN"} -H "Mcp-Session-Id: $session" "$BASE/mcp" >/dev/null 2>&1 || true
+if [ -n "$TOKEN" ]; then
+	echo "OK: MCP endpoint $BASE/mcp (with the token of AGENT_LOUNGE_TOKEN)"
+else
+	echo "OK: MCP endpoint $BASE/mcp (without a token)"
+fi

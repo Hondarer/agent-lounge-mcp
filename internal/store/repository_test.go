@@ -95,15 +95,15 @@ func TestSendToRepositoryRoom(t *testing.T) {
 		t.Fatalf("repository rooms before sending = %d", rooms)
 	}
 
-	sent, err := s.SendToRepositoryRoom(ctx, alice, LoungeRoom, "repo hello")
+	sent, err := sendRoom(s, alice, ScopeRepository, LoungeRoom, "repo hello")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(sent.Recipients, []string{"bob", "carol"}) || sent.Scope != ScopeRepository || sent.Repository != "github.com/org/a" {
+	if !slices.Equal(names(sent.Recipients), []string{"bob", "carol"}) || sent.Scope != (Scope{ScopeRepository, "github.com/org/a"}) {
 		t.Errorf("sent = %+v", sent)
 	}
-	if !slices.Equal(sent.RecipientIDs, []int64{bob.ID, carol.ID}) {
-		t.Errorf("recipient IDs = %v", sent.RecipientIDs)
+	if !slices.Equal(ids(sent.Recipients), []int64{bob.ID, carol.ID}) || sent.Recipients[1].User != "other" {
+		t.Errorf("recipients = %+v", sent.Recipients)
 	}
 	for _, sess := range []Session{dave, erin, alice} {
 		if n := unread(t, s, sess); n != 0 {
@@ -118,13 +118,13 @@ func TestSendToRepositoryRoom(t *testing.T) {
 		t.Fatalf("carol got %+v", msgs)
 	}
 	m := msgs[0]
-	if m.Scope != ScopeRepository || m.Repository != "github.com/org/a" || m.Room != LoungeRoom || m.From != "alice" ||
+	if m.Scope != (Scope{ScopeRepository, "github.com/org/a"}) || m.Room != LoungeRoom || m.From != "alice" || m.FromUser != LocalUser ||
 		m.FromOSUser != "honda" || m.FromMachine != "host-a" || m.Body != "repo hello" {
 		t.Errorf("carol's message = %+v", m)
 	}
 
 	// The room is created once per unit.
-	if _, err := s.SendToRepositoryRoom(ctx, bob, LoungeRoom, "again"); err != nil {
+	if _, err := sendRoom(s, bob, ScopeRepository, LoungeRoom, "again"); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM rooms WHERE scope = 'repository'").Scan(&rooms); err != nil {
@@ -136,11 +136,11 @@ func TestSendToRepositoryRoom(t *testing.T) {
 
 	// The sender's unit is read at sending: after bob moves to b, his message reaches dave only.
 	joinWith(t, s, JoinParams{UserID: user, Name: "bob", Location: &Location{Origin: "github.com/org/b"}})
-	sent, err = s.SendToRepositoryRoom(ctx, bob, LoungeRoom, "now in b")
+	sent, err = sendRoom(s, bob, ScopeRepository, LoungeRoom, "now in b")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(sent.Recipients, []string{"dave"}) || sent.Repository != "github.com/org/b" {
+	if !slices.Equal(names(sent.Recipients), []string{"dave"}) || sent.Scope.ID != "github.com/org/b" {
 		t.Errorf("after moving: %+v", sent)
 	}
 	// What bob received before moving stays in his inbox.
@@ -148,19 +148,19 @@ func TestSendToRepositoryRoom(t *testing.T) {
 		t.Errorf("bob unread = %d, want 1 (received before moving)", n)
 	}
 
-	if _, err := s.SendToRepositoryRoom(ctx, erin, LoungeRoom, "x"); !errors.Is(err, ErrNoRepository) {
+	if _, err := sendRoom(s, erin, ScopeRepository, LoungeRoom, "x"); !errors.Is(err, ErrNoRepository) {
 		t.Errorf("sender without repository: err = %v", err)
 	}
-	if _, err := s.SendToRepositoryRoom(ctx, alice, "other", "x"); !errors.Is(err, ErrNoSuchRoom) {
+	if _, err := sendRoom(s, alice, ScopeRepository, "other", "x"); !errors.Is(err, ErrNoSuchRoom) {
 		t.Errorf("unknown room: err = %v", err)
 	}
 
 	// The user space is unchanged: the lounge of the user reaches the user's sessions only.
-	sent, err = s.SendToRoom(ctx, alice, LoungeRoom, "user hello")
+	sent, err = sendRoom(s, alice, ScopeUser, LoungeRoom, "user hello")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(sent.Recipients, []string{"bob", "dave", "erin"}) || sent.Scope != ScopeUser || sent.Repository != "" {
+	if !slices.Equal(names(sent.Recipients), []string{"bob", "dave", "erin"}) || sent.Scope != (Scope{ScopeUser, LocalUser}) {
 		t.Errorf("user room: %+v", sent)
 	}
 }
@@ -289,7 +289,7 @@ func TestMigrateVersion1KeepsData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) != 1 || msgs[0].Body != "room" || msgs[0].Room != LoungeRoom || msgs[0].Scope != ScopeUser || msgs[0].Repository != "" {
+	if len(msgs) != 1 || msgs[0].Body != "room" || msgs[0].Room != LoungeRoom || msgs[0].Scope != (Scope{ScopeUser, LocalUser}) {
 		t.Errorf("alice's inbox after migration = %+v", msgs)
 	}
 	sessions, _, err := s.ListSessions(ctx, 1, 10)

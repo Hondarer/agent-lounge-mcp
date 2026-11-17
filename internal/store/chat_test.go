@@ -14,11 +14,39 @@ import (
 func openLocal(t *testing.T) (*Store, int64) {
 	t.Helper()
 	s := open(t, filepath.Join(t.TempDir(), "lounge.db"))
-	id, err := s.EnsureLocalUser(context.Background())
+	u, err := s.EnsureLocalUser(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s, id
+	return s, u.ID
+}
+
+// sendTo sends to a session of the given user in the given scope.
+func sendTo(s *Store, sender Session, scope, user, name, body string) (Sent, error) {
+	return s.Send(context.Background(), sender.ID, scope, Target{User: user, Name: name}, body)
+}
+
+// sendRoom sends to a room of the given scope.
+func sendRoom(s *Store, sender Session, scope, room, body string) (Sent, error) {
+	return s.Send(context.Background(), sender.ID, scope, Target{Room: room}, body)
+}
+
+// names returns the session names of members.
+func names(members []Member) []string {
+	out := []string{}
+	for _, m := range members {
+		out = append(out, m.Name)
+	}
+	return out
+}
+
+// ids returns the session IDs of members.
+func ids(members []Member) []int64 {
+	out := []int64{}
+	for _, m := range members {
+		out = append(out, m.ID)
+	}
+	return out
 }
 
 func join(t *testing.T, s *Store, userID int64, name string) Session {
@@ -46,8 +74,8 @@ func TestEnsureLocalUserIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if again != id {
-		t.Errorf("second call returned user %d, want %d", again, id)
+	if again.ID != id || again.Name != LocalUser {
+		t.Errorf("second call returned user %+v, want %d", again, id)
 	}
 	rooms, err := s.ListRooms(ctx, id)
 	if err != nil {
@@ -139,11 +167,11 @@ func TestSendToSession(t *testing.T) {
 	s, user := openLocal(t)
 	alice, bob, carol := join(t, s, user, "alice"), join(t, s, user, "bob"), join(t, s, user, "carol")
 
-	sent, err := s.SendToSession(ctx, alice, "bob", "こんにちは")
+	sent, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", "こんにちは")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sent.MessageID == 0 || !slices.Equal(sent.Recipients, []string{"bob"}) || !slices.Equal(sent.RecipientIDs, []int64{bob.ID}) {
+	if sent.MessageID == 0 || !slices.Equal(names(sent.Recipients), []string{"bob"}) || !slices.Equal(ids(sent.Recipients), []int64{bob.ID}) {
 		t.Fatalf("sent = %+v", sent)
 	}
 	if n := unread(t, s, bob); n != 1 {
@@ -161,7 +189,7 @@ func TestSendToSession(t *testing.T) {
 		t.Fatalf("bob got %d messages, want 1", len(msgs))
 	}
 	m := msgs[0]
-	if m.MessageID != sent.MessageID || m.From != "alice" || m.Body != "こんにちは" || m.Room != "" || m.Scope != ScopeUser || !m.SentAt.Equal(sent.SentAt) {
+	if m.MessageID != sent.MessageID || m.From != "alice" || m.Body != "こんにちは" || m.Room != "" || m.Scope != (Scope{ScopeUser, LocalUser}) || m.FromUser != LocalUser || !m.SentAt.Equal(sent.SentAt) {
 		t.Errorf("message = %+v", m)
 	}
 
@@ -187,10 +215,10 @@ func TestSendToSessionErrors(t *testing.T) {
 	s, user := openLocal(t)
 	alice := join(t, s, user, "alice")
 
-	if _, err := s.SendToSession(ctx, alice, "nobody", "x"); !errors.Is(err, ErrNoSuchSession) {
+	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "nobody", "x"); !errors.Is(err, ErrNoSuchSession) {
 		t.Errorf("unknown destination: err = %v", err)
 	}
-	if _, err := s.SendToSession(ctx, alice, "alice", "x"); !errors.Is(err, ErrSendToSelf) {
+	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "alice", "x"); !errors.Is(err, ErrSendToSelf) {
 		t.Errorf("own session: err = %v", err)
 	}
 	var n int
@@ -208,7 +236,7 @@ func TestSendToRoom(t *testing.T) {
 	alice := join(t, s, user, "alice")
 
 	// Alone in the room: accepted with no recipients.
-	sent, err := s.SendToRoom(ctx, alice, LoungeRoom, "anyone?")
+	sent, err := sendRoom(s, alice, ScopeUser, LoungeRoom, "anyone?")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,15 +245,15 @@ func TestSendToRoom(t *testing.T) {
 	}
 
 	bob, carol := join(t, s, user, "bob"), join(t, s, user, "carol")
-	sent, err = s.SendToRoom(ctx, alice, LoungeRoom, "hello all")
+	sent, err = sendRoom(s, alice, ScopeUser, LoungeRoom, "hello all")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(sent.Recipients, []string{"bob", "carol"}) {
+	if !slices.Equal(names(sent.Recipients), []string{"bob", "carol"}) {
 		t.Errorf("recipients = %v, want [bob carol]", sent.Recipients)
 	}
-	if !slices.Equal(sent.RecipientIDs, []int64{bob.ID, carol.ID}) {
-		t.Errorf("recipient IDs = %v, want [%d %d]", sent.RecipientIDs, bob.ID, carol.ID)
+	if !slices.Equal(ids(sent.Recipients), []int64{bob.ID, carol.ID}) {
+		t.Errorf("recipient IDs = %v, want [%d %d]", ids(sent.Recipients), bob.ID, carol.ID)
 	}
 	// A session that joins later does not receive earlier room messages.
 	dave := join(t, s, user, "dave")
@@ -245,7 +273,7 @@ func TestSendToRoom(t *testing.T) {
 		}
 	}
 
-	if _, err := s.SendToRoom(ctx, alice, "other", "x"); !errors.Is(err, ErrNoSuchRoom) {
+	if _, err := sendRoom(s, alice, ScopeUser, "other", "x"); !errors.Is(err, ErrNoSuchRoom) {
 		t.Errorf("unknown room: err = %v", err)
 	}
 }
@@ -255,7 +283,7 @@ func TestFetchInboxLimitAndOrder(t *testing.T) {
 	s, user := openLocal(t)
 	alice, bob := join(t, s, user, "alice"), join(t, s, user, "bob")
 	for _, body := range []string{"1", "2", "3"} {
-		if _, err := s.SendToSession(ctx, alice, "bob", body); err != nil {
+		if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", body); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -285,7 +313,7 @@ func TestConcurrentFetchDeliversOnce(t *testing.T) {
 	alice, bob := join(t, s, user, "alice"), join(t, s, user, "bob")
 	const total = 40
 	for range total {
-		if _, err := s.SendToSession(ctx, alice, "bob", "x"); err != nil {
+		if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", "x"); err != nil {
 			t.Fatal(err)
 		}
 	}
