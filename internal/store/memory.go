@@ -65,7 +65,7 @@ const (
 var (
 	// ErrNoSuchMemory is returned for an ID that names no memory of the scopes the session
 	// can use: a missing memory and a memory of another scope give the same error.
-	ErrNoSuchMemory = errors.New("no such memory in your scopes")
+	ErrNoSuchMemory = errors.New("no such memory")
 	// ErrMemoryTooLarge is returned for a body over Limits.MaxMemoryBytes.
 	ErrMemoryTooLarge = errors.New("the memory body is too large")
 	// ErrTooManyMemories is returned for creating a memory in a scope that holds

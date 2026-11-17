@@ -323,7 +323,7 @@ func TestMemoryCommands(t *testing.T) {
 	}
 	// With a longer half-life, the same memories are active.
 	if code, stdout, _ := memory("list", "--scope", "user", "--memory-half-life", "30d", "--db", db); code != 0 ||
-		!strings.Contains(stdout, "\tuser\tlocal\tactive\t0.4") || strings.Contains(stdout, "repository") {
+		!(strings.Contains(stdout, "\tuser\tlocal\tactive\t0.49\t") || strings.Contains(stdout, "\tuser\tlocal\tactive\t0.50\t")) || strings.Contains(stdout, "repository") {
 		t.Errorf("list --scope user --memory-half-life 30d: %d %q", code, stdout)
 	}
 

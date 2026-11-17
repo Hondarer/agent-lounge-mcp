@@ -93,6 +93,8 @@ Table: Registration commands
 
 Claude Code registers for the current project by default; add `--scope user` to use the server from any directory.
 
+Codex asks for approval before calling tools that may change data (`memory_put`, `memory_forget`), and `codex exec` refuses them since it cannot ask. To approve the agent-lounge tools, pass `-c 'mcp_servers.agent-lounge.default_tools_approval_mode="approve"'` to `codex exec`, or set `default_tools_approval_mode = "approve"` under `[mcp_servers.agent-lounge]` in `~/.codex/config.toml`.
+
 When the server requires a token (it listens on an address other than loopback, or was started with `--require-token` or `--allowed-host`), register with the token the administrator issued with `agent-lounge-mcp user add <name>`. Never print the token or write it into files of the repository.
 
 | Agent | Register with a token |
@@ -179,7 +181,8 @@ The `shared` space is not implemented.
 | In the five agents (Claude Code 2.1.326, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.10): replying to a question and calling `chat_ack` from the guidance alone; in a run without context, finding a fetched but unhandled request with `chat_history` (`unacked: true`) and handling it; summarizing past messages; checking a sent message with `chat_status` | Verified | Real machine: Linux x86_64 (WSL 2), non-interactive runs allowing only the agent-lounge tools |
 | `chat_ack`, `chat_status` and `chat_history` in agents on Windows | Unverified | |
 | Memories: saving, reading, updating, pinning, deleting, searching (two-character Japanese terms, letter case, several terms, symbols, tags, scopes, order, limits), scopes across two users, forgetting with an advanced clock (fading, leaving searches, coming back when read, deletion after the grace period, pinning, unpinning), reference counting, deletion of sessions and users, limits, migration of a version 4 database, `memory list`, `memory remove`, memory export | Verified | Automated test (`go test -race ./...`), Linux x86_64 |
-| `probe.sh` and `chat-probe.sh` with the memory check | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| `probe.sh` and `chat-probe.sh` with the memory check; with a short half-life: fading, coming back when read, pinning, deletion after the grace period (later for a referenced memory); `memory list`, `memory remove` and memory export while the server runs | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| In the five agents (Claude Code 2.1.326, Codex 0.169.0, Copilot CLI 1.0.113, Grok 1.0.77, agy 1.5.10): saving a memory from the guidance alone (all five searched first), answering from a memory another CLI saved, reading a repository memory another user saved and naming its author | Verified | Real machine: Linux x86_64 (WSL 2), non-interactive runs allowing only the agent-lounge tools (Codex with `-s read-only` and its approval mode for the agent-lounge tools set to approve) |
 | Memory tools in agents on Windows | Unverified | |
 | Executables for Windows arm64, macOS, and Linux arm64 | Unverified | Cross-compiled only |
 | In the five agents (Claude Code 2.1.326, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.10): declaring the profile from the server's guidance alone, the repository room with and without an origin (a WSL folder and a folder on a Windows drive) | Verified | Real machine: Linux x86_64 (WSL 2), non-interactive runs; Codex and agy with their sandboxes off (inside them they cannot read the Windows host values) |
