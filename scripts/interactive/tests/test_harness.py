@@ -132,8 +132,10 @@ class AgentTest(unittest.TestCase):
     def test_not_ready(self):
         d = fake()
         d = Definition(**{**d.__dict__, "ready": ["a text it never shows"]})
+        a = Agent(d, self.tmp.name)
         with self.assertRaises(AgentNotReady):
-            Agent(d, self.tmp.name).start(timeout=6)
+            a.start(timeout=6)
+        self.assertIsNone(a.term)  # the CLI was ended
 
 
 if __name__ == "__main__":

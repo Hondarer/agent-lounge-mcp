@@ -191,7 +191,10 @@ class Agent:
                 return self
             if self.term.closed():
                 break
-        raise AgentNotReady(f"{self.d.title} did not become ready; last output:\n{self.term.text()[-2000:]}")
+        last = self.term.text()[-2000:]
+        # End the CLI: it holds the working folder, which cannot be deleted on Windows meanwhile.
+        self.quit()
+        raise AgentNotReady(f"{self.d.title} did not become ready; last output:\n{last}")
 
     def ask(self, instruction: str, timeout: float = 180, settle: float = 4) -> Reply:
         """Type an instruction that asks for the completion word, and wait for the reply.
