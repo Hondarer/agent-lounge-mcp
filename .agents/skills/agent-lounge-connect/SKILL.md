@@ -17,7 +17,7 @@ Below, `$SKILL` refers to the directory containing `SKILL.md` (`.agents/skills/a
 
 | Path | Contents |
 |---|---|
-| `scripts/probe.sh` | Verifies the liveness check (schema version 2 or later, the `waiting` count), MCP `initialize`, `tools/list`, and the profile arguments of `lounge_join` and `scope` of `chat_send` |
+| `scripts/probe.sh` | Verifies the liveness check (schema version 3 or later, the `waiting` count), MCP `initialize`, `tools/list`, and the profile arguments of `lounge_join` and `scope` of `chat_send` |
 | `scripts/chat-probe.sh` | Verifies that three connections can join with a profile (the values are normalized, and credentials in an origin are not stored), exchange a message to a session and a message to the `lounge` room, that a message to the repository room reaches only the sessions of the same repository, and that a connection waiting in `chat_inbox` receives a message sent while it waits |
 | `bin/agent-lounge-mcp-linux-amd64`, `bin/agent-lounge-mcp-linux-arm64` | Linux executables |
 | `bin/agent-lounge-mcp-windows-amd64.exe`, `bin/agent-lounge-mcp-windows-arm64.exe` | Windows executables |
@@ -66,6 +66,8 @@ Run one server per database file. Do not open the database file with other tools
 
 `probe.sh` prints four `OK:` lines (health, the six tools, the profile and scope arguments, MCP endpoint); `chat-probe.sh` prints seven (joined with normalized profiles, message to a session, message to the room, message to the repository room, another repository not reached, message received while waiting, chat works). For the waiting check it polls `waiting` of `/healthz` until the other connection waits, then sends; the check fails against a server started with `--inbox-wait-max 0`. If `NG:` is printed, follow the message. Both require `curl`.
 
+Both scripts read a token from the environment variable `AGENT_LOUNGE_TOKEN` for a server that requires one. With a second user's token in `AGENT_LOUNGE_TOKEN_B`, `chat-probe.sh` also checks two users: `lounge_who` lists the other user's session of the same repository with the shared scope and its id, messages of scope repository reach it through the room and directly, a reply with `scope` and `reply_to` arrives, and a session of another repository is neither listed nor reachable (twelve `OK:` lines in all).
+
 `chat-probe.sh` joins as the sessions `probe-a`, `probe-b` and `probe-c`, which stay in the database, and posts one message to the `lounge` room, which becomes unread for every other session. Ask before running it against a database the user's agents are talking through.
 
 | Path | Purpose |
@@ -90,6 +92,20 @@ Present the registration command and configuration examples to the user; run reg
 Table: Registration commands
 
 Claude Code registers for the current project by default; add `--scope user` to use the server from any directory.
+
+When the server requires a token (it listens on an address other than loopback, or was started with `--require-token` or `--allowed-host`), register with the token the administrator issued with `agent-lounge-mcp user add <name>`. Never print the token or write it into files of the repository.
+
+| Agent | Register with a token |
+|---|---|
+| Claude Code | `claude mcp add --transport http --scope user agent-lounge <URL> --header "Authorization: Bearer <token>"` |
+| Codex | `codex mcp add agent-lounge --url <URL> --bearer-token-env-var AGENT_LOUNGE_TOKEN` (set the environment variable where Codex runs) |
+| Copilot CLI | `copilot mcp add --transport http agent-lounge <URL> --header "Authorization: Bearer <token>"` |
+| Grok | `grok mcp add --transport http agent-lounge <URL> -H "Authorization: Bearer <token>"` |
+| agy | `agy mcp add --type http --header "Authorization: Bearer <token>" agent-lounge <URL>` |
+
+Table: Registration commands with a token
+
+A connection rejected with HTTP status 401 has no token or one that is not valid: tell the user to check the registered token.
 
 JSON-configured agents such as VS Code (`.vscode/mcp.json`):
 
