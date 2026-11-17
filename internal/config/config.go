@@ -12,8 +12,17 @@ import (
 // Config holds startup option values only. Components created at runtime (such as the store)
 // are passed to the server separately.
 type Config struct {
-	// Listen is the TCP address the HTTP server listens on.
+	// Listen is the TCP address the HTTP server listens on. An address other than loopback
+	// needs AllowRemote.
 	Listen string
+	// AllowRemote allows Listen to be an address other than loopback, served over plain HTTP.
+	AllowRemote bool
+	// RequireToken requires a token on every MCP request even when the server listens only on
+	// loopback (see TokenRequired).
+	RequireToken bool
+	// AllowedHosts are Host header names accepted besides the loopback names, for a reverse
+	// proxy in front of a loopback server. Lowercase, without a port.
+	AllowedHosts []string
 	// DBPath is the SQLite database file. It is created when missing.
 	DBPath string
 	// ShutdownTimeout bounds how long in-flight requests may finish after a stop signal.
@@ -53,15 +62,72 @@ func (c Config) Validate() error {
 	if err != nil {
 		return fmt.Errorf("--listen: %w", err)
 	}
-	// Requests are not authenticated yet, so only loopback clients may connect.
-	if !isLoopback(host) {
-		return fmt.Errorf("--listen %s: only loopback addresses (127.0.0.1, [::1], localhost) are supported until token authentication is implemented", c.Listen)
+	if !isLoopback(host) && !c.AllowRemote {
+		return fmt.Errorf("%w: --listen %s is not a loopback address, so other machines could connect over plain HTTP, "+
+			"which does not encrypt tokens and messages. Pass --allow-remote to accept it (every request then needs a token: "+
+			"create users with agent-lounge-mcp user add), or listen on 127.0.0.1 and put an HTTPS reverse proxy in front (--allowed-host)",
+			ErrRemoteNotAllowed, c.Listen)
+	}
+	for _, h := range c.AllowedHosts {
+		if !validHostName(h) {
+			return fmt.Errorf("--allowed-host %q: give a host name or IP address without scheme, port or path (for example lounge.example.com)", h)
+		}
 	}
 	return nil
 }
 
+// ErrRemoteNotAllowed is returned by Validate for an address other than loopback without
+// AllowRemote.
+var ErrRemoteNotAllowed = errors.New("listening on an address other than loopback needs --allow-remote")
+
+// ListensRemote reports whether the server listens on an address other than loopback, where
+// other machines can connect. Listen must be valid (see Validate).
+func (c Config) ListensRemote() bool {
+	host, _, err := net.SplitHostPort(c.Listen)
+	return err != nil || !isLoopback(host)
+}
+
+// TokenRequired reports whether every MCP request needs a token. Without a token a request
+// would be taken as the user local, which is right only for clients of this machine:
+//   - an address other than loopback is reachable from other machines;
+//   - with AllowedHosts, a reverse proxy forwards the requests of other machines, and they
+//     arrive from loopback like local ones;
+//   - RequireToken protects loopback from the other users of this machine.
+func (c Config) TokenRequired() bool {
+	return c.ListensRemote() || len(c.AllowedHosts) > 0 || c.RequireToken
+}
+
+// validHostName reports whether h has the form of a Host header name (without port): a DNS
+// name or an IP address.
+func validHostName(h string) bool {
+	if net.ParseIP(strings.Trim(h, "[]")) != nil {
+		return true
+	}
+	if h == "" || len(h) > 253 {
+		return false
+	}
+	for _, r := range h {
+		if !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '-' || r == '.' || r == '_') {
+			return false
+		}
+	}
+	return true
+}
+
+// NormalizeHost returns the form of a Host header name that AllowedHosts holds: lowercase,
+// without surrounding space.
+func NormalizeHost(h string) string {
+	return strings.ToLower(strings.TrimSpace(h))
+}
+
+// IsLoopbackHost reports whether host (a Host header name without port) names the loopback
+// interface: localhost or a loopback IP address.
+func IsLoopbackHost(host string) bool {
+	return isLoopback(strings.Trim(host, "[]"))
+}
+
 func isLoopback(host string) bool {
-	if host == "localhost" {
+	if strings.EqualFold(host, "localhost") {
 		return true
 	}
 	ip := net.ParseIP(host)

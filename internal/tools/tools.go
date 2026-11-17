@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
@@ -17,8 +18,11 @@ import (
 type Deps struct {
 	Cfg   config.Config
 	Store *store.Store
-	// UserID is the user every connection acts as (see store.EnsureLocalUser).
-	UserID int64
+	// LocalUser is the user of requests that carry no user (see RequestUser): requests over
+	// in-memory transports. Requests over HTTP always carry the user that package server
+	// authenticated, which is this same user for a request without a token on a server that
+	// does not require one.
+	LocalUser store.User
 
 	presenceOnce sync.Once
 	presence     *presence
@@ -63,9 +67,38 @@ const (
 	// Planned: "memory" (memory_*).
 )
 
+// userInfoKey is the key of the user in sdkauth.TokenInfo.Extra.
+const userInfoKey = "agent-lounge-mcp/user"
+
+// TokenInfo returns the token information that package server attaches to an authenticated
+// request of user u. The SDK passes it to the tools with every request (RequestUser), and
+// binds an MCP connection to its UserID at the connection's first request: a later request on
+// the connection with another UserID is rejected with 403 Forbidden.
+//
+// UserID combines the user's database ID with its creation time, so that a user added again
+// under a removed user's name (which may get the same ID) does not continue the removed user's
+// connections.
+func TokenInfo(u store.User) *sdkauth.TokenInfo {
+	return &sdkauth.TokenInfo{
+		UserID: fmt.Sprintf("%d.%d", u.ID, u.CreatedAt.UnixMilli()),
+		Extra:  map[string]any{userInfoKey: u},
+	}
+}
+
+// RequestUser returns the user a tool request acts as: the user attached by TokenInfo, or
+// d.LocalUser for a request without one.
+func (d *Deps) RequestUser(req *mcp.CallToolRequest) store.User {
+	if req != nil && req.Extra != nil && req.Extra.TokenInfo != nil {
+		if u, ok := req.Extra.TokenInfo.Extra[userInfoKey].(store.User); ok {
+			return u
+		}
+	}
+	return d.LocalUser
+}
+
 // Instructions returns the guidance sent to agents when they connect.
 func Instructions(*Deps) string {
-	return "agent-lounge-mcp lets coding agents on this machine exchange messages across sessions. " +
+	return "agent-lounge-mcp lets coding agents exchange messages across sessions, on one machine or across machines. " +
 		"Call lounge_join first; pass the session name used before to continue that session and its unread messages. " +
 		"Pass your profile to lounge_join (lounge_help explains how to find the values). " +
 		"When a tool result reports unread messages (unread of 1 or more), call chat_inbox. " +

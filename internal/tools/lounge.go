@@ -34,7 +34,8 @@ func registerLounge(r *Registry, d *Deps) {
 		Title: "Join the lounge",
 		Description: "Join the lounge under a session name. Call this first, and wait for its result before calling other tools " +
 			"(do not call them in parallel with it): the chat tools work only after joining. " +
-			"Other sessions address messages to this name. Joining with a name used before continues that session and its unread messages " +
+			"Other sessions address messages to this name. Names are unique within your user, which the token your client sends decides (the result returns it as user). " +
+			"Joining with a name used before continues that session of your user and its unread messages " +
 			"(if another connection is using the name, it loses the session). After a reconnect, join again with the same name. " +
 			"Pass your profile (os_user, machine, origin, folder, wsl_distro) as the output of the commands that lounge_help lists; " +
 			"the server normalizes the values, decides your repository, and returns them. " +
@@ -46,8 +47,9 @@ func registerLounge(r *Registry, d *Deps) {
 	add(r, groupChat, &mcp.Tool{
 		Name:  toolWho,
 		Title: "List sessions and rooms",
-		Description: "List the sessions that joined (name, agent, OS user, machine, repository, whether it is your repository, whether connected now, last activity), " +
-			"your own repository, and the rooms. Use a session name as the 'to' of chat_send.",
+		Description: "List the sessions you can reach: the sessions of your user, and the sessions of other users that declared your repository. " +
+			"For each: name, user, address, agent, OS user, machine, repository, the scopes you share with it (scope and id), whether connected now, last activity. " +
+			"Also returns your scopes and the rooms. To send to a session, pass its address as the 'to' of chat_send with one of its scopes.",
 		Annotations: readOnly(),
 	}, d.loungeWho)
 }
@@ -69,7 +71,7 @@ type JoinInput struct {
 type JoinOutput struct {
 	Name    string   `json:"name" jsonschema:"the session name you joined as"`
 	Agent   string   `json:"agent" jsonschema:"recorded agent name"`
-	User    string   `json:"user" jsonschema:"user the session belongs to"`
+	User    string   `json:"user" jsonschema:"user the session belongs to, decided by the token your client sends (local without a token)"`
 	Resumed bool     `json:"resumed" jsonschema:"true when an existing session was continued"`
 	Rooms   []string `json:"rooms" jsonschema:"rooms the session is a member of"`
 	// Profile as recorded.
@@ -164,7 +166,8 @@ func normalized(v *string, normalize func(string) (string, error)) (*string, err
 }
 
 func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in JoinInput) (*mcp.CallToolResult, JoinOutput, error) {
-	p, err := joinParams(d.UserID, in)
+	user := d.RequestUser(req)
+	p, err := joinParams(user.ID, in)
 	if err != nil {
 		return nil, JoinOutput{}, err
 	}
@@ -173,16 +176,19 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	case errors.Is(err, store.ErrMachineRequired):
 		return nil, JoinOutput{}, errors.New("folder without origin needs machine: pass machine (on WSL the output of cmd.exe /c hostname, on Windows of hostname, on Linux and macOS of uname -n), " +
 			"so that the same path on another machine is not taken for the same repository")
+	case errors.Is(err, store.ErrTooManySessions):
+		return nil, JoinOutput{}, fmt.Errorf("your user has %d sessions, the most allowed: join with the name of an existing session (%s lists them)",
+			store.MaxSessionsPerUser, toolWho)
 	case err != nil:
 		return nil, JoinOutput{}, err
 	}
-	rooms, err := d.Store.ListRooms(ctx, d.UserID)
+	rooms, err := d.Store.ListRooms(ctx, user.ID)
 	if err != nil {
 		return nil, JoinOutput{}, err
 	}
 	d.notify.wake(d.presence.bind(req.Session, sess)...)
 	return nil, JoinOutput{
-		Name: sess.Name, Agent: sess.Agent, User: store.LocalUser, Resumed: resumed, Rooms: rooms,
+		Name: sess.Name, Agent: sess.Agent, User: sess.UserName, Resumed: resumed, Rooms: rooms,
 		OSUser: sess.OSUser, Machine: sess.Machine, Origin: sess.Origin, Folder: sess.Folder, Repository: sess.Repository,
 		Hint: joinHint(sess),
 	}, nil
@@ -191,26 +197,43 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 // WhoInput defines arguments for the lounge_who tool.
 type WhoInput struct{}
 
+// ScopeOutput is a scope in tool output: its kind and identifier.
+type ScopeOutput struct {
+	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user) or repository (the sessions of one repository, whatever their user)"`
+	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository"`
+}
+
+func scopesOutput(scopes []store.Scope) []ScopeOutput {
+	out := make([]ScopeOutput, 0, len(scopes))
+	for _, sc := range scopes {
+		out = append(out, ScopeOutput{Scope: sc.Kind, ID: sc.ID})
+	}
+	return out
+}
+
 // WhoSession is one session in the result of lounge_who.
 type WhoSession struct {
 	Name       string `json:"name" jsonschema:"session name"`
+	User       string `json:"user" jsonschema:"user the session belongs to"`
+	Address    string `json:"address" jsonschema:"value to pass as the 'to' of chat_send to reach this session: its name for a session of your user, user/name for a session of another user"`
 	Agent      string `json:"agent" jsonschema:"agent name the session declared"`
 	OSUser     string `json:"os_user" jsonschema:"OS user name the session declared"`
 	Machine    string `json:"machine" jsonschema:"machine name the session declared"`
 	Repository string `json:"repository" jsonschema:"repository of the session (empty for none)"`
-	// SameRepository is false when either repository is empty.
-	SameRepository bool   `json:"same_repository" jsonschema:"true when the session has your repository"`
-	Connected      bool   `json:"connected" jsonschema:"true when a connection is joined as this session now"`
-	You            bool   `json:"you" jsonschema:"true for your own session"`
-	LastSeenAt     string `json:"last_seen_at" jsonschema:"time of the session's last successful tool call (RFC 3339, UTC)"`
+	// Scopes are those in which the caller reaches the session.
+	Scopes     []ScopeOutput `json:"scopes" jsonschema:"scopes you share with the session, each with its id: pass one as the scope of chat_send to reach it"`
+	Connected  bool          `json:"connected" jsonschema:"true when a connection is joined as this session now"`
+	You        bool          `json:"you" jsonschema:"true for your own session"`
+	LastSeenAt string        `json:"last_seen_at" jsonschema:"time of the session's last successful tool call (RFC 3339, UTC)"`
 }
 
 // WhoOutput is the result of the lounge_who tool.
 type WhoOutput struct {
-	Repository string       `json:"repository" jsonschema:"your repository (empty for none)"`
-	Sessions   []WhoSession `json:"sessions" jsonschema:"sessions, most recently active first"`
-	Truncated  bool         `json:"truncated" jsonschema:"true when more sessions exist than are listed"`
-	Rooms      []string     `json:"rooms" jsonschema:"room names"`
+	Repository string        `json:"repository" jsonschema:"your repository (empty for none)"`
+	Scopes     []ScopeOutput `json:"scopes" jsonschema:"scopes you can use, each with its id"`
+	Sessions   []WhoSession  `json:"sessions" jsonschema:"sessions you can reach, most recently active first"`
+	Truncated  bool          `json:"truncated" jsonschema:"true when more sessions exist than are listed"`
+	Rooms      []string      `json:"rooms" jsonschema:"room names"`
 	unreadField
 }
 
@@ -219,29 +242,31 @@ func (d *Deps) loungeWho(ctx context.Context, req *mcp.CallToolRequest, _ WhoInp
 	if err != nil {
 		return nil, WhoOutput{}, err
 	}
-	sessions, truncated, err := d.Store.ListSessions(ctx, d.UserID, maxSessionsList)
+	viewer, sessions, truncated, err := d.Store.VisibleSessions(ctx, me.ID, maxSessionsList)
 	if err != nil {
 		return nil, WhoOutput{}, err
 	}
-	rooms, err := d.Store.ListRooms(ctx, d.UserID)
+	rooms, err := d.Store.ListRooms(ctx, viewer.UserID)
 	if err != nil {
 		return nil, WhoOutput{}, err
 	}
-	// The profile changes only at lounge_join, which binds the connection to the updated
-	// session, so the caller's session in presence is current.
-	mine := me.Repository
-	out := WhoOutput{Repository: mine, Sessions: make([]WhoSession, 0, len(sessions)), Truncated: truncated, Rooms: rooms}
+	out := WhoOutput{
+		Repository: viewer.Repository, Scopes: scopesOutput(store.ScopesOf(viewer)),
+		Sessions: make([]WhoSession, 0, len(sessions)), Truncated: truncated, Rooms: rooms,
+	}
 	for _, s := range sessions {
 		out.Sessions = append(out.Sessions, WhoSession{
-			Name:           s.Name,
-			Agent:          s.Agent,
-			OSUser:         s.OSUser,
-			Machine:        s.Machine,
-			Repository:     s.Repository,
-			SameRepository: mine != "" && s.Repository == mine,
-			Connected:      d.presence.connected(s.ID),
-			You:            s.ID == me.ID,
-			LastSeenAt:     formatTime(s.LastSeenAt),
+			Name:       s.Name,
+			User:       s.UserName,
+			Address:    address(viewer.UserName, s.UserName, s.Name),
+			Agent:      s.Agent,
+			OSUser:     s.OSUser,
+			Machine:    s.Machine,
+			Repository: s.Repository,
+			Scopes:     scopesOutput(store.SharedScopes(viewer, s)),
+			Connected:  d.presence.connected(s.ID),
+			You:        s.ID == me.ID,
+			LastSeenAt: formatTime(s.LastSeenAt),
 		})
 	}
 	return nil, out, nil

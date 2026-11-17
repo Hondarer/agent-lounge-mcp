@@ -5,6 +5,7 @@ package testutil
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"testing"
 	"time"
 
@@ -49,6 +50,35 @@ func ConnectHTTPWith(t *testing.T, endpoint string, copts *mcp.ClientOptions) *m
 	}
 	t.Cleanup(func() { cs.Close() })
 	return cs
+}
+
+// TokenClient returns an HTTP client that sends the Authorization header "Bearer <token>" with
+// every request, as an agent registered with a token does. An empty token sends no header.
+func TokenClient(token string) *http.Client {
+	return &http.Client{Transport: tokenTransport{token: token}}
+}
+
+type tokenTransport struct{ token string }
+
+func (t tokenTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if t.token != "" {
+		req = req.Clone(req.Context())
+		req.Header.Set("Authorization", "Bearer "+t.token)
+	}
+	return http.DefaultTransport.RoundTrip(req)
+}
+
+// ConnectToken connects to the Streamable HTTP endpoint with a token (see TokenClient) and
+// returns the client session, closed when the test ends, or the connection error.
+func ConnectToken(t *testing.T, endpoint, token string) (*mcp.ClientSession, error) {
+	t.Helper()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).
+		Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: endpoint, HTTPClient: TokenClient(token)}, nil)
+	if err != nil {
+		return nil, err
+	}
+	t.Cleanup(func() { cs.Close() })
+	return cs, nil
 }
 
 // Text returns the first text content of a tool result.

@@ -3,7 +3,8 @@
 //
 //	agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
 //
-// Diagnostics go to standard error.
+// Users and their tokens are managed with the user subcommand (see user.go). Diagnostics go to
+// standard error.
 package main
 
 import (
@@ -40,6 +41,9 @@ func main() {
 		switch {
 		case errors.Is(err, flag.ErrHelp):
 			return
+		case errors.Is(err, config.ErrRemoteNotAllowed):
+			log.Print(err)
+			os.Exit(2)
 		case err != nil:
 			log.Fatal(err)
 		}
@@ -49,6 +53,8 @@ func main() {
 		if err := serve(ctx, force, cfg, nil); err != nil {
 			log.Fatal(err)
 		}
+	case "user":
+		os.Exit(runUser(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "version", "--version", "-version":
 		fmt.Println("agent-lounge-mcp", version.Version)
 	case "help", "--help", "-help", "-h":
@@ -61,14 +67,24 @@ func main() {
 }
 
 func usage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--db FILE] [--inbox-wait-max DURATION]  (start the server; see agent-lounge-mcp serve -h)")
+	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--allowed-host NAME]... [--db FILE] [--inbox-wait-max DURATION]")
+	fmt.Fprintln(w, "           start the server; see agent-lounge-mcp serve -h")
+	fmt.Fprintln(w, "       agent-lounge-mcp user add|list|rotate|remove ...  (manage users and their tokens; see agent-lounge-mcp user -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
 // parseServeFlags builds the server configuration from the command line of the serve subcommand.
 func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 	cfg := config.Default()
-	fs.StringVar(&cfg.Listen, "listen", cfg.Listen, "loopback TCP address to listen on")
+	fs.StringVar(&cfg.Listen, "listen", cfg.Listen, "TCP address to listen on; an address other than loopback needs --allow-remote")
+	fs.BoolVar(&cfg.AllowRemote, "allow-remote", false,
+		"allow --listen on an address other than loopback, served over plain HTTP (every request then needs a token)")
+	fs.BoolVar(&cfg.RequireToken, "require-token", false, "require a token on every request, also on loopback")
+	fs.Func("allowed-host", "Host header name accepted besides the loopback names, for an HTTPS reverse proxy in front "+
+		"(repeatable; every request then needs a token)", func(v string) error {
+		cfg.AllowedHosts = append(cfg.AllowedHosts, config.NormalizeHost(v))
+		return nil
+	})
 	fs.StringVar(&cfg.DBPath, "db", cfg.DBPath, "SQLite database file (created when missing)")
 	fs.DurationVar(&cfg.InboxWaitMax, "inbox-wait-max", cfg.InboxWaitMax,
 		"longest time chat_inbox may wait for a message (0 disables waiting, at most "+config.MaxInboxWaitMax.String()+
@@ -80,6 +96,17 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		return cfg, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
 	return cfg, cfg.Validate()
+}
+
+// listenAddr returns the address to show for a listener: the host as configured (the listener
+// reports 0.0.0.0 as [::]) with the port actually bound (useful with port 0).
+func listenAddr(configured string, actual net.Addr) string {
+	host, _, err := net.SplitHostPort(configured)
+	_, port, err2 := net.SplitHostPort(actual.String())
+	if err != nil || err2 != nil {
+		return actual.String()
+	}
+	return net.JoinHostPort(host, port)
 }
 
 // watchSignals turns the signals received on sigs into the stop requests of serve: the first
@@ -112,10 +139,16 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 		return err
 	}
 	defer st.Close()
-	// Requests are not authenticated: every connection acts as the one local user.
-	userID, err := st.EnsureLocalUser(ctx)
+	// Requests without a token act as the user local, unless a token is required.
+	local, err := st.EnsureLocalUser(ctx)
 	if err != nil {
 		return err
+	}
+	var tokenUsers int
+	if cfg.TokenRequired() {
+		if tokenUsers, err = st.TokenUserCount(ctx); err != nil {
+			return err
+		}
 	}
 
 	var lc net.ListenConfig
@@ -123,12 +156,23 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 	if err != nil {
 		return err
 	}
-	sess := server.Session{Store: st, UserID: userID}
+	sess := server.Session{Store: st, LocalUser: local}
 	srv := server.New(cfg, sess)
 	hs := &http.Server{Handler: server.Handler(srv, sess)}
 
 	log.Printf("version %s, database %s", version.Version, cfg.DBPath)
-	log.Printf("serving MCP at http://%s%s", ln.Addr(), server.MCPPath)
+	addr := listenAddr(cfg.Listen, ln.Addr())
+	log.Printf("serving MCP at http://%s%s", addr, server.MCPPath)
+	if cfg.ListensRemote() {
+		log.Printf("warning: listening on %s without TLS: tokens and messages travel unencrypted. "+
+			"Use it only on a trusted network, or put an HTTPS reverse proxy in front.", addr)
+	}
+	if cfg.TokenRequired() {
+		log.Print("every request needs a token")
+		if tokenUsers == 0 {
+			log.Printf("no user has a token yet, so every request is rejected: create one with agent-lounge-mcp user add <name> --db %s", cfg.DBPath)
+		}
+	}
 	if ready != nil {
 		ready <- ln.Addr()
 	}

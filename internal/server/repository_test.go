@@ -28,19 +28,23 @@ type profileJoined struct {
 type profileWho struct {
 	Repository string `json:"repository"`
 	Sessions   []struct {
-		Name           string `json:"name"`
-		OSUser         string `json:"os_user"`
-		Machine        string `json:"machine"`
-		Repository     string `json:"repository"`
-		SameRepository bool   `json:"same_repository"`
-		You            bool   `json:"you"`
+		Name       string `json:"name"`
+		OSUser     string `json:"os_user"`
+		Machine    string `json:"machine"`
+		Repository string `json:"repository"`
+		Scopes     []struct {
+			Scope string `json:"scope"`
+			ID    string `json:"id"`
+		} `json:"scopes"`
+		You bool `json:"you"`
 	} `json:"sessions"`
 }
 
 type scopedSent struct {
 	Recipients []string `json:"recipients"`
+	Skipped    []string `json:"skipped"`
 	Scope      string   `json:"scope"`
-	Repository string   `json:"repository"`
+	ScopeID    string   `json:"scope_id"`
 }
 
 type scopedInbox struct {
@@ -48,8 +52,10 @@ type scopedInbox struct {
 		From        string `json:"from"`
 		FromOSUser  string `json:"from_os_user"`
 		FromMachine string `json:"from_machine"`
+		FromUser    string `json:"from_user"`
 		Scope       string `json:"scope"`
-		Repository  string `json:"repository"`
+		ScopeID     string `json:"scope_id"`
+		ReplyTo     string `json:"reply_to"`
 		Room        string `json:"room"`
 		Body        string `json:"body"`
 	} `json:"messages"`
@@ -71,7 +77,7 @@ func TestJoinProfile(t *testing.T) {
 		t.Fatalf("join = %+v, want %+v", j, want)
 	}
 	// The credentialed raw origin is stored nowhere.
-	sessions, _, err := sess.Store.ListSessions(context.Background(), sess.UserID, 10)
+	sessions, _, err := sess.Store.ListSessions(context.Background(), sess.LocalUser.ID, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,20 +186,26 @@ func TestRepositoryRoom(t *testing.T) {
 	}
 	same := map[string]bool{}
 	for _, sess := range w.Sessions {
-		same[sess.Name] = sess.SameRepository
+		// The repository scope is shared exactly with the sessions of alice's repository.
+		same[sess.Name] = false
+		for _, sc := range sess.Scopes {
+			if sc.Scope == "repository" && sc.ID == "github.com/org/a" {
+				same[sess.Name] = true
+			}
+		}
 		if sess.Name == "alice" && (sess.OSUser != "honda" || sess.Machine != "host-a" || !sess.You) {
 			t.Errorf("alice in who = %+v", sess)
 		}
 	}
 	if want := map[string]bool{"alice": true, "bob": true, "carol": false, "dave": false, "wsl": false, "win": false, "other": false}; !mapsEqual(same, want) {
-		t.Errorf("same_repository = %v, want %v", same, want)
+		t.Errorf("shares the repository scope = %v, want %v", same, want)
 	}
 
 	// bob waits; alice posts to the repository room and the wait ends with the message.
 	ch := callAsync(context.Background(), bob, "chat_inbox", map[string]any{"wait_seconds": 10})
 	waitingCalls(t, s, 1)
 	out := testutil.Call[scopedSent](t, alice, "chat_send", map[string]any{"room": "lounge", "scope": "repository", "body": "repo a"})
-	if !slices.Equal(out.Recipients, []string{"bob"}) || out.Scope != "repository" || out.Repository != "github.com/org/a" {
+	if !slices.Equal(out.Recipients, []string{"bob"}) || out.Scope != "repository" || out.ScopeID != "github.com/org/a" {
 		t.Errorf("sent = %+v", out)
 	}
 	got := decode[scopedInbox](t, receive(t, ch))
@@ -201,7 +213,7 @@ func TestRepositoryRoom(t *testing.T) {
 		t.Fatalf("bob's inbox = %+v", got)
 	}
 	m := got.Messages[0]
-	if m.Scope != "repository" || m.Repository != "github.com/org/a" || m.Room != "lounge" || m.From != "alice" ||
+	if m.Scope != "repository" || m.ScopeID != "github.com/org/a" || m.Room != "lounge" || m.From != "alice" || m.ReplyTo != "alice" ||
 		m.FromOSUser != "honda" || m.FromMachine != "host-a" || m.Body != "repo a" {
 		t.Errorf("bob's message = %+v", m)
 	}
@@ -213,20 +225,19 @@ func TestRepositoryRoom(t *testing.T) {
 
 	// The folder unit: wsl reaches win only.
 	out = testutil.Call[scopedSent](t, wsl, "chat_send", map[string]any{"room": "lounge", "scope": "repository", "body": "folder"})
-	if !slices.Equal(out.Recipients, []string{"win"}) || out.Repository != `pc:\\wsl.localhost\ubuntu\home\u\app` {
+	if !slices.Equal(out.Recipients, []string{"win"}) || out.ScopeID != `pc:\\wsl.localhost\ubuntu\home\u\app` {
 		t.Errorf("folder unit: %+v", out)
 	}
-	// Messages without scope or with scope user are unchanged, and the sender sees no
-	// repository field and an empty one is omitted from the inbox.
+	// Messages without scope or with scope user are unchanged; their scope id is the user.
 	out = testutil.Call[scopedSent](t, alice, "chat_send", map[string]any{"room": "lounge", "body": "user room"})
-	if out.Scope != "user" || out.Repository != "" || len(out.Recipients) != 6 {
+	if out.Scope != "user" || out.ScopeID != "local" || len(out.Recipients) != 6 {
 		t.Errorf("user room: %+v", out)
 	}
 	res, err := carol.CallTool(context.Background(), &mcp.CallToolParams{Name: "chat_inbox"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text := testutil.Text(res); strings.Contains(text, `"repository"`) || !strings.Contains(text, `"scope":"user"`) {
+	if text := testutil.Text(res); !strings.Contains(text, `"scope":"user"`) || !strings.Contains(text, `"scope_id":"local"`) {
 		t.Errorf("user message text: %s", text)
 	}
 	out = testutil.Call[scopedSent](t, alice, "chat_send", map[string]any{"room": "lounge", "scope": "user", "body": "user room"})
@@ -242,7 +253,7 @@ func TestRepositorySendErrors(t *testing.T) {
 		want string
 	}{
 		{map[string]any{"room": "lounge", "scope": "repository", "body": "x"}, "lounge_join"},
-		{map[string]any{"to": "bob", "scope": "repository", "body": "x"}, "only with room"},
+		{map[string]any{"to": "bob", "scope": "repository", "body": "x"}, "lounge_join"},
 		{map[string]any{"room": "lounge", "scope": "shared", "body": "x"}, "invalid scope"},
 	} {
 		if msg := testutil.CallErr(t, cs[0], "chat_send", tc.args); !strings.Contains(msg, tc.want) {
@@ -297,7 +308,7 @@ func TestHelpDescribesProfileAndRepository(t *testing.T) {
 	cs := connect(t)
 	out := testutil.Call[help](t, cs, "lounge_help", nil)
 	for _, want := range []string{
-		"## Profile", "## Repository space", "os_user", "machine", "origin", "folder", "wsl_distro",
+		"## Profile", "## Scopes and targets", "## Users", "os_user", "machine", "origin", "folder", "wsl_distro",
 		"id -un", "uname -n", "you are on WSL", "$env:USERNAME", "echo $USERNAME", `cmd.exe /c "echo %USERNAME%"`, "cmd.exe /c hostname", "git remote get-url origin",
 		"git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
 		"before you call other tools", "not verified", "not carried over", "/mnt/<drive letter>",
