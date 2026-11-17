@@ -230,8 +230,8 @@ agent-lounge の lounge_help の Snippet for instruction files の文面を、�
 | 5 つのエージェントでの、origin のないフォルダーのリポジトリのルーム (WSL の中のフォルダーとそのサブフォルダー、Windows のドライブの中のフォルダー) | 検証済 | 同上 |
 | フォルダーを移ったときの、エージェントによるプロフィールの更新 | 検証済 (Codex、Copilot CLI、Grok、agy)、未検証 (Claude Code) | 同上。Claude Code は、別のフォルダーへ移る操作が許可されない条件だったため、更新の動作を確認していません。 |
 | サンドボックスの中で実行する Codex (`-s read-only`、`-s workspace-write`) と agy (許可の規則を指定した実行) でのプロフィールの申告 | 制限あり | 実機。WSL からホストの Windows の値を取得できず、`os_user` と `machine` を申告できません。origin のあるリポジトリのルームは使えます (検証済)。origin のないフォルダーでは、リポジトリの空間を使えません。 |
-| Windows で動く Claude Code (2.1.325、PowerShell 7.7.0) でのプロフィールの申告と、WSL の側のセッションとの間のリポジトリのルームの往復 (origin のない同じフォルダーを、Windows の側と WSL の側から開く) | 検証済 | 実機。Windows 10.0.26300 と、同じマシンの WSL 2。サーバーは WSL の側で起動 |
-| Windows で動く Codex、Copilot CLI、Grok、agy | 未検証 | |
+| Windows で動く 5 つのエージェントでのプロフィールの申告と、WSL の側のセッションとの間のリポジトリのルームの往復 (origin のない同じフォルダーを、Windows の側と WSL の側から開く) | 検証済 | 実機 (各 CLI の非対話の実行。許可は、agent-lounge のツールと読み取りのコマンドだけ。Codex は `-s read-only`)。Windows 10.0.26300、PowerShell 7.7.0 と、同じマシンの WSL 2。サーバーは WSL の側で起動。Claude Code 2.1.325、Codex 0.169.0、Copilot CLI 1.0.112、Grok 1.0.77、agy 1.5.9 |
+| Windows で動く Claude Code での、origin のあるリポジトリのフォルダーでの申告 | 検証済 | 実機。Windows 10.0.26300。Claude Code 2.1.325 |
 | Windows 向けの実行ファイル (`windows-amd64`) の起動、`/healthz`、`lounge_join` の正規化、Ctrl+C の信号での停止の表示と終了コード | 検証済 | 実機。Windows 10.0.26300 |
 | Windows での、キーボードからの Ctrl+C と、2 回目の Ctrl+C | 未検証 | |
 | 5 つのエージェントでの、停止のログ通知の見え方 | 未検証 | 非対話の実行の出力には、5 つとも現れません。対話の画面での見え方は、確認していません。 |

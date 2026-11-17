@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-17 19:20:42 JST
+最終更新日時: 2026-11-17 19:43:05 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261117-repository-space-design.md` (最終仕様)、`261117-repository-space-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -16,7 +16,7 @@
 
 検討 ID: repository-space
 
-版: 5
+版: 6
 
 状態: 作業の実施済み (成果物の承認待ち)
 
@@ -1036,8 +1036,8 @@ Claude Code が各エージェントを非対話で実行するとき、プロ�
 
 - **実装**: Opus 5.5 のサブエージェントが、スキーマの版 2、`internal/profile/`、ツールの引数と出力、小さな修正 3 件、自動テスト、確認のスクリプトを実装しました。Claude Code がレビューし、確認の結果を受けた修正を加えました (最終仕様の「承認の後に加えた変更」)。
 - **機械的検証**: `gofmt -l .` (出力なし)、`go vet ./...` (Linux、Windows、macOS 向け)、`go test -race ./...`、`make dist` が成功しました。
-- **エージェントでの確認**: 到達点 1 から 3 を、5 つのエージェントすべてで満たしました (Codex と agy は、サンドボックスを外した実行)。到達点 4 を記録しました。到達点 5 は、Windows の Claude Code で検証しました。結果は、`261117-repository-space-validation.md` にあります。
+- **エージェントでの確認**: 到達点 1 から 3 を、5 つのエージェントすべてで満たしました (Codex と agy は、サンドボックスを外した実行)。到達点 4 を記録しました。到達点 5 は、Windows の 5 つの CLI で検証しました。結果は、`261117-repository-space-validation.md` にあります。
 - **文書**: `docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`、`docs/agent-lounge-mcp-proposal.md` を更新しました。
-- **後片付け**: WSL の側の 5 つの CLI と、Windows の側の Claude Code の登録を解除し、確認用のフォルダーを削除しました。
+- **後片付け**: WSL の側と Windows の側の、それぞれ 5 つの CLI の登録を解除し、確認用のフォルダーを削除しました。
 - **残課題**: `261117-repository-space-backlog.md` を再構築しました (対策した 6 件を除き、3 件を追加して、18 件)。
 - **Git**: ブランチ `feature/repository-space` にコミットし、origin にプッシュしました (利用者の許可による)。`main` へのマージは、行っていません。

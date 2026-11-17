@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 確認の記録 (validation)
-最終更新日時: 2026-11-17 19:17:52 JST
+最終更新日時: 2026-11-17 19:43:05 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 上流文書: `261117-repository-space-design.md` (最終仕様)、`261117-repository-space-discussion.md` (検討用 Markdown)。削除されている場合があります。
@@ -24,9 +24,9 @@
 | 到達点 2 (リポジトリのルーム、origin あり) | 検証済 (5 つすべて、送信と受信) |
 | 到達点 3 (origin のないフォルダー) | 検証済 (5 つすべて。WSL の中のフォルダーと、Windows のドライブの中のフォルダー) |
 | 到達点 4 (フォルダーを移ったときの更新) | 記録済み (4 つが自分で更新。Claude Code は、別のフォルダーへ移る操作が許可されず、更新しなかった) |
-| 到達点 5 (Windows の側のエージェント) | 検証済 (Claude Code、PowerShell)。他の 4 つの CLI は未検証 |
+| 到達点 5 (Windows の側のエージェント) | 検証済 (5 つすべて。許可を省くオプションは使っていない) |
 | Windows 向けの実行ファイル (`windows-amd64`) | 検証済 (起動、`/healthz`、`lounge_join`、停止の表示) |
-| 登録の解除と後片付け | 実施済み (WSL の側の 5 つと、Windows の側の Claude Code。確認用のフォルダーを削除) |
+| 登録の解除と後片付け | 実施済み (WSL の側の 5 つと、Windows の側の 5 つ。確認用のフォルダーを削除) |
 
 ## 環境
 
@@ -37,10 +37,10 @@
 | サーバー | `dist/agent-lounge-mcp` (ブランチ `feature/repository-space`、コミット `e768743` に、`cmd.exe` の入力を閉じる案内と、最後の行を値にする変更を加えたもの)、ポート 7788、WSL の側で起動 |
 | データベース | `dist/repository-final.db` (最終の通しの確認用。空の状態から開始) |
 | Claude Code | 2.1.326 (WSL の側)、2.1.325 (Windows の側) |
-| Codex | 0.169.0 |
-| Copilot CLI | 1.0.112 |
-| Grok | 1.0.77 |
-| agy | 1.5.10 (確認の開始時は 1.5.9) |
+| Codex | 0.169.0 (両方の側) |
+| Copilot CLI | 1.0.112 (両方の側) |
+| Grok | 1.0.77 (両方の側) |
+| agy | 1.5.10 (WSL の側。確認の開始時は 1.5.9)、1.5.9 (Windows の側) |
 
 ## 再現の手順
 
@@ -169,6 +169,28 @@ Windows の Claude Code (PowerShell) で、次を確認しました。確認の�
 | Windows の側と WSL の側の間の、リポジトリのルームの往復 | `win-w` の送信が `claude-w` に届き、`claude-w` の返信が、待ち受け中の `win-w` に約 1[秒] で届いた |
 
 非対話の実行のコマンドは、`claude -p '<指示>' --allowedTools "mcp__agent-lounge" "Bash(git remote get-url origin)" "Bash(git rev-parse --show-toplevel)" "Bash(pwd)" "Bash(hostname)" "Bash(echo $USERNAME)" "PowerShell(git remote get-url origin)" "PowerShell(git rev-parse --show-toplevel)" "PowerShell(hostname)" "PowerShell(pwd)" "PowerShell($env:USERNAME)"` の形です。登録と登録の解除は、WSL の側と同じコマンドです。
+
+#### Windows の側の 5 つの CLI
+
+利用者の指摘を受けて、Windows にある 5 つの CLI で、最終のビルドのサーバー (WSL の側で起動、空のデータベース) に対して確認しました。WSL の側では、同じフォルダーを `/mnt/c/...` から申告したセッション `wsl-w` (スクリプト) が待ち受け、リポジトリのルームのメッセージに自動で返信しました。
+
+各 CLI を、`%TEMP%\lounge-check-w` で 1 つずつ順に、次の指示文で実行しました。
+
+```text
+agent-lounge の使い方を確認して、win-<cli> で参加して、リポジトリのルームに「<cli> からの確認です」と送って。その後、返信を 45 秒まで待って、参加の結果、送信の結果、受け取ったメッセージを表示して。
+```
+
+5 つすべてで、`repository` が `<コンピューター名>:c:\users\<ユーザー名>\appdata\local\temp\lounge-check-w` (`wsl-w` と同じ値) になり、`os_user` と `machine` に正しい値が入り、送信が `wsl-w` と先に参加した `win-*` に届き、`wsl-w` の返信を受け取りました。すべての許可を省くオプションは、使っていません。
+
+| CLI | コマンド | 値を調べたコマンドと、気付き |
+| --- | --- | --- |
+| Claude Code 2.1.325 | `claude -p '<指示>' --allowedTools mcp__agent-lounge Bash(...) PowerShell(...)` | PowerShell で `$env:USERNAME`、`hostname`、`pwd`。`(Get-Location).Path` は、許可の確認で拒否され、`pwd` に切り替えた |
+| Codex 0.169.0 | `codex exec --skip-git-repo-check -s read-only '<指示>'` | 最初の `pwsh.exe -Command ...` は、サンドボックスで `CreateProcessAsUserW failed: 5` になり、`cmd.exe /c 'echo %USERNAME%'`、`cmd.exe /c hostname`、`cmd.exe /c cd` に切り替えて成功 |
+| Copilot CLI 1.0.112 | `copilot -p '<指示>' --allow-tool agent-lounge 'shell(hostname)' 'shell($env:USERNAME)' ...` | `$env:USERNAME`、`hostname` |
+| Grok 1.0.77 | `grok -p '<指示>' --allow mcp__agent-lounge --allow 'Bash(hostname)' --allow 'Bash(echo $USERNAME)' ...` | 許可に `PowerShell(...)` を書くと、`Grok has no tool named PowerShell` で開始できない。`Bash(...)` だけにして実行。実際のシェルは PowerShell で、`$env:USERNAME`、`hostname`、`pwd` |
+| agy 1.5.9 | `agy -p '<指示>' --settings <許可を書いた JSON>` | `$env:USERNAME`、`hostname`、`(Get-Location).Path`。出力に PowerShell の `InitializeDefaultDrives` のエラー文が混ざったが、値は取得できた。WSL の側と違い、隔離された環境にはならなかった |
+
+Windows では、Codex の読み取り専用のサンドボックスの中でも、値を取得できました。サンドボックスのためにホストの値を取得できない制限 (BL-027) は、WSL の側だけで現れます。
 
 ### Windows 向けの実行ファイル
 
