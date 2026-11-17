@@ -279,10 +279,10 @@ func TestLimits(t *testing.T) {
 	alice, bob, carol := join(t, s, local, "alice"), join(t, s, local, "bob"), join(t, s, local, "carol")
 
 	// Body size.
-	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", strings.Repeat("a", MaxBodyBytes)); err != nil {
+	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", strings.Repeat("a", DefaultMaxBodyBytes)); err != nil {
 		t.Errorf("body of the limit: %v", err)
 	}
-	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", strings.Repeat("a", MaxBodyBytes+1)); !errors.Is(err, ErrBodyTooLarge) {
+	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", strings.Repeat("a", DefaultMaxBodyBytes+1)); !errors.Is(err, ErrBodyTooLarge) {
 		t.Errorf("body over the limit: %v", err)
 	}
 
@@ -290,7 +290,7 @@ func TestLimits(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `
 		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
 		INSERT INTO messages (scope, scope_id, sender_session_id, to_session_id, body, sent_at)
-		SELECT 'user', 'local', ?, ?, 'fill', 1 FROM n`, MaxUnread-1, alice.ID, bob.ID); err != nil {
+		SELECT 'user', 'local', ?, ?, 'fill', 1 FROM n`, DefaultMaxUnread-1, alice.ID, bob.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.db.ExecContext(ctx, `
@@ -298,8 +298,8 @@ func TestLimits(t *testing.T) {
 		SELECT id, ?, 1 FROM messages WHERE to_session_id = ? AND body = 'fill'`, bob.ID, bob.ID); err != nil {
 		t.Fatal(err)
 	}
-	if n := unread(t, s, bob); n != MaxUnread {
-		t.Fatalf("bob unread = %d, want %d", n, MaxUnread)
+	if n := unread(t, s, bob); n != DefaultMaxUnread {
+		t.Fatalf("bob unread = %d, want %d", n, DefaultMaxUnread)
 	}
 	if _, err := sendTo(s, alice, ScopeUser, LocalUser, "bob", "x"); !errors.Is(err, ErrInboxFull) {
 		t.Errorf("direct to a full inbox: %v", err)
@@ -308,7 +308,7 @@ func TestLimits(t *testing.T) {
 	if err != nil || !slices.Equal(names(sent.Recipients), []string{"carol"}) || !slices.Equal(names(sent.Skipped), []string{"bob"}) {
 		t.Errorf("room with a full inbox: %+v %v", sent, err)
 	}
-	if n := unread(t, s, bob); n != MaxUnread {
+	if n := unread(t, s, bob); n != DefaultMaxUnread {
 		t.Errorf("bob unread after the room message = %d", n)
 	}
 	// Reading makes room again.
@@ -324,7 +324,7 @@ func TestLimits(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `
 		WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < ?)
 		INSERT INTO sessions (user_id, name, created_at, last_seen_at) SELECT ?, 'fill-' || i, 1, 1 FROM n`,
-		MaxSessionsPerUser-3, local); err != nil {
+		DefaultMaxSessionsPerUser-3, local); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.JoinSession(ctx, JoinParams{UserID: local, Name: "one-more"}); !errors.Is(err, ErrTooManySessions) {

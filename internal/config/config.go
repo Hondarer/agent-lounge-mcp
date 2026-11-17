@@ -7,6 +7,8 @@ import (
 	"net"
 	"strings"
 	"time"
+
+	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
 
 // Config holds startup option values only. Components created at runtime (such as the store)
@@ -32,6 +34,44 @@ type Config struct {
 	// limit of the agents, or their waiting calls fail on the agent's side: Claude Code
 	// 2.1.325 gives up after 60 seconds. Agents keep waiting by calling chat_inbox again.
 	InboxWaitMax time.Duration
+
+	// The periodic cleanup (see store.Cleanup) runs at start-up and every CleanupInterval.
+	// A zero period disables its step.
+	//
+	// ExpireAfter is how long a message may wait unread before its delivery expires.
+	// RetainFor is how long a message is kept after its last change of state (once nothing of
+	// it is unread), so with the defaults a message lives at most ExpireAfter + RetainFor
+	// (44 days). SessionIdle is how long a session may stay unused before it is deleted.
+	// Deleting a session deletes the messages it sent, also from the other sessions' history,
+	// so the default SessionIdle (60 days) is longer than the longest life of a message.
+	ExpireAfter     time.Duration
+	RetainFor       time.Duration
+	SessionIdle     time.Duration
+	CleanupInterval time.Duration
+
+	// Limits of the stored data (see store.Limits). Lowering one deletes nothing: it applies
+	// to new messages and new sessions.
+	MaxBodyBytes       int
+	MaxUnread          int
+	MaxSessionsPerUser int
+}
+
+// Bounds of the options.
+const (
+	// MinCleanupInterval is the smallest CleanupInterval.
+	MinCleanupInterval = time.Second
+	// MaxMaxBodyBytes is the largest MaxBodyBytes.
+	MaxMaxBodyBytes = 1 << 20
+)
+
+// Limits returns the limits of the stored data.
+func (c Config) Limits() store.Limits {
+	return store.Limits{MaxBodyBytes: c.MaxBodyBytes, MaxUnread: c.MaxUnread, MaxSessionsPerUser: c.MaxSessionsPerUser}
+}
+
+// CleanupPolicy returns the periods of the periodic cleanup.
+func (c Config) CleanupPolicy() store.CleanupPolicy {
+	return store.CleanupPolicy{ExpireAfter: c.ExpireAfter, RetainFor: c.RetainFor, SessionIdle: c.SessionIdle}
 }
 
 // MaxInboxWaitMax is the largest value InboxWaitMax accepts.
@@ -44,6 +84,15 @@ func Default() Config {
 		DBPath:          "lounge.db",
 		ShutdownTimeout: 5 * time.Second,
 		InboxWaitMax:    45 * time.Second,
+
+		ExpireAfter:     14 * Day,
+		RetainFor:       30 * Day,
+		SessionIdle:     60 * Day,
+		CleanupInterval: time.Hour,
+
+		MaxBodyBytes:       store.DefaultMaxBodyBytes,
+		MaxUnread:          store.DefaultMaxUnread,
+		MaxSessionsPerUser: store.DefaultMaxSessionsPerUser,
 	}
 }
 
@@ -57,6 +106,26 @@ func (c Config) Validate() error {
 	}
 	if c.InboxWaitMax < 0 || c.InboxWaitMax > MaxInboxWaitMax {
 		return fmt.Errorf("--inbox-wait-max %s: use a duration from 0 (no waiting) to %s", c.InboxWaitMax, MaxInboxWaitMax)
+	}
+	for _, p := range []struct {
+		name string
+		d    time.Duration
+	}{{"--expire-after", c.ExpireAfter}, {"--retain-for", c.RetainFor}, {"--session-idle", c.SessionIdle}} {
+		if p.d < 0 {
+			return fmt.Errorf("%s %s: must not be negative (0 disables it)", p.name, p.d)
+		}
+	}
+	if c.CleanupInterval < MinCleanupInterval {
+		return fmt.Errorf("--cleanup-interval %s: use %s or more", FormatDuration(c.CleanupInterval), MinCleanupInterval)
+	}
+	if c.MaxBodyBytes < 1 || c.MaxBodyBytes > MaxMaxBodyBytes {
+		return fmt.Errorf("--max-body-bytes %d: use a number from 1 to %d", c.MaxBodyBytes, MaxMaxBodyBytes)
+	}
+	if c.MaxUnread < 1 {
+		return fmt.Errorf("--max-unread %d: use 1 or more", c.MaxUnread)
+	}
+	if c.MaxSessionsPerUser < 1 {
+		return fmt.Errorf("--max-sessions-per-user %d: use 1 or more", c.MaxSessionsPerUser)
 	}
 	host, _, err := net.SplitHostPort(c.Listen)
 	if err != nil {

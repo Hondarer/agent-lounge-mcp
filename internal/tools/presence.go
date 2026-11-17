@@ -25,6 +25,9 @@ type presence struct {
 	// takenOver remembers, for a connection that lost its session to a later join, the name
 	// of that session, so its next call can say what happened.
 	takenOver map[*mcp.ServerSession]string
+	// deleted remembers, for a connection whose session was deleted from the database, the
+	// name of that session, so its next calls can say what happened.
+	deleted map[*mcp.ServerSession]string
 	// watched are the connections whose end is awaited to drop their entries.
 	watched map[*mcp.ServerSession]bool
 }
@@ -34,6 +37,7 @@ func newPresence() *presence {
 		byConn:    map[*mcp.ServerSession]store.Session{},
 		bySession: map[int64]*mcp.ServerSession{},
 		takenOver: map[*mcp.ServerSession]string{},
+		deleted:   map[*mcp.ServerSession]string{},
 		watched:   map[*mcp.ServerSession]bool{},
 	}
 }
@@ -59,6 +63,7 @@ func (p *presence) bind(conn *mcp.ServerSession, sess store.Session) (changed []
 	p.byConn[conn] = sess
 	p.bySession[sess.ID] = conn
 	delete(p.takenOver, conn)
+	delete(p.deleted, conn)
 	if !p.watched[conn] {
 		p.watched[conn] = true
 		go func() {
@@ -80,7 +85,31 @@ func (p *presence) release(conn *mcp.ServerSession) {
 		}
 	}
 	delete(p.takenOver, conn)
+	delete(p.deleted, conn)
 	delete(p.watched, conn)
+}
+
+// dropDeleted unbinds conn from sess, a session that no longer exists in the database, and
+// remembers it, so that the connection's calls say the session was deleted until it joins
+// again.
+func (p *presence) dropDeleted(conn *mcp.ServerSession, sess store.Session) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if cur, ok := p.byConn[conn]; !ok || cur.ID != sess.ID {
+		return // joined again meanwhile
+	}
+	delete(p.byConn, conn)
+	if p.bySession[sess.ID] == conn {
+		delete(p.bySession, sess.ID)
+	}
+	p.deleted[conn] = sess.Name
+}
+
+// sessionDeletedError tells a connection that its session was deleted and how to go on.
+func sessionDeletedError(name string) error {
+	return fmt.Errorf("your session %q was deleted (it was not used for a long time, or an administrator removed it), "+
+		"together with its unread messages and the messages it sent. Call lounge_join again: joining with the name %q creates a new session. "+
+		"Call lounge_help for the usage guide", name, name)
 }
 
 // lookup returns the session conn joined.
@@ -97,6 +126,9 @@ func (p *presence) caller(conn *mcp.ServerSession) (store.Session, error) {
 	defer p.mu.Unlock()
 	if sess, ok := p.byConn[conn]; ok {
 		return sess, nil
+	}
+	if name, ok := p.deleted[conn]; ok {
+		return store.Session{}, sessionDeletedError(name)
 	}
 	if name, ok := p.takenOver[conn]; ok {
 		return store.Session{}, fmt.Errorf("not joined: another connection joined as %q and took the session over. "+

@@ -3,8 +3,9 @@
 //
 //	agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
 //
-// Users and their tokens are managed with the user subcommand (see user.go). Diagnostics go to
-// standard error.
+// Users and their tokens are managed with the user subcommand (see user.go), sessions with the
+// session subcommand, and the export subcommand writes the messages as Markdown files (see
+// admin.go). Diagnostics go to standard error.
 package main
 
 import (
@@ -55,6 +56,10 @@ func main() {
 		}
 	case "user":
 		os.Exit(runUser(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	case "session":
+		os.Exit(runSession(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	case "export":
+		os.Exit(runExport(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "version", "--version", "-version":
 		fmt.Println("agent-lounge-mcp", version.Version)
 	case "help", "--help", "-help", "-h":
@@ -68,8 +73,12 @@ func main() {
 
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--allowed-host NAME]... [--db FILE] [--inbox-wait-max DURATION]")
+	fmt.Fprintln(w, "           [--expire-after DURATION] [--retain-for DURATION] [--session-idle DURATION] [--cleanup-interval DURATION]")
+	fmt.Fprintln(w, "           [--max-body-bytes N] [--max-unread N] [--max-sessions-per-user N]")
 	fmt.Fprintln(w, "           start the server; see agent-lounge-mcp serve -h")
 	fmt.Fprintln(w, "       agent-lounge-mcp user add|list|rotate|remove ...  (manage users and their tokens; see agent-lounge-mcp user -h)")
+	fmt.Fprintln(w, "       agent-lounge-mcp session list|remove ...          (list and remove sessions; see agent-lounge-mcp session -h)")
+	fmt.Fprintln(w, "       agent-lounge-mcp export --out DIR [--format markdown] [--db FILE]  (write every message as Markdown files)")
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
@@ -89,6 +98,18 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 	fs.DurationVar(&cfg.InboxWaitMax, "inbox-wait-max", cfg.InboxWaitMax,
 		"longest time chat_inbox may wait for a message (0 disables waiting, at most "+config.MaxInboxWaitMax.String()+
 			"); keep it below the agents' tool-call time limit")
+	fs.Var(config.DurationValue{D: &cfg.ExpireAfter}, "expire-after",
+		"time after which a message nobody read expires (0: never). Durations take h, m, s and d (24h), such as 14d or 1d12h")
+	fs.Var(config.DurationValue{D: &cfg.RetainFor}, "retain-for",
+		"time after its last change of state (read, acked or expired) after which a message with nothing unread is deleted (0: never)")
+	fs.Var(config.DurationValue{D: &cfg.SessionIdle}, "session-idle",
+		"time without use after which a session is deleted with the messages it sent (0: never)")
+	fs.Var(config.DurationValue{D: &cfg.CleanupInterval}, "cleanup-interval",
+		"interval of the cleanup (expiry and deletion), which also runs at start-up; at least "+config.MinCleanupInterval.String())
+	fs.IntVar(&cfg.MaxBodyBytes, "max-body-bytes", cfg.MaxBodyBytes,
+		fmt.Sprintf("largest message body in bytes of UTF-8 (1 to %d)", config.MaxMaxBodyBytes))
+	fs.IntVar(&cfg.MaxUnread, "max-unread", cfg.MaxUnread, "most unread messages one session can hold (1 or more)")
+	fs.IntVar(&cfg.MaxSessionsPerUser, "max-sessions-per-user", cfg.MaxSessionsPerUser, "most sessions one user can have (1 or more)")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -156,6 +177,9 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 	if err != nil {
 		return err
 	}
+	// The cleanup runs while the server serves, and stops before the store is closed.
+	stopCleanup := startCleanup(ctx, st, cfg)
+	defer stopCleanup()
 	sess := server.Session{Store: st, LocalUser: local}
 	srv := server.New(cfg, sess)
 	hs := &http.Server{Handler: server.Handler(srv, sess)}
@@ -163,6 +187,7 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 	log.Printf("version %s, database %s", version.Version, cfg.DBPath)
 	addr := listenAddr(cfg.Listen, ln.Addr())
 	log.Printf("serving MCP at http://%s%s", addr, server.MCPPath)
+	log.Print(describeCleanupPolicy(cfg))
 	if cfg.ListensRemote() {
 		log.Printf("warning: listening on %s without TLS: tokens and messages travel unencrypted. "+
 			"Use it only on a trusted network, or put an HTTPS reverse proxy in front.", addr)

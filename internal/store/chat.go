@@ -24,17 +24,37 @@ const (
 	localTokenHash = "none:" + LocalUser
 )
 
-// Limits. The usage guide (lounge_help) states them from these constants.
-const (
+// Limits bound what sessions can store. The server sets them from its startup options (see
+// package config); the usage guide (lounge_help) states the values in effect. Lowering a limit
+// deletes nothing: it applies to new messages and new sessions.
+type Limits struct {
 	// MaxBodyBytes is the largest message body, in bytes of UTF-8.
-	MaxBodyBytes = 65536
+	MaxBodyBytes int
 	// MaxUnread is the most unread messages one session can hold. A message to a session that
 	// holds this many is refused; a room message skips that session.
-	MaxUnread = 1000
+	MaxUnread int
 	// MaxSessionsPerUser is the most sessions one user can have. Joining under a new name fails
 	// beyond it; joining under an existing name still works.
-	MaxSessionsPerUser = 500
+	MaxSessionsPerUser int
+}
+
+// Default limits, used until SetLimits is called.
+const (
+	DefaultMaxBodyBytes       = 65536
+	DefaultMaxUnread          = 1000
+	DefaultMaxSessionsPerUser = 500
 )
+
+// DefaultLimits returns the limits a store has when it is opened.
+func DefaultLimits() Limits {
+	return Limits{MaxBodyBytes: DefaultMaxBodyBytes, MaxUnread: DefaultMaxUnread, MaxSessionsPerUser: DefaultMaxSessionsPerUser}
+}
+
+// SetLimits replaces the limits. Call it before the store is used concurrently.
+func (s *Store) SetLimits(l Limits) { s.limits = l }
+
+// Limits returns the limits in effect.
+func (s *Store) Limits() Limits { return s.limits }
 
 // Errors the tools turn into guidance for agents.
 var (
@@ -49,12 +69,13 @@ var (
 	// ErrNoRepository is returned for a message of scope repository from a session that
 	// declared no repository.
 	ErrNoRepository = errors.New("the sending session has no repository")
-	// ErrBodyTooLarge is returned for a body over MaxBodyBytes.
+	// ErrBodyTooLarge is returned for a body over Limits.MaxBodyBytes.
 	ErrBodyTooLarge = errors.New("the message body is too large")
-	// ErrInboxFull is returned for a message to a session that holds MaxUnread unread messages.
+	// ErrInboxFull is returned for a message to a session that holds Limits.MaxUnread unread
+	// messages.
 	ErrInboxFull = errors.New("the recipient's inbox is full")
 	// ErrTooManySessions is returned for joining under a new name when the user has
-	// MaxSessionsPerUser sessions.
+	// Limits.MaxSessionsPerUser sessions.
 	ErrTooManySessions = errors.New("the user has too many sessions")
 	// ErrMachineRequired is returned by JoinSession when the session would have a folder
 	// without an origin and without a machine.
@@ -112,7 +133,7 @@ type Sent struct {
 	// Recipients are the sessions the message is queued for, ordered by name.
 	Recipients []Member
 	// Skipped are the sessions of a room that did not get the message because their inbox
-	// was full (MaxUnread).
+	// was full (Limits.MaxUnread).
 	Skipped []Member
 }
 
@@ -121,8 +142,9 @@ type InboxMessage struct {
 	MessageID int64
 	FromUser  string // sender's user name
 	From      string // sender's session name
-	FromAgent string
-	// FromOSUser and FromMachine are the sender's declared values ("" when not declared).
+	// FromAgent, FromOSUser and FromMachine are the values the sender declared when it sent
+	// the message ("" when not declared).
+	FromAgent   string
 	FromOSUser  string
 	FromMachine string
 	Scope       Scope
@@ -196,7 +218,7 @@ func (s *Store) EnsureLocalUser(ctx context.Context) (User, error) {
 // JoinSession returns the user's session named p.Name, creating it when missing, and records
 // the declared values of p. resumed reports that the session existed. Session names are unique
 // per user, so joining under a name continues only a session of the same user. A new name fails
-// with ErrTooManySessions when the user has MaxSessionsPerUser sessions.
+// with ErrTooManySessions when the user has Limits.MaxSessionsPerUser sessions.
 //
 // origin and folder are replaced as one set (p.Location), never one at a time: a session that
 // moves from a repository with an origin to a folder without one must not keep the old origin,
@@ -251,7 +273,7 @@ func (s *Store) JoinSession(ctx context.Context, p JoinParams) (sess Session, re
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM sessions WHERE user_id = ?", p.UserID).Scan(&count); err != nil {
 			return err
 		}
-		if count >= MaxSessionsPerUser {
+		if count >= s.limits.MaxSessionsPerUser {
 			return ErrTooManySessions
 		}
 		res, err := tx.ExecContext(ctx, `
@@ -295,8 +317,8 @@ func freeSessionName(ctx context.Context, tx *sql.Tx, userID int64) (string, err
 	return "", errors.New("no free session name found; pass a name")
 }
 
-// Seen records that the session was used now and returns its number of unread messages
-// (deliveries still queued).
+// Seen records that the session was used now and returns its number of unread messages:
+// deliveries still queued. Expired deliveries are not unread.
 func (s *Store) Seen(ctx context.Context, sessionID int64) (unread int, err error) {
 	if _, err := s.db.ExecContext(ctx, "UPDATE sessions SET last_seen_at = ? WHERE id = ?", millis(s.now()), sessionID); err != nil {
 		return 0, fmt.Errorf("update session: %w", err)
@@ -415,7 +437,7 @@ func (s *Store) Send(ctx context.Context, senderID int64, scope string, target T
 	if !ok {
 		return Sent{}, ErrInvalidScope
 	}
-	if len(body) > MaxBodyBytes {
+	if len(body) > s.limits.MaxBodyBytes {
 		return Sent{}, ErrBodyTooLarge
 	}
 	var sent Sent
@@ -483,7 +505,7 @@ func (s *Store) sendToSession(ctx context.Context, tx *sql.Tx, sender Session, s
 		return Sent{}, ErrNoSuchSession
 	case found[0].ID == sender.ID:
 		return Sent{}, ErrSendToSelf
-	case found[0].unread >= MaxUnread:
+	case found[0].unread >= s.limits.MaxUnread:
 		return Sent{}, ErrInboxFull
 	}
 	return s.store(ctx, tx, sender, sc, "to_session_id", found[0].ID, body, found[:1], nil)
@@ -513,7 +535,7 @@ func (s *Store) sendToRoom(ctx context.Context, tx *sql.Tx, sender Session, sc S
 	}
 	var recipients, skipped []candidate
 	for _, c := range found {
-		if c.unread >= MaxUnread {
+		if c.unread >= s.limits.MaxUnread {
 			skipped = append(skipped, c)
 		} else {
 			recipients = append(recipients, c)
@@ -527,9 +549,11 @@ func (s *Store) sendToRoom(ctx context.Context, tx *sql.Tx, sender Session, sc S
 func (s *Store) store(ctx context.Context, tx *sql.Tx, sender Session, sc Scope, column string, dest int64, body string,
 	recipients, skipped []candidate) (Sent, error) {
 	now := millis(s.now())
+	// The sender's declared values are copied as they are now (see schema version 4).
 	res, err := tx.ExecContext(ctx,
-		"INSERT INTO messages (scope, scope_id, sender_session_id, "+column+", body, sent_at) VALUES (?, ?, ?, ?, ?, ?)",
-		sc.Kind, sc.ID, sender.ID, dest, body, now)
+		"INSERT INTO messages (scope, scope_id, sender_session_id, "+column+`, body, sent_at, sender_agent, sender_os_user, sender_machine)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sc.Kind, sc.ID, sender.ID, dest, body, now, sender.Agent, sender.OSUser, sender.Machine)
 	if err != nil {
 		return Sent{}, err
 	}
@@ -558,7 +582,7 @@ func (s *Store) FetchInbox(ctx context.Context, sessionID int64, limit int) ([]I
 	msgs := []InboxMessage{}
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		rows, err := tx.QueryContext(ctx, `
-			SELECT m.id, u.name, s.name, s.agent, s.os_user, s.machine, m.scope, m.scope_id, coalesce(r.name, ''),
+			SELECT m.id, u.name, s.name, m.sender_agent, m.sender_os_user, m.sender_machine, m.scope, m.scope_id, coalesce(r.name, ''),
 				m.body, m.sent_at
 			FROM deliveries d
 			JOIN messages m ON m.id = d.message_id

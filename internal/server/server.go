@@ -41,6 +41,8 @@ type Server struct {
 
 // New creates the MCP server with all tools registered.
 func New(cfg config.Config, sess Session) *Server {
+	// The store enforces the limits that the tools state.
+	sess.Store.SetLimits(cfg.Limits())
 	d := &tools.Deps{Cfg: cfg, Store: sess.Store, LocalUser: sess.LocalUser}
 	impl := &mcp.Implementation{Name: "agent-lounge-mcp", Title: "agent-lounge-mcp", Version: version.Version}
 	registry := tools.Prepare(d)

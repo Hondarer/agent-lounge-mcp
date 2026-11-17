@@ -1,7 +1,11 @@
 #!/bin/sh
 # Verify that connections to a running agent-lounge-mcp server can talk: they join with profiles,
 # one sends a message to another's session and one to the lounge room of the user, and the other
-# receives both. Then the repository scope: probe-a and probe-b declare one repository in two
+# receives both. Then the completion of messages: probe-a checks the delivery of its message
+# with chat_status (delivered, then acked after probe-b calls chat_ack, which gives the same
+# result when repeated), another session's status request gets the error of a missing message,
+# and chat_history returns the conversation in both directions, the read and unacked messages
+# with unacked, and no unread message. Then the repository scope: probe-a and probe-b declare one repository in two
 # forms of its origin, probe-c declares a folder without origin; a message to the repository room
 # reaches probe-b and not probe-c, and a message to probe-b in scope repository reaches it. Then
 # one connection waits in chat_inbox (wait_seconds) and receives a message sent while it waits;
@@ -131,6 +135,11 @@ field() {
 	printf '%s' "$2" | grep -o "\"$1\":\"[^\"]*\"" | head -n 1 | cut -d'"' -f4
 }
 
+# num_field NAME RESPONSE: print the first number value of NAME in RESPONSE.
+num_field() {
+	printf '%s' "$2" | grep -o "\"$1\":[0-9][0-9]*" | head -n 1 | cut -d: -f2
+}
+
 # The order of keys in a result is not fixed, so checks look at single fields of single objects.
 # norm RESPONSE: print RESPONSE with each scope object ({"scope":S,"id":I} in any key order)
 # replaced by <S:I>, so that sessions and messages are objects without nested objects.
@@ -210,6 +219,8 @@ done
 echo "OK: lounge_who lists the scopes with their ids, and each session's user, address and shared scopes"
 
 out=$(call "$a" chat_send "{\"to\":\"probe-b\",\"body\":\"direct-$mark\"}")
+direct_id=$(num_field message_id "$out")
+[ -n "$direct_id" ] || ng "chat_send returned no message_id: $out"
 expect '"recipients":["probe-b"]' "chat_send to a session" "$out"
 expect '"scope":"user"' "chat_send to a session" "$out"
 expect "\"scope_id\":\"$user_a\"" "chat_send to a session" "$out"
@@ -224,6 +235,59 @@ for f in '"from":"probe-a"' "\"from_user\":\"$user_a\"" '"scope":"user"' "\"scop
 done
 reject '"room"' "chat_inbox (a message to a session)" "$msg"
 echo "OK: message to a session delivered (probe-a -> probe-b), with scope, scope_id and reply_to"
+
+# chat_status: the sender sees the delivery; chat_ack: the recipient records that it handled
+# the message, and repeating the call gives the same result.
+out=$(call "$a" chat_status "{\"message_id\":$direct_id}")
+recipient=$(object_with '"address":"probe-b"' "$out")
+[ -n "$recipient" ] || ng "chat_status lists no probe-b: $out"
+expect '"state":"delivered"' "chat_status after chat_inbox" "$recipient"
+expect '"delivered_at":"' "chat_status after chat_inbox" "$recipient"
+reject '"acked_at"' "chat_status before chat_ack" "$recipient"
+expect '"delivered":1' "chat_status counts" "$out"
+missing_id=999999999
+out=$(call "$b" chat_ack "{\"message_ids\":[$direct_id,$missing_id]}")
+expect "\"acked\":[$direct_id]" "chat_ack" "$out"
+expect "\"not_found\":[$missing_id]" "chat_ack of a missing message" "$out"
+out=$(call "$b" chat_ack "{\"message_ids\":[$direct_id]}")
+expect "\"acked\":[$direct_id]" "chat_ack repeated" "$out"
+reject '"not_found"' "chat_ack repeated" "$out"
+out=$(call "$a" chat_status "{\"message_id\":$direct_id}")
+recipient=$(object_with '"address":"probe-b"' "$out")
+expect '"state":"acked"' "chat_status after chat_ack" "$recipient"
+expect '"acked_at":"' "chat_status after chat_ack" "$recipient"
+expect '"acked":1' "chat_status counts after chat_ack" "$out"
+# Another session's message and a missing message give the same error.
+other=$(call_error "$b" chat_status "{\"message_id\":$direct_id}" | sed "s/$direct_id/<id>/g")
+missing=$(call_error "$a" chat_status "{\"message_id\":$missing_id}" | sed "s/$missing_id/<id>/g")
+[ "$other" = "$missing" ] || ng "chat_status of another session's message and of a missing one give different errors: $other / $missing"
+echo "OK: chat_status shows delivered, then acked after chat_ack (repeatable); another session's message gives the error of a missing one"
+
+# chat_history: both directions, unacked, and no unread message.
+call "$a" chat_send "{\"to\":\"probe-b\",\"body\":\"pending-$mark\"}" >/dev/null
+call "$b" chat_inbox '{"limit":100}' >/dev/null
+call "$a" chat_send "{\"to\":\"probe-b\",\"body\":\"unread-$mark\"}" >/dev/null
+out=$(call "$b" chat_history '{"with":"probe-a","limit":100}')
+reject "unread-$mark" "chat_history (an unread message)" "$out"
+msg=$(object_with "\"body\":\"direct-$mark\"" "$out")
+[ -n "$msg" ] || ng "chat_history of probe-b: no message direct-$mark in: $out"
+for f in '"direction":"received"' '"state":"acked"' '"reply_to":"probe-a"' '"to":"probe-b"' '"from_agent":"chat-probe"'; do
+	expect "$f" "chat_history (received)" "$msg"
+done
+out=$(call "$b" chat_history '{"unacked":true,"limit":100}')
+expect "\"body\":\"pending-$mark\"" "chat_history unacked" "$out"
+reject "\"body\":\"direct-$mark\"" "chat_history unacked" "$out"
+out=$(call "$a" chat_history '{"with":"probe-b","limit":1}')
+msg=$(object_with "\"body\":\"unread-$mark\"" "$out")
+[ -n "$msg" ] || ng "chat_history of probe-a: no message unread-$mark in: $out"
+expect '"direction":"sent"' "chat_history (sent)" "$msg"
+reject '"state"' "chat_history (sent)" "$msg"
+expect '"next_before":' "chat_history with limit 1" "$out"
+out=$(call "$b" chat_inbox '{"limit":100}')
+expect "\"body\":\"unread-$mark\"" "chat_inbox after chat_history (history must not mark messages read)" "$out"
+out=$(call "$b" chat_ack "{\"message_ids\":[$(num_field message_id "$(object_with "\"body\":\"unread-$mark\"" "$out")")]}")
+expect '"acked":[' "chat_ack of unread-$mark" "$out"
+echo "OK: chat_history returns sent and received messages, unacked ones with unacked, and leaves unread ones to chat_inbox"
 
 out=$(call "$b" chat_send "{\"room\":\"lounge\",\"body\":\"room-$mark\"}")
 expect '"probe-a"' "chat_send to the room" "$out"

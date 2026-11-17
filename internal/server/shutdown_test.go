@@ -23,6 +23,8 @@ func TestShutdownFailsToolCalls(t *testing.T) {
 		"lounge_join": {"name": "alice"},
 		"chat_send":   {"to": "bob", "body": "x"},
 		"chat_inbox":  {"wait_seconds": 10},
+		"chat_ack":    {"message_ids": []int64{1}},
+		"chat_status": {"message_id": 1},
 	}
 	for _, c := range []*mcp.ClientSession{cs[0], fresh} {
 		for _, name := range toolNames {
