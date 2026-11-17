@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 最終仕様 (design)
-最終更新日時: 2026-11-17 12:04:37 JST
+最終更新日時: 2026-11-17 19:20:42 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 上流文書: `261117-repository-space-discussion.md` (検討用 Markdown、合意版は版 2)。削除されている場合があります。
@@ -322,3 +322,22 @@ origin は実在しない URL で、通信は行いません。フォルダー�
 | 場所を 1 組として置き換える理由 | `internal/store/chat.go` のコメント、`docs/ja/reference.md` |
 | プロフィールは申告の値で、認証ではないこと。`os_user` の例外 | 企画提案書の「安全面の扱い」、`docs/ja/user-guide.md`、`lounge_help` |
 | 空間が 3 つであることと、リポジトリの空間の目的 (協調と、別のリポジトリと混ざらないこと) | 企画提案書の「空間の分け方」 |
+
+## 承認の後に加えた変更
+
+第 2 ゲートの承認 (2026-11-17) の後、エージェントでの確認の結果を受けて、次の点を変えました。経緯は、確認の記録 (`261117-repository-space-validation.md`) の「確認の中で直した点」にあります。現在の仕様の正本は、`docs/ja/reference.md` と `lounge_help` の本文です。
+
+| 項目 | 承認した仕様 | 変更後 |
+| --- | --- | --- |
+| `lounge_help` の Profile | 項目ごとの調べ方の一覧 | 番号付きの手順。最初に `echo $WSL_DISTRO_NAME` で WSL かどうかを確かめる。コマンドを 1 つずつ実行する。調べられない値は、推測せずに省略する |
+| WSL の `os_user`、`machine` のコマンド | `cmd.exe /c "echo %USERNAME%"`、`cmd.exe /c hostname` | 末尾に `</dev/null` を付ける (入力待ちで止まらないようにする) |
+| Windows の `os_user` のコマンド | `echo %USERNAME%` | シェルごとの形 (PowerShell: `$env:USERNAME`、cmd: `echo %USERNAME%`、Git Bash: `echo $USERNAME`) |
+| Linux と macOS の `machine` のコマンド | `hostname` | `uname -n` |
+| `os_user`、`machine` の正規化 | 前後の空白を除く | 空でない最後の行を取ってから、前後の空白を除く。展開されていない変数の形 (`%USERNAME%` など) は、エラーにする |
+| `wsl_distro` だけを渡した `lounge_join` | 場所を消去する | エラーにする |
+| `lounge_join` の出力 | プロフィールと `repository` | `folder` が Linux のパスの形のときに、WSL の確認を促す `hint` を加える |
+| origin、`folder`、`wsl_distro` の長さ | 定めなし | 正規化の前で、それぞれ 1024 文字以下 |
+| 移行の実行 | 定めなし | 外部キーの検査を止めて実行し、コミットの前に `PRAGMA foreign_key_check` で確かめる (テーブルの作り直しで、参照する行が消えないようにする) |
+| 5 つのエージェントでの確認の条件 | agent-lounge のツールと、読み取りのコマンドだけを許可する | Codex と agy は、すべての許可を省くオプションを使う (利用者の許可、2026-11-17) |
+| 到達点 5 (Windows の側のエージェント) | 未検証として文書に書く | Windows の Claude Code で検証する (利用者の指示、2026-11-17)。他の CLI は未検証 |
+| コミットとプッシュ | 利用者の指示があるまで行わない | 必要に応じて行う (利用者の許可、2026-11-17。Windows の側の作業リポジトリが別の実体のため) |

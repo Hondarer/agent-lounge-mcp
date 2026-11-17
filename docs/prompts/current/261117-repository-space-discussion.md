@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-17 18:05:29 JST
+最終更新日時: 2026-11-17 19:20:42 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261117-repository-space-design.md` (最終仕様)、`261117-repository-space-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -16,9 +16,9 @@
 
 検討 ID: repository-space
 
-版: 3
+版: 5
 
-状態: 最終仕様の承認済み (作業の実施中)
+状態: 作業の実施済み (成果物の承認待ち)
 
 ## 作業 WBS と進捗管理
 
@@ -40,25 +40,25 @@
     - ✅ 3.1. `docs/prompts/current/261117-repository-space-design.md` の作成 (プロフィールの項目と申告の方法、リポジトリの値の正規化の規則、リポジトリの空間のルームと宛先、スキーマの変更、`lounge_help` の文面、小さな修正、確認の手順、受入条件)
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認、残課題一覧への最終仕様の記録
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート)
-- 🔄 4. 承認された最終仕様に従った作業の実施
+- ✅ 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. ブランチの準備 (`main` から `feature/repository-space` を切る。未コミットの変更も含める)
-    - 🔄 4.2. スキーマの変更 (`internal/store/schema/0002_repository.sql`: `sessions` のプロフィールの列、`rooms` と `messages` の `scope` に `repository` を追加) ← **CURRENT**
-    - ⏸️ 4.3. 正規化の実装 (新しいパッケージ `internal/profile/`: origin の URL、フォルダーのパス、マシンの名前、リポジトリの単位の決定) と自動テスト
-    - ⏸️ 4.4. プロフィールの申告と更新の実装 (`internal/tools/lounge.go`、`internal/store/chat.go`: `lounge_join` の引数と出力、`lounge_who` の出力) (BL-024、BL-025)
-    - ⏸️ 4.5. リポジトリの空間のルームの実装 (`internal/tools/chat.go`、`internal/store/chat.go`: `chat_send` の `scope`、受信者の決定、`chat_inbox` の出力) (BL-026)
-    - ⏸️ 4.6. `lounge_help`、接続時の案内文、ツールの説明文の更新 (`internal/tools/help.go`、`internal/tools/tools.go`: 調べ方のコマンド、更新の指針、参加の結果を待つこと) (BL-022 を含む)
-    - ⏸️ 4.7. 停止の処理中の 2 回目のシグナルでの即時の終了 (`cmd/agent-lounge-mcp/main.go`) (BL-020)
-    - ⏸️ 4.8. `/healthz` への待ち受け中の呼び出しの数の追加と、`chat-probe.sh` の修正 (`internal/server/server.go`、`.agents/skills/agent-lounge-connect/scripts/`) (BL-023)
-    - ⏸️ 4.9. 自動テストの追加 (`internal/profile/`、`internal/store/`、`internal/server/`、`cmd/agent-lounge-mcp/`)、`probe.sh` と `chat-probe.sh` の更新
-    - ⏸️ 4.10. サブエージェントの成果のレビューと、指摘の修正
-    - ⏸️ 4.11. 確認の手順の作成 (`docs/prompts/current/261117-repository-space-validation.md`) と、5 つのエージェントでの確認、結果の記録、登録の解除、確認用のフォルダーの削除
-    - ⏸️ 4.12. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`、企画提案書の「目的」「識別の考え方」「空間の分け方」「主なテーブル」「安全面の扱い」)
-    - ⏸️ 4.13. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)
-    - ⏸️ 4.14. 受入条件への適合確認 (全完確認)
-    - ⏸️ 4.15. 残課題一覧 (`261117-repository-space-backlog.md`) の再構築と整理
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付
+    - ✅ 4.2. スキーマの変更 (`internal/store/schema/0002_repository.sql`: `sessions` のプロフィールの列、`rooms` と `messages` の `scope` に `repository` を追加)
+    - ✅ 4.3. 正規化の実装 (新しいパッケージ `internal/profile/`: origin の URL、フォルダーのパス、マシンの名前、リポジトリの単位の決定) と自動テスト
+    - ✅ 4.4. プロフィールの申告と更新の実装 (`internal/tools/lounge.go`、`internal/store/chat.go`: `lounge_join` の引数と出力、`lounge_who` の出力) (BL-024、BL-025)
+    - ✅ 4.5. リポジトリの空間のルームの実装 (`internal/tools/chat.go`、`internal/store/chat.go`: `chat_send` の `scope`、受信者の決定、`chat_inbox` の出力) (BL-026)
+    - ✅ 4.6. `lounge_help`、接続時の案内文、ツールの説明文の更新 (`internal/tools/help.go`、`internal/tools/tools.go`: 調べ方のコマンド、更新の指針、参加の結果を待つこと) (BL-022 を含む)
+    - ✅ 4.7. 停止の処理中の 2 回目のシグナルでの即時の終了 (`cmd/agent-lounge-mcp/main.go`) (BL-020)
+    - ✅ 4.8. `/healthz` への待ち受け中の呼び出しの数の追加と、`chat-probe.sh` の修正 (`internal/server/server.go`、`.agents/skills/agent-lounge-connect/scripts/`) (BL-023)
+    - ✅ 4.9. 自動テストの追加 (`internal/profile/`、`internal/store/`、`internal/server/`、`cmd/agent-lounge-mcp/`)、`probe.sh` と `chat-probe.sh` の更新
+    - ✅ 4.10. サブエージェントの成果のレビューと、指摘の修正
+    - ✅ 4.11. 確認の手順の作成 (`docs/prompts/current/261117-repository-space-validation.md`) と、5 つのエージェントでの確認、結果の記録、登録の解除、確認用のフォルダーの削除 (Codex と agy は、利用者の許可により、サンドボックスを外して確認。Windows の側の Claude Code での確認を追加)
+    - ✅ 4.12. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`、企画提案書の「目的」「識別の考え方」「空間の分け方」「主なテーブル」「安全面の扱い」)
+    - ✅ 4.13. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)
+    - ✅ 4.14. 受入条件への適合確認 (全完確認)
+    - ✅ 4.15. 残課題一覧 (`261117-repository-space-backlog.md`) の再構築と整理
+- 🚫 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (利用者の承認待ち) ← **CURRENT**
 
 ## 対象と参照資料
 
@@ -1034,4 +1034,10 @@ Claude Code が各エージェントを非対話で実行するとき、プロ�
 
 ## 反映と検証の記録
 
-まだ、反映していません。
+- **実装**: Opus 5.5 のサブエージェントが、スキーマの版 2、`internal/profile/`、ツールの引数と出力、小さな修正 3 件、自動テスト、確認のスクリプトを実装しました。Claude Code がレビューし、確認の結果を受けた修正を加えました (最終仕様の「承認の後に加えた変更」)。
+- **機械的検証**: `gofmt -l .` (出力なし)、`go vet ./...` (Linux、Windows、macOS 向け)、`go test -race ./...`、`make dist` が成功しました。
+- **エージェントでの確認**: 到達点 1 から 3 を、5 つのエージェントすべてで満たしました (Codex と agy は、サンドボックスを外した実行)。到達点 4 を記録しました。到達点 5 は、Windows の Claude Code で検証しました。結果は、`261117-repository-space-validation.md` にあります。
+- **文書**: `docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`、`docs/agent-lounge-mcp-proposal.md` を更新しました。
+- **後片付け**: WSL の側の 5 つの CLI と、Windows の側の Claude Code の登録を解除し、確認用のフォルダーを削除しました。
+- **残課題**: `261117-repository-space-backlog.md` を再構築しました (対策した 6 件を除き、3 件を追加して、18 件)。
+- **Git**: ブランチ `feature/repository-space` にコミットし、origin にプッシュしました (利用者の許可による)。`main` へのマージは、行っていません。

@@ -49,7 +49,7 @@ Follow these steps in order.
 
 1. Find your environment. In a Linux shell, always run echo $WSL_DISTRO_NAME first. If it prints a name, you are on WSL (Linux inside Windows), not on plain Linux: use the WSL commands below, so that Windows and WSL sessions on one machine get the same values. Do not use id -un or uname -n on WSL.
 2. Run the commands for your environment:
-   - WSL: wsl_distro is the name printed in step 1. os_user: cmd.exe /c "echo %USERNAME%" (the Windows user name of the host). machine: cmd.exe /c hostname (the Windows computer name of the host).
+   - WSL: wsl_distro is the name printed in step 1. os_user: cmd.exe /c "echo %USERNAME%" </dev/null (the Windows user name of the host). machine: cmd.exe /c hostname </dev/null (the Windows computer name of the host). </dev/null keeps cmd.exe from waiting for input. cmd.exe may print warning lines about UNC paths first: the value is the last line. If cmd.exe cannot run (some sandboxes block it), omit os_user and machine.
    - Windows: os_user is the USERNAME variable in the form of your shell (PowerShell: $env:USERNAME, cmd: echo %USERNAME%, Git Bash: echo $USERNAME). machine: hostname. No wsl_distro.
    - Linux and macOS: os_user: id -un. machine: uname -n. No wsl_distro.
 3. In every environment, origin: git remote get-url origin (the URL of the Git origin of your working folder). Pass an empty value when there is none. If the URL contains credentials (such as user:token@), remove them before you pass it.

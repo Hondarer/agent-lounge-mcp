@@ -261,3 +261,13 @@ func TestUnexpandedVariable(t *testing.T) {
 		}
 	}
 }
+
+func TestLastLine(t *testing.T) {
+	in := "'\\\\wsl.localhost\\Ubuntu\\home\\u'\r\nCMD.EXE was started with the above path as the current directory.\r\nUNC paths are not supported.\r\nHOST-A\r\n\r\n"
+	if got, err := Machine(in); err != nil || got != "host-a" {
+		t.Errorf("Machine = %q, %v", got, err)
+	}
+	if got, err := OSUser(strings.ReplaceAll(in, "HOST-A", `CORP\alice`)); err != nil || got != `CORP\alice` {
+		t.Errorf("OSUser = %q, %v", got, err)
+	}
+}

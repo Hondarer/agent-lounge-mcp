@@ -30,16 +30,29 @@ const MaxNameLen = 128
 // without a machine: the same path on another machine would otherwise share the unit.
 var ErrMachineRequired = errors.New("a folder without an origin needs a machine")
 
-// OSUser normalizes the OS user name: surrounding white space is removed and a Windows
+// OSUser normalizes the OS user name: the last non-empty line is taken, trimmed, and a Windows
 // DOMAIN\user form is kept as is. An empty result means no value.
 func OSUser(raw string) (string, error) {
-	return name("os_user", strings.TrimSpace(raw))
+	return name("os_user", lastLine(raw))
 }
 
-// Machine normalizes the machine name: surrounding white space is removed and the name is
+// Machine normalizes the machine name: the last non-empty line is taken, trimmed and
 // lowercased. An empty result means no value.
 func Machine(raw string) (string, error) {
-	return name("machine", strings.ToLower(strings.TrimSpace(raw)))
+	return name("machine", strings.ToLower(lastLine(raw)))
+}
+
+// lastLine returns the last non-empty line of s, trimmed. On WSL, cmd.exe started in a Linux
+// folder prints warning lines about UNC paths before the value, and agents pass the output as
+// it is.
+func lastLine(s string) string {
+	lines := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == '\r' })
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.TrimSpace(lines[i]); l != "" {
+			return l
+		}
+	}
+	return ""
 }
 
 func name(field, s string) (string, error) {
