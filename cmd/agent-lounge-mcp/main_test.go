@@ -48,6 +48,17 @@ func TestParseServeFlags(t *testing.T) {
 	if cfg.Listen != "127.0.0.1:9000" || cfg.DBPath != "/tmp/x.db" || cfg.InboxWaitMax != 2*time.Minute {
 		t.Errorf("got %+v", cfg)
 	}
+	cfg, err = parse("--memory-half-life", "3d", "--memory-fade-threshold", "0.25", "--memory-grace", "0", "--max-memory-bytes", "100", "--max-memories-per-scope", "5")
+	if err != nil || cfg.MemoryHalfLife != 3*config.Day || cfg.MemoryFadeThreshold != 0.25 || cfg.MemoryGrace != 0 ||
+		cfg.MaxMemoryBytes != 100 || cfg.MaxMemoriesPerScope != 5 {
+		t.Errorf("memory options: %+v %v", cfg, err)
+	}
+	for _, bad := range [][]string{{"--memory-fade-threshold", "0"}, {"--memory-fade-threshold", "1"}, {"--max-memory-bytes", "0"},
+		{"--max-memories-per-scope", "0"}, {"--memory-half-life", "-1d"}} {
+		if _, err := parse(bad...); err == nil {
+			t.Errorf("%v: no error", bad)
+		}
+	}
 	if cfg, err = parse("--inbox-wait-max", "0"); err != nil || cfg.InboxWaitMax != 0 {
 		t.Errorf("--inbox-wait-max 0: %+v %v", cfg, err)
 	}

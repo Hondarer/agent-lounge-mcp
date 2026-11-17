@@ -28,6 +28,8 @@ type CleanupResult struct {
 	// Sessions are the unused sessions deleted; SessionMessages and SessionDeliveries are the
 	// messages and deliveries deleted with them.
 	Sessions, SessionMessages, SessionDeliveries int
+	// Memories are the memories deleted by the forgetting model (the store's RetentionPolicy).
+	Memories int
 }
 
 // Empty reports whether the cleanup did nothing.
@@ -35,7 +37,7 @@ func (r CleanupResult) Empty() bool {
 	return r == CleanupResult{}
 }
 
-// Cleanup runs the three steps of the periodic cleanup, in this order, with the store's clock:
+// Cleanup runs the four steps of the periodic cleanup, in this order, with the store's clock:
 //
 //  1. Expire: a delivery queued longer than ExpireAfter becomes expired. Only queued
 //     deliveries expire: a delivered one stays delivered until it is acked (see delivery.go).
@@ -46,7 +48,11 @@ func (r CleanupResult) Empty() bool {
 //     state but queued, not only acked: messages that are never acked, and expired ones, would
 //     otherwise stay forever. A queued message is kept until it expires.
 //  3. Delete sessions: a session unused for longer than SessionIdle is deleted, with the
-//     messages it sent, the messages addressed to it and every delivery to it.
+//     messages it sent, the messages addressed to it and every delivery to it. The memories
+//     it wrote stay: a memory outlives its session.
+//  4. Delete memories: a memory that faded more than the grace period ago is deleted, under
+//     the store's RetentionPolicy (see retention.go), and the references older than
+//     ReferenceWindow are dropped.
 //
 // Each step is its own transaction. When a step fails, Cleanup returns what the earlier steps
 // did with the error; the caller tries again at its next run.
@@ -119,6 +125,15 @@ func (s *Store) Cleanup(ctx context.Context, p CleanupPolicy) (CleanupResult, er
 		if err != nil {
 			return r, fmt.Errorf("delete unused sessions: %w", err)
 		}
+	}
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		r.Memories, err = s.deleteForgottenMemories(ctx, tx, now)
+		return err
+	})
+	if err != nil {
+		r.Memories = 0
+		return r, fmt.Errorf("delete forgotten memories: %w", err)
 	}
 	return r, nil
 }

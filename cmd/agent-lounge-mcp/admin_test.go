@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
+	"github.com/hondarer/agent-lounge-mcp/internal/export"
 	"github.com/hondarer/agent-lounge-mcp/internal/server"
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 	"github.com/hondarer/agent-lounge-mcp/internal/testutil"
@@ -145,7 +147,7 @@ func TestExportCommand(t *testing.T) {
 	}
 	seed(t, db, time.Now())
 	code, stdout, stderr := exportCmd("--out", out, "--format", "markdown", "--db", db)
-	if code != 0 || stdout != "exported 2 messages to 2 files in "+filepath.Join(out, "chat")+"\n" || !strings.Contains(stderr, "every user") {
+	if code != 0 || stdout != "exported 2 messages and 0 memories to 2 files in "+out+"\n" || !strings.Contains(stderr, "every user") {
 		t.Fatalf("export: %d %q %q", code, stdout, stderr)
 	}
 	room, err := os.ReadFile(filepath.Join(out, "chat", "user-local", "room-lounge.md"))
@@ -261,5 +263,144 @@ func TestStartCleanupRepeats(t *testing.T) {
 	stop()
 	if strings.Count(logged.String(), "cleanup:") != 2 {
 		t.Errorf("log:\n%s", logged.String())
+	}
+}
+
+// memory runs the memory subcommand and returns its exit code, stdout and stderr.
+func memory(args ...string) (int, string, string) {
+	var stdout, stderr bytes.Buffer
+	code := runMemory(context.Background(), args, &stdout, &stderr)
+	return code, stdout.String(), stderr.String()
+}
+
+// seedMemories adds a user memory with a title and a repository memory without one, created
+// at now, and returns their IDs.
+func seedMemories(t *testing.T, db string, now time.Time) (int64, int64) {
+	t.Helper()
+	ctx := context.Background()
+	st, err := store.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	st.SetClock(func() time.Time { return now })
+	local, err := st.EnsureLocalUser(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess, _, err := st.JoinSession(ctx, store.JoinParams{UserID: local.ID, Name: "carol", Location: &store.Location{Origin: "github.com/org/a"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, title, repo := "make clean fixes it", "Build\tfix", "first line of a long body that goes on and on\nsecond line"
+	tags := []string{"build"}
+	a, err := st.CreateMemory(ctx, sess.ID, store.ScopeUser, store.MemoryInput{Body: &body, Title: &title, Tags: &tags})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := st.CreateMemory(ctx, sess.ID, store.ScopeRepository, store.MemoryInput{Body: &repo})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return a.ID, b.ID
+}
+
+func TestMemoryCommands(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "lounge.db")
+	if code, _, stderr := memory("list", "--db", db); code != 1 || !strings.Contains(stderr, "does not exist") {
+		t.Errorf("list without a database: %d %q", code, stderr)
+	}
+	// Created 30 days ago: faded with the default retention.
+	userID, repoID := seedMemories(t, db, time.Now().Add(-30*24*time.Hour))
+
+	code, stdout, _ := memory("list", "--db", db)
+	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
+	if code != 0 || len(lines) != 3 || lines[0] != "ID\tSCOPE\tSCOPE_ID\tSTATE\tRETENTION\tUPDATED\tCREATED_BY\tTITLE" ||
+		!strings.HasPrefix(lines[1], fmt.Sprintf("%d\trepository\tgithub.com/org/a\tfaded\t0.05\t", repoID)) ||
+		!strings.HasSuffix(lines[1], "\tlocal/carol\tfirst line of a long body that goes on a...") ||
+		!strings.HasPrefix(lines[2], fmt.Sprintf("%d\tuser\tlocal\tfaded\t", userID)) || !strings.HasSuffix(lines[2], "\tBuild fix") {
+		t.Errorf("list: %d %q", code, stdout)
+	}
+	// With a longer half-life, the same memories are active.
+	if code, stdout, _ := memory("list", "--scope", "user", "--memory-half-life", "30d", "--db", db); code != 0 ||
+		!strings.Contains(stdout, "\tuser\tlocal\tactive\t0.50\t") || strings.Contains(stdout, "repository") {
+		t.Errorf("list --scope user --memory-half-life 30d: %d %q", code, stdout)
+	}
+
+	for _, tc := range []struct {
+		args []string
+		code int
+		want string
+	}{
+		{[]string{"list", "x", "--db", db}, 2, "no argument"},
+		{[]string{"list", "--scope", "shared", "--db", db}, 2, "--scope"},
+		{[]string{"list", "--memory-fade-threshold", "1", "--db", db}, 2, "--memory-fade-threshold"},
+		{[]string{"remove", "--yes", "--db", db}, 2, "one memory ID"},
+		{[]string{"remove", "x", "--yes", "--db", db}, 2, "one memory ID"},
+		{[]string{"remove", "999", "--yes", "--db", db}, 1, "no such memory"},
+		{[]string{"remove", "999", "--db", db}, 1, "no such memory"},
+		{[]string{"remove", fmt.Sprint(userID), "--db", db}, 1, "Build fix"},
+		{[]string{"nope", "--db", db}, 2, "unknown memory command"},
+	} {
+		code, stdout, stderr := memory(tc.args...)
+		if code != tc.code || !strings.Contains(stderr, tc.want) || stdout != "" {
+			t.Errorf("%v: %d %q %q, want %d and %q", tc.args, code, stdout, stderr, tc.code, tc.want)
+		}
+	}
+	if code, stdout, _ := memory("remove", fmt.Sprint(userID), "--yes", "--db", db); code != 0 || stdout != fmt.Sprintf("removed memory %d (scope user local: Build fix)\n", userID) {
+		t.Errorf("remove: %d %q", code, stdout)
+	}
+	if code, stdout, _ := memory("list", "--db", db); code != 0 || strings.Count(stdout, "\n") != 2 {
+		t.Errorf("list after remove: %d %q", code, stdout)
+	}
+	if code, stdout, _ := memory("help"); code != 0 || !strings.Contains(stdout, "memory remove") {
+		t.Errorf("help: %d %q", code, stdout)
+	}
+}
+
+// export writes the memories, one file per scope, after the conversations.
+func TestExportMemories(t *testing.T) {
+	dir := t.TempDir()
+	db := filepath.Join(dir, "lounge.db")
+	out := filepath.Join(dir, "out")
+	seedMemories(t, db, time.Now())
+	code, stdout, _ := exportCmd("--out", out, "--db", db)
+	if code != 0 || stdout != "exported 0 messages and 2 memories to 2 files in "+out+"\n" {
+		t.Fatalf("export: %d %q", code, stdout)
+	}
+	b, err := os.ReadFile(filepath.Join(out, "memory", "user-local.md"))
+	if err != nil || !strings.Contains(string(b), "## Memory 1: `Build\tfix`") || !strings.Contains(string(b), "- Tags: `build`") ||
+		!strings.Contains(string(b), "by `local/carol`") || !strings.Contains(string(b), "```text\nmake clean fixes it\n```") {
+		t.Errorf("user memories:\n%s %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "memory", export.SafeName("repository-github.com/org/a")+".md")); err != nil {
+		t.Errorf("repository memories: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(out, "chat")); err == nil {
+		t.Error("a chat directory without messages")
+	}
+}
+
+func TestPlural(t *testing.T) {
+	for n, want := range map[int]string{0: "0 memories", 1: "1 memory", 2: "2 memories"} {
+		if got := plural(n, "memory", "memories"); got != want {
+			t.Errorf("plural(%d) = %q", n, got)
+		}
+	}
+	if got := describeCleanup(store.CleanupResult{Expired: 1, Sessions: 1, SessionMessages: 1, SessionDeliveries: 2, Memories: 1}); got !=
+		"cleanup: 1 unread delivery expired; 1 unused session deleted (1 message, 2 deliveries); 1 forgotten memory deleted" {
+		t.Errorf("describeCleanup = %q", got)
+	}
+	cfg := config.Default()
+	if got := describeMemoryPolicy(cfg); got != "memories: half-life 7d, longer with references; they fade below a retention score of 0.1 and are deleted 30d after they fade" {
+		t.Errorf("describeMemoryPolicy = %q", got)
+	}
+	cfg.MemoryGrace = 0
+	if got := describeMemoryPolicy(cfg); !strings.HasSuffix(got, "are never deleted") {
+		t.Errorf("describeMemoryPolicy without grace = %q", got)
+	}
+	cfg.MemoryHalfLife = 0
+	if got := describeMemoryPolicy(cfg); !strings.Contains(got, "disabled") {
+		t.Errorf("describeMemoryPolicy without forgetting = %q", got)
 	}
 }

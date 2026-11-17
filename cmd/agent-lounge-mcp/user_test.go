@@ -91,11 +91,11 @@ func TestUserCommands(t *testing.T) {
 
 	// remove without --yes shows the counts and removes nothing.
 	code, stdout, stderr = user("remove", "bob", "--db", db)
-	if code != 1 || stdout != "" || !strings.Contains(stderr, "0 sessions, 0 messages, 0 deliveries") || !strings.Contains(stderr, "--yes") {
+	if code != 1 || stdout != "" || !strings.Contains(stderr, "0 sessions, 0 messages, 0 deliveries, 0 memories") || !strings.Contains(stderr, "--yes") {
 		t.Errorf("remove without --yes: %d %q %q", code, stdout, stderr)
 	}
 	code, stdout, _ = user("remove", "bob", "--yes", "--db", db)
-	if code != 0 || stdout != "removed user bob: 0 sessions, 0 messages, 0 deliveries\n" {
+	if code != 0 || stdout != "removed user bob: 0 sessions, 0 messages, 0 deliveries, 0 memories\n" {
 		t.Errorf("remove: %d %q", code, stdout)
 	}
 	if _, stdout, _ = user("list", "--db", db); strings.Contains(stdout, "bob") {
@@ -162,7 +162,7 @@ func TestUserCommandsWhileServing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new token: %v", err)
 	}
-	if code, stdout, _ := user("remove", "alice", "--yes", "--db", cfg.DBPath); code != 0 || !strings.Contains(stdout, "1 sessions") {
+	if code, stdout, _ := user("remove", "alice", "--yes", "--db", cfg.DBPath); code != 0 || !strings.Contains(stdout, "1 session,") {
 		t.Errorf("remove while serving: %d %q", code, stdout)
 	}
 	if _, err := cs.ListTools(ctx, nil); err == nil {

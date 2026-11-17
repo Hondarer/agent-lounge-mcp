@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-18 03:11:02 JST
+最終更新日時: 2026-11-18 03:25:54 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261118-memory-design.md` (最終仕様)、`261118-memory-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -42,15 +42,15 @@
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート)
 - 🔄 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. ブランチの準備と、検討の記録のコミット (`feature/memory`)
-    - 🔄 4.2. スキーマの版 5 (`internal/store/schema/0005_memory.sql`: メモリのテーブル、全文検索の索引、参照の記録) ← **CURRENT**
-    - ⏸️ 4.3. メモリの保存、取得、固定、削除 (`internal/store/`、`internal/tools/`: `memory_put`、`memory_get`、`memory_pin`、`memory_forget`)
-    - ⏸️ 4.4. 検索と並び順 (`internal/store/`、`internal/tools/`: `memory_search`)
-    - ⏸️ 4.5. 忘却モデル、参照の数え方、定期の削除 (`internal/store/`、`internal/config/`、`cmd/agent-lounge-mcp/`)
-    - ⏸️ 4.6. 上限と起動オプション (`internal/config/`、`internal/store/`)
-    - ⏸️ 4.7. 同梱する項目 (メモリの書き出し `internal/export/`、管理コマンド `memory list` と `memory remove`、件数の単数形と複数形)
-    - ⏸️ 4.8. `lounge_help`、接続時の案内文、ツールの説明文の更新
-    - ⏸️ 4.9. 自動テストの追加 (時刻を進めた試験、版 4 からの移行を含む)、確認用のスクリプトの更新
-    - ⏸️ 4.10. 実装のレビュー (Opus 5.5 のサブエージェント) と、指摘の修正
+    - ✅ 4.2. スキーマの版 5 (`internal/store/schema/0005_memory.sql`: メモリのテーブル、全文検索の索引、参照の記録)
+    - ✅ 4.3. メモリの保存、取得、固定、削除 (`internal/store/`、`internal/tools/`: `memory_put`、`memory_get`、`memory_pin`、`memory_forget`)
+    - ✅ 4.4. 検索と並び順 (`internal/store/`、`internal/tools/`: `memory_search`)
+    - ✅ 4.5. 忘却モデル、参照の数え方、定期の削除 (`internal/store/`、`internal/config/`、`cmd/agent-lounge-mcp/`)
+    - ✅ 4.6. 上限と起動オプション (`internal/config/`、`internal/store/`)
+    - ✅ 4.7. 同梱する項目 (メモリの書き出し `internal/export/`、管理コマンド `memory list` と `memory remove`、件数の単数形と複数形)
+    - ✅ 4.8. `lounge_help`、接続時の案内文、ツールの説明文の更新
+    - ✅ 4.9. 自動テストの追加 (時刻を進めた試験、版 4 からの移行を含む)、確認用のスクリプトの更新
+    - 🔄 4.10. 実装のレビュー (Opus 5.5 のサブエージェント) と、指摘の修正 ← **CURRENT**
     - ⏸️ 4.11. エージェントでの確認、結果の記録 (`261118-memory-validation.md`)、登録の解除、後片付け (無視の対象のフォルダーを含めて、残りがないことを確かめる)
     - ⏸️ 4.12. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`SKILL.md`、企画提案書)
     - ⏸️ 4.13. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)

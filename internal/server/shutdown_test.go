@@ -20,11 +20,14 @@ func TestShutdownFailsToolCalls(t *testing.T) {
 	fresh := testutil.Connect(t, s.MCP, nil)
 	s.BeginShutdown(context.Background())
 	args := map[string]map[string]any{
-		"lounge_join": {"name": "alice"},
-		"chat_send":   {"to": "bob", "body": "x"},
-		"chat_inbox":  {"wait_seconds": 10},
-		"chat_ack":    {"message_ids": []int64{1}},
-		"chat_status": {"message_id": 1},
+		"lounge_join":   {"name": "alice"},
+		"chat_send":     {"to": "bob", "body": "x"},
+		"chat_inbox":    {"wait_seconds": 10},
+		"chat_ack":      {"message_ids": []int64{1}},
+		"chat_status":   {"message_id": 1},
+		"memory_get":    {"id": 1},
+		"memory_pin":    {"id": 1},
+		"memory_forget": {"id": 1},
 	}
 	for _, c := range []*mcp.ClientSession{cs[0], fresh} {
 		for _, name := range toolNames {

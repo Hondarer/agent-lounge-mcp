@@ -74,10 +74,15 @@ func messages() []store.ExportMessage {
 	}
 }
 
-func feed(msgs []store.ExportMessage) func(func(store.ExportMessage) error) error {
-	return func(fn func(store.ExportMessage) error) error {
+func feed(msgs []store.ExportMessage, mems ...store.Memory) Reader {
+	return func(fn func(store.ExportMessage) error, fm func(store.Memory) error) error {
 		for _, m := range msgs {
 			if err := fn(m); err != nil {
+				return err
+			}
+		}
+		for _, m := range mems {
+			if err := fm(m); err != nil {
 				return err
 			}
 		}
@@ -194,5 +199,39 @@ func TestWriteMarkdownInterleaved(t *testing.T) {
 	b, _ := os.ReadFile(filepath.Join(dir, "chat", SafeName("repository-github.com/org/a"), "room-lounge.md"))
 	if !strings.Contains(string(b), "message 1") || !strings.Contains(string(b), "message 3") || strings.Count(string(b), "# agent-lounge") != 1 {
 		t.Errorf("room file:\n%s", b)
+	}
+}
+
+func TestWriteMarkdownMemories(t *testing.T) {
+	dir := t.TempDir()
+	at := time.Date(2026, 11, 18, 1, 2, 3, 0, time.UTC)
+	author := store.Author{User: "local", Session: "alice", Agent: "claude"}
+	mems := []store.Memory{
+		{ID: 1, Scope: store.Scope{Kind: "repository", ID: "github.com/org/a"}, Body: "repo", Tags: []string{}, CreatedAt: at, UpdatedAt: at, CreatedBy: author, UpdatedBy: author},
+		{ID: 2, Scope: store.Scope{Kind: "user", ID: "local"}, Title: "Fix", Body: "has ``` inside", Tags: []string{"build", "go"}, Pinned: true,
+			CreatedAt: at, UpdatedAt: at, AccessedAt: at, AccessCount: 2, CreatedBy: author, UpdatedBy: store.Author{User: "local", Session: "bob"}},
+		{ID: 3, Scope: store.Scope{Kind: "user", ID: "local"}, Body: "third", Tags: []string{}, CreatedAt: at, UpdatedAt: at, CreatedBy: author, UpdatedBy: author},
+	}
+	sum, err := WriteMarkdown(dir, feed(messages()[:1], mems...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum != (Summary{Files: 3, Messages: 1, Memories: 3}) {
+		t.Errorf("summary = %+v", sum)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "memory", "user-local.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "# agent-lounge memories\n\n- Scope: `user`\n- Scope ID: `local`\n\nMemories are written by the sessions named with them. Times are UTC.\n\n" +
+		"## Memory 2: `Fix`\n\n- Tags: `build`, `go`\n- Pinned: yes\n- Created: 2026-11-18T01:02:03Z by `local/alice` (`claude`)\n" +
+		"- Updated: 2026-11-18T01:02:03Z by `local/bob`\n- Last referenced: 2026-11-18T01:02:03Z\n- References: 2\n\n````text\nhas ``` inside\n````\n\n" +
+		"## Memory 3\n\n- Tags: none\n- Pinned: no\n- Created: 2026-11-18T01:02:03Z by `local/alice` (`claude`)\n" +
+		"- Updated: 2026-11-18T01:02:03Z by `local/alice` (`claude`)\n- Last referenced: never\n- References: 0\n\n```text\nthird\n```\n"
+	if string(b) != want {
+		t.Errorf("user-local.md:\n%s\nwant:\n%s", b, want)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "memory", SafeName("repository-github.com/org/a")+".md")); err != nil {
+		t.Error(err)
 	}
 }

@@ -33,6 +33,9 @@ type UserData struct {
 	// Deliveries are the delivery records of those messages and of the messages to the
 	// user's sessions.
 	Deliveries int
+	// Memories are the memories of the user's own scope (user). Memories its sessions wrote in
+	// a repository scope belong to that scope and stay.
+	Memories int
 }
 
 // Errors of the user functions.
@@ -204,11 +207,16 @@ func countUserData(ctx context.Context, tx *sql.Tx, name string) (UserData, erro
 	case err != nil:
 		return UserData{}, err
 	}
-	return countSessionData(ctx, tx, "SELECT id FROM sessions WHERE user_id = ?", id)
+	d, err := countSessionData(ctx, tx, "SELECT id FROM sessions WHERE user_id = ?", id)
+	if err != nil {
+		return UserData{}, err
+	}
+	err = tx.QueryRowContext(ctx, "SELECT count(*) FROM memories WHERE user_id = ?", id).Scan(&d.Memories)
+	return d, err
 }
 
 // RemoveUser deletes the user with its sessions, the messages they sent or that were addressed
-// to them, and the delivery records of those, and returns what it deleted. Connections of the
+// to them, the delivery records of those, and the memories of its user scope, and returns what it deleted. Connections of the
 // user are rejected from their next request, since the token no longer matches any user.
 func (s *Store) RemoveUser(ctx context.Context, name string) (UserData, error) {
 	if err := checkManagedUser(name); err != nil {
@@ -220,8 +228,13 @@ func (s *Store) RemoveUser(ctx context.Context, name string) (UserData, error) {
 		if data, err = countUserData(ctx, tx, name); err != nil {
 			return err
 		}
-		// Foreign keys cascade from the user to its sessions and rooms, and from those to the
-		// messages and deliveries.
+		// Foreign keys cascade from the user to its sessions, rooms and memories, and from those
+		// to the messages, deliveries, tags and references. The full-text index of the memories
+		// is a virtual table without foreign keys: its rows are deleted first.
+		if _, err := tx.ExecContext(ctx, `DELETE FROM memories_fts WHERE rowid IN (
+			SELECT m.id FROM memories m JOIN users u ON u.id = m.user_id WHERE u.name = ?)`, name); err != nil {
+			return err
+		}
 		_, err = tx.ExecContext(ctx, "DELETE FROM users WHERE name = ?", name)
 		return err
 	})

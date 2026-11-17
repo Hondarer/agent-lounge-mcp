@@ -26,7 +26,7 @@ func userUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp user add <name> [--db FILE]          create a user and print its token")
 	fmt.Fprintln(w, "       agent-lounge-mcp user list [--db FILE]                list the users")
 	fmt.Fprintln(w, "       agent-lounge-mcp user rotate <name> [--db FILE]       print a new token; the old one stops working")
-	fmt.Fprintln(w, "       agent-lounge-mcp user remove <name> --yes [--db FILE] delete the user, its sessions and messages")
+	fmt.Fprintln(w, "       agent-lounge-mcp user remove <name> --yes [--db FILE] delete the user, its sessions, messages and memories")
 	fmt.Fprintf(w, "A user name is %s. The commands open the database file directly and work while a server uses it.\n", store.UserNameRule)
 }
 
@@ -200,5 +200,15 @@ func userRemove(ctx context.Context, st *store.Store, name string, yes bool, std
 }
 
 func describeData(d store.UserData) string {
-	return fmt.Sprintf("%d sessions, %d messages, %d deliveries", d.Sessions, d.Messages, d.Deliveries)
+	return plural(d.Sessions, "session", "sessions") + ", " + plural(d.Messages, "message", "messages") + ", " +
+		plural(d.Deliveries, "delivery", "deliveries") + ", " + plural(d.Memories, "memory", "memories")
+}
+
+// plural renders a count with the form of the noun it takes in English: 1 session, 2 sessions.
+// The administration commands and the log lines use it for every count they print.
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
 }

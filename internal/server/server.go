@@ -43,6 +43,7 @@ type Server struct {
 func New(cfg config.Config, sess Session) *Server {
 	// The store enforces the limits that the tools state.
 	sess.Store.SetLimits(cfg.Limits())
+	sess.Store.SetRetention(cfg.Retention())
 	d := &tools.Deps{Cfg: cfg, Store: sess.Store, LocalUser: sess.LocalUser}
 	impl := &mcp.Implementation{Name: "agent-lounge-mcp", Title: "agent-lounge-mcp", Version: version.Version}
 	registry := tools.Prepare(d)

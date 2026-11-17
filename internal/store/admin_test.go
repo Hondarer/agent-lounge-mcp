@@ -102,7 +102,7 @@ func TestExport(t *testing.T) {
 		}
 		got = append(got, m.Scope.Kind+"|"+m.Scope.ID+"|"+m.Room+"|"+m.ToUser+"/"+m.ToName+"|"+m.Body)
 		return nil
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestExport(t *testing.T) {
 	}
 
 	stop := errors.New("stop")
-	if err := s.Export(ctx, func(ExportMessage) error { return stop }); !errors.Is(err, stop) {
+	if err := s.Export(ctx, func(ExportMessage) error { return stop }, nil); !errors.Is(err, stop) {
 		t.Errorf("export with a failing callback: %v", err)
 	}
 }
