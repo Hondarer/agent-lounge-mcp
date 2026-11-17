@@ -53,6 +53,9 @@ func TestParseServeFlags(t *testing.T) {
 		cfg.MaxMemoryBytes != 100 || cfg.MaxMemoriesPerScope != 5 {
 		t.Errorf("memory options: %+v %v", cfg, err)
 	}
+	if cfg, err := parse("--log-connections"); err != nil || !cfg.LogConnections {
+		t.Errorf("--log-connections: %+v %v", cfg, err)
+	}
 	for _, bad := range [][]string{{"--memory-fade-threshold", "0"}, {"--memory-fade-threshold", "1"}, {"--max-memory-bytes", "0"},
 		{"--max-memories-per-scope", "0"}, {"--memory-half-life", "-1d"}} {
 		if _, err := parse(bad...); err == nil {

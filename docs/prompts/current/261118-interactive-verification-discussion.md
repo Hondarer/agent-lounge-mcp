@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-18 06:16:36 JST
+最終更新日時: 2026-11-18 06:20:34 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261118-interactive-verification-design.md` (最終仕様)、`261118-interactive-verification-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -45,8 +45,8 @@
     - ✅ 3.4. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート。2026-11-18 06:17 JST 頃、Tetsuo Honda が承認)
 - 🔄 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. ブランチの準備と、検討の記録のコミット (`feature/interactive-verification`)
-    - 🔄 4.2. 接続の診断を出力する起動オプション (`cmd/agent-lounge-mcp/`、`internal/server/`、`internal/config/`) と自動テスト ← **CURRENT**
-    - ⏸️ 4.3. 検証の基盤の作成 (`scripts/interactive/`: 共通の部分と、OS ごとの仮想端末の部分。CLI ごとの定義。自己試験)
+    - ✅ 4.2. 接続の診断を出力する起動オプション (`cmd/agent-lounge-mcp/`、`internal/server/`、`internal/config/`) と自動テスト
+    - 🔄 4.3. 検証の基盤の作成 (`scripts/interactive/`: 共通の部分と、OS ごとの仮想端末の部分。CLI ごとの定義。自己試験) ← **CURRENT**
     - ⏸️ 4.4. Windows の側のセッションへの依頼 (ブランチの取得、`pywinpty` の導入、自己試験。以後の各確認の Windows の側の実行)
     - ⏸️ 4.5. 停止のログ通知の切り分けと、対話の画面での確認 (停止のログ通知の見え方、複数回のやりとり、起動し直した後の再参加。2 つの OS、5 つの CLI)
     - ⏸️ 4.6. 接続時の案内文の確認 (一時フォルダーの確認用の実行ファイル) と、CLI ごとの指示ファイルの調査、貼る文面の確認 (CLI ごとに 3 回。2 つの OS)

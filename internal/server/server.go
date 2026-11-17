@@ -37,6 +37,8 @@ type Server struct {
 	MCP *mcp.Server
 	d   *tools.Deps
 	cfg config.Config
+	// conns writes the connection diagnostics; nil unless cfg.LogConnections.
+	conns *connLog
 }
 
 // New creates the MCP server with all tools registered.
@@ -51,7 +53,12 @@ func New(cfg config.Config, sess Session) *Server {
 	// to set a log level and so to receive the shutdown notification.
 	s := mcp.NewServer(impl, &mcp.ServerOptions{Instructions: tools.Instructions(d)})
 	registry.Register(s)
-	return &Server{MCP: s, d: d, cfg: cfg}
+	srv := &Server{MCP: s, d: d, cfg: cfg}
+	if cfg.LogConnections {
+		srv.conns = newConnLog(s, nil)
+		s.AddReceivingMiddleware(srv.conns.middleware())
+	}
+	return srv
 }
 
 // BeginShutdown tells agents that the server is stopping. The HTTP server must keep accepting
@@ -67,7 +74,10 @@ func (s *Server) BeginShutdown(ctx context.Context) {
 	s.d.BeginShutdown()
 	for ss := range s.MCP.Sessions() {
 		// An error means the client is already gone; the others are still notified.
-		_ = ss.Log(ctx, &mcp.LoggingMessageParams{Level: "warning", Logger: "agent-lounge-mcp", Data: tools.ShutdownMessage})
+		err := ss.Log(ctx, &mcp.LoggingMessageParams{Level: "warning", Logger: "agent-lounge-mcp", Data: tools.ShutdownMessage})
+		if s.conns != nil {
+			s.conns.shutdownNotice(ss, err)
+		}
 	}
 }
 

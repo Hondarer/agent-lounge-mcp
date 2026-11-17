@@ -65,6 +65,11 @@ type Config struct {
 	MemoryHalfLife      time.Duration
 	MemoryFadeThreshold float64
 	MemoryGrace         time.Duration
+
+	// LogConnections writes diagnostics of every MCP connection to standard error: its
+	// client, the methods and tools it calls, its log level, and whether the shutdown notice
+	// was sent to it. They hold no tool arguments or results.
+	LogConnections bool
 }
 
 // Bounds of the options.
