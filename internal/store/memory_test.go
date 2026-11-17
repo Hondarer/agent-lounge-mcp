@@ -300,7 +300,7 @@ func TestMemorySearch(t *testing.T) {
 		tags  []string
 		want  []int64
 	}{
-		{"認証", nil, []int64{old.ID, auth.ID}}, // two characters: no index; same retention order by update
+		{"認証", nil, []int64{old.ID, auth.ID}}, // two characters: no index; old was updated later, so it is kept better
 		{"認証の", nil, []int64{auth.ID}},
 		{"make clean", nil, []int64{build.ID}},
 		{"make  CLEAN", nil, []int64{build.ID}},
@@ -668,5 +668,121 @@ func TestMigrateVersion4(t *testing.T) {
 	}
 	if got := search(t, s, Session{ID: 2}, MemorySearch{Query: "migrated"}); len(got) != 1 {
 		t.Errorf("search after migration = %v", memoryIDs(got))
+	}
+}
+
+func TestRoundRetention(t *testing.T) {
+	for in, want := range map[float64]float64{1: 1, 1 - 1e-9: 1, 0.0999: 0.09, 0.5: 0.5, 0.123: 0.12, 0: 0} {
+		if got := RoundRetention(in); got != want {
+			t.Errorf("RoundRetention(%v) = %v, want %v", in, got, want)
+		}
+	}
+}
+
+// Durations that would overflow saturate: a memory with many references under a long
+// half-life does not fade at once, and the cleanup does not misread the cutoff.
+func TestRetentionSaturates(t *testing.T) {
+	p := RetentionPolicy{HalfLife: 3650 * day, Threshold: 0.1, Grace: 30 * day}
+	for _, refs := range []int{0, 300, 1 << 30} {
+		if d, ok := p.FadesAfter(refs); !ok || d <= 0 {
+			t.Errorf("%d references: fades after %v", refs, d)
+		}
+	}
+	now := time.Date(2026, 11, 18, 0, 0, 0, 0, time.UTC)
+	st := retentionState{updatedAt: now.Add(-time.Hour), accessCount: 300}
+	if p.faded(st, now) || p.expired(st, now) {
+		t.Error("a memory with 300 references faded at once")
+	}
+	tiny := RetentionPolicy{HalfLife: 7 * day, Threshold: 1e-300, Grace: math.MaxInt64}
+	s, user := openLocal(t)
+	useClock(s)
+	s.SetRetention(tiny)
+	createMemory(t, s, join(t, s, user, "alice"), "", "kept")
+	if r := cleanup(t, s, CleanupPolicy{}); r.Memories != 0 {
+		t.Errorf("deleted %d with an overflowing cutoff", r.Memories)
+	}
+}
+
+// Only the first three results count, faded ones among them excepted: a faded result in the
+// top three does not let the fourth count.
+func TestSearchCountsTopThreeOnly(t *testing.T) {
+	ctx := context.Background()
+	s, user := openLocal(t)
+	clock := useClock(s)
+	alice := join(t, s, user, "alice")
+	bob := join(t, s, user, "bob")
+	// The faded memory matches strongly and has just faded (retention just below 0.1); the
+	// others match weakly and are half a day younger (retention just above 0.1), so that
+	// relevance times retention ranks the faded one first.
+	faded := createMemory(t, s, alice, "", "topic topic topic")
+	clock.advance(12 * time.Hour)
+	for i := range 4 {
+		createMemory(t, s, alice, "", "topic and some other words "+strings.Repeat("y", i+1))
+	}
+	clock.advance(23 * day)
+	res := search(t, s, bob, MemorySearch{Query: "topic", IncludeFaded: true})
+	if len(res) != 5 {
+		t.Fatalf("results = %v", memoryIDs(res))
+	}
+	pos := slices.Index(memoryIDs(res), faded.ID)
+	if pos != 0 || !res[0].Faded || res[1].Faded {
+		t.Fatalf("the faded memory ranks %d (%+v); the case needs it first", pos, res[0])
+	}
+	counted := 0
+	for i, m := range res {
+		got, err := s.MemoryByID(ctx, m.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := i < 3 && m.ID != faded.ID; (got.AccessCount == 1) != want {
+			t.Errorf("result %d (faded %v) counted %d", i, m.Faded, got.AccessCount)
+		}
+		counted += got.AccessCount
+	}
+	if counted != 2 {
+		t.Errorf("%d references counted, want 2", counted)
+	}
+}
+
+// Terms shorter than a trigram ignore the case of every letter, as the index does.
+func TestShortTermsFoldEveryLetter(t *testing.T) {
+	s, user := openLocal(t)
+	alice := join(t, s, user, "alice")
+	m := createMemory(t, s, alice, "", "ÄÖÜ ΩΜΈΓΑ Éa")
+	for _, q := range []string{"äöü", "ωμέ", "äö", "ωμ", "éa", "ÉA", "Ω"} {
+		if got := search(t, s, alice, MemorySearch{Query: q}); !slices.Equal(memoryIDs(got), []int64{m.ID}) {
+			t.Errorf("search %q = %v", q, memoryIDs(got))
+		}
+	}
+}
+
+// The cleanup deletes a referenced memory at its own, later time, and keeps faded memories
+// when the grace period is 0.
+func TestCleanupReferencedAndNoGrace(t *testing.T) {
+	ctx := context.Background()
+	s, user := openLocal(t)
+	clock := useClock(s)
+	alice := join(t, s, user, "alice")
+	m := createMemory(t, s, alice, "", "used once")
+	if _, err := s.GetMemory(ctx, alice.ID, m.ID); err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(76 * day) // one reference: fades after about 46.5 days, deleted 30 days later
+	if r := cleanup(t, s, CleanupPolicy{}); r.Memories != 0 {
+		t.Fatalf("day 76: %d deleted", r.Memories)
+	}
+	clock.advance(day)
+	if r := cleanup(t, s, CleanupPolicy{}); r.Memories != 1 {
+		t.Errorf("day 77: %d deleted", r.Memories)
+	}
+
+	keep := createMemory(t, s, alice, "", "kept faded")
+	s.SetRetention(RetentionPolicy{HalfLife: 7 * day, Threshold: 0.1})
+	clock.advance(1000 * day)
+	if r := cleanup(t, s, CleanupPolicy{}); r.Memories != 0 {
+		t.Errorf("with no grace, %d deleted", r.Memories)
+	}
+	if got, err := s.MemoryByID(ctx, keep.ID); err != nil || !got.Faded {
+		t.Errorf("kept memory: %+v, %v", got, err)
 	}
 }

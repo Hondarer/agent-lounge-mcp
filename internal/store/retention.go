@@ -55,6 +55,13 @@ func (s *Store) SetRetention(p RetentionPolicy) { s.retention = p }
 // Retention returns the retention policy in effect.
 func (s *Store) Retention() RetentionPolicy { return s.retention }
 
+// RoundRetention renders a retention score with two decimals for display. It rounds down, so
+// that a faded memory never shows the threshold itself (0.098 shows as 0.09, not 0.10), with a
+// tolerance of a millionth, so that a memory touched a moment ago shows 1, not 0.99.
+func RoundRetention(score float64) float64 {
+	return math.Floor(score*100+1e-6) / 100
+}
+
 // retentionState holds the inputs of the forgetting model for one memory.
 type retentionState struct {
 	pinned      bool
@@ -112,8 +119,16 @@ func (p RetentionPolicy) FadesAfter(accessCount int) (time.Duration, bool) {
 
 // fadeAfter returns how long after it was last touched a memory with the given reference
 // count fades: its half-life × log2(1 / Threshold). forgets must be true.
+//
+// The result saturates at the longest Duration (about 292 years): a large half-life, a tiny
+// threshold or many references would otherwise overflow, and an overflowed duration is
+// negative, which would make the memory fade at once.
 func (p RetentionPolicy) fadeAfter(accessCount int) time.Duration {
-	return time.Duration(p.halfLife(accessCount) * math.Log2(1/p.Threshold))
+	d := p.halfLife(accessCount) * math.Log2(1/p.Threshold)
+	if d >= math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return time.Duration(d)
 }
 
 // faded reports whether a memory has faded at now: its score is below the threshold.

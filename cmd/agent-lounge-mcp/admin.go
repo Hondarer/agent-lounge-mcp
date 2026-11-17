@@ -346,7 +346,7 @@ func memoryList(ctx context.Context, st *store.Store, scope string, stdout io.Wr
 		case m.Faded:
 			state = "faded"
 		}
-		fmt.Fprintf(stdout, "%d\t%s\t%s\t%s\t%.2f\t%s\t%s/%s\t%s\n", m.ID, m.Scope.Kind, m.Scope.ID, state, m.Retention,
+		fmt.Fprintf(stdout, "%d\t%s\t%s\t%s\t%.2f\t%s\t%s/%s\t%s\n", m.ID, m.Scope.Kind, m.Scope.ID, state, store.RoundRetention(m.Retention),
 			m.UpdatedAt.Format(time.RFC3339), m.CreatedBy.User, m.CreatedBy.Session, memoryLabel(m))
 	}
 	return nil

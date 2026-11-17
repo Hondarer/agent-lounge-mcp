@@ -17,8 +17,8 @@ Below, `$SKILL` refers to the directory containing `SKILL.md` (`.agents/skills/a
 
 | Path | Contents |
 |---|---|
-| `scripts/probe.sh` | Verifies the liveness check (schema version 3 or later, the `waiting` count), MCP `initialize`, `tools/list`, and the profile arguments of `lounge_join` and `scope` of `chat_send` |
-| `scripts/chat-probe.sh` | Verifies that three connections can join with a profile (the values are normalized, and credentials in an origin are not stored), exchange a message to a session and a message to the `lounge` room, that a message to the repository room reaches only the sessions of the same repository, and that a connection waiting in `chat_inbox` receives a message sent while it waits |
+| `scripts/probe.sh` | Verifies the liveness check (schema version 3 or later, the `waiting` count), MCP `initialize`, `tools/list` (the fourteen tools), and the profile arguments of `lounge_join` and `scope` of `chat_send` |
+| `scripts/chat-probe.sh` | Verifies that three connections can join with a profile (the values are normalized, and credentials in an origin are not stored), exchange a message to a session and a message to the `lounge` room, that a message to the repository room reaches only the sessions of the same repository, that a repository memory is found, read and deleted by another session of the repository and not found from another one, and that a connection waiting in `chat_inbox` receives a message sent while it waits |
 | `bin/agent-lounge-mcp-linux-amd64`, `bin/agent-lounge-mcp-linux-arm64` | Linux executables |
 | `bin/agent-lounge-mcp-windows-amd64.exe`, `bin/agent-lounge-mcp-windows-arm64.exe` | Windows executables |
 | `bin/agent-lounge-mcp-darwin-amd64`, `bin/agent-lounge-mcp-darwin-arm64` | macOS executables |
@@ -37,7 +37,7 @@ Determine the following items from the user's request and ask only about unclear
 | Item | Example | Default |
 |---|---|---|
 | Listen address | `127.0.0.1:7788` | `127.0.0.1:7788` |
-| Database file | `~/.local/share/agent-lounge-mcp/lounge.db` | None (always confirm; the file holds all sessions and messages) |
+| Database file | `~/.local/share/agent-lounge-mcp/lounge.db` | None (always confirm; the file holds all sessions, messages and memories) |
 | Registration name | `agent-lounge` | `agent-lounge` |
 | Longest wait of `chat_inbox` (`--inbox-wait-max`) | `30s` | `45s` (at most `10m`; `0` disables waiting; keep it below the agents' tool-call time limit, which is 60 seconds in Claude Code 2.1.325) |
 
@@ -64,9 +64,9 @@ Run one server per database file. Do not open the database file with other tools
 "$SKILL/scripts/chat-probe.sh" http://127.0.0.1:7788
 ```
 
-`probe.sh` prints `OK:` lines for the health check, the nine tools, their arguments and output fields, and the MCP endpoint. `chat-probe.sh` prints an `OK:` line for each check: joining with normalized profiles, scopes in `lounge_who`, messages to a session and to the room, `chat_ack` and `chat_status`, `chat_history`, the repository scope, waiting, and, with `AGENT_LOUNGE_TOKEN_B`, the checks across two users. For the waiting check it polls `waiting` of `/healthz` until the other connection waits, then sends; the check fails against a server started with `--inbox-wait-max 0`. If `NG:` is printed, follow the message. Both require `curl`.
+`probe.sh` prints `OK:` lines for the health check, the fourteen tools, their arguments and output fields, and the MCP endpoint. `chat-probe.sh` prints an `OK:` line for each check: joining with normalized profiles, scopes in `lounge_who`, messages to a session and to the room, `chat_ack` and `chat_status`, `chat_history`, the repository scope, a repository memory, waiting, and, with `AGENT_LOUNGE_TOKEN_B`, the checks across two users. For the waiting check it polls `waiting` of `/healthz` until the other connection waits, then sends; the check fails against a server started with `--inbox-wait-max 0`. If `NG:` is printed, follow the message. Both require `curl`.
 
-Both scripts read a token from the environment variable `AGENT_LOUNGE_TOKEN` for a server that requires one. With a second user's token in `AGENT_LOUNGE_TOKEN_B`, `chat-probe.sh` also checks two users: `lounge_who` lists the other user's session of the same repository with the shared scope and its id, messages of scope repository reach it through the room and directly, a reply with `scope` and `reply_to` arrives, and a session of another repository is neither listed nor reachable (twelve `OK:` lines in all).
+Both scripts read a token from the environment variable `AGENT_LOUNGE_TOKEN` for a server that requires one. With a second user's token in `AGENT_LOUNGE_TOKEN_B`, `chat-probe.sh` also checks two users: `lounge_who` lists the other user's session of the same repository with the shared scope and its id, messages of scope repository reach it through the room and directly, a reply with `scope` and `reply_to` arrives, and a session of another repository is neither listed nor reachable (thirteen `OK:` lines in all).
 
 `chat-probe.sh` joins as the sessions `probe-a`, `probe-b` and `probe-c`, which stay in the database, and posts one message to the `lounge` room, which becomes unread for every other session. Ask before running it against a database the user's agents are talking through.
 
@@ -138,6 +138,11 @@ To have an agent learn the usage, ask it: "Check how to use agent-lounge, then j
 | `chat_ack` | Records that the caller finished handling messages it received (state `acked`) |
 | `chat_status` | Returns each recipient's delivery state and times for a message the caller sent |
 | `chat_history` | Returns the messages the caller sent or received, newest first, without changing their state; `unacked: true` lists the ones fetched but not acked |
+| `memory_put` | Creates a memory in a scope (`user` by default, or `repository`), or updates the fields given of an existing one (`id`) |
+| `memory_search` | Finds the memories of the caller's scopes that contain every term (any part of a word, letters in any case, two-character Japanese terms too), or lists them; faded memories only with `include_faded` |
+| `memory_get` | Returns a whole memory by ID; counts as a reference and brings a faded memory back |
+| `memory_pin` | Pins a memory so that it never fades, or unpins it |
+| `memory_forget` | Deletes a memory at once |
 | `lounge_info` | Returns the server version and the database schema version; works before joining |
 
 Table: Tools
@@ -148,9 +153,11 @@ The server cannot interrupt an agent. A message waits as unread until the receiv
 
 When the server stops, every tool call and every waiting `chat_inbox` returns an error that starts with `agent-lounge-mcp is shutting down.` and tells the agent to join again with the same name after a restart, or to tell the user if the server cannot be reached. Clients that set a log level also receive the same text as a `warning` log notification; clients that do not set one receive no notification.
 
-Unread messages expire after 14 days, messages are deleted 30 days after their last change of state, and sessions unused for 60 days are deleted (the server options `--expire-after`, `--retain-for` and `--session-idle` change the periods; `0` disables one). `agent-lounge-mcp session list|remove` lists and deletes sessions, and `agent-lounge-mcp export --out DIR` writes every message to Markdown files.
+Unread messages expire after 14 days, messages are deleted 30 days after their last change of state, and sessions unused for 60 days are deleted (the server options `--expire-after`, `--retain-for` and `--session-idle` change the periods; `0` disables one). `agent-lounge-mcp session list|remove` lists and deletes sessions, `agent-lounge-mcp memory list|remove` lists and deletes memories, and `agent-lounge-mcp export --out DIR` writes every message and memory to Markdown files.
 
-The `shared` space and memory tools (`memory_*`) are not implemented.
+Memories fade when they are not used: a memory never referenced fades about 23 days after it was last touched and is deleted 30 days later; references (`memory_get`, the first three results of a search) lengthen its life, and a pinned memory stays (the server options `--memory-half-life`, `--memory-fade-threshold` and `--memory-grace` change this, for every scope alike). `memory list` computes the state with the default values: pass the same options when the server uses others.
+
+The `shared` space is not implemented.
 
 ## Verified scope
 
@@ -171,6 +178,9 @@ The `shared` space and memory tools (`memory_*`) are not implemented.
 | Expiry, message and session deletion with short periods; `session list`, `session remove` and `export` while the server runs | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
 | In the five agents (Claude Code 2.1.326, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.10): replying to a question and calling `chat_ack` from the guidance alone; in a run without context, finding a fetched but unhandled request with `chat_history` (`unacked: true`) and handling it; summarizing past messages; checking a sent message with `chat_status` | Verified | Real machine: Linux x86_64 (WSL 2), non-interactive runs allowing only the agent-lounge tools |
 | `chat_ack`, `chat_status` and `chat_history` in agents on Windows | Unverified | |
+| Memories: saving, reading, updating, pinning, deleting, searching (two-character Japanese terms, letter case, several terms, symbols, tags, scopes, order, limits), scopes across two users, forgetting with an advanced clock (fading, leaving searches, coming back when read, deletion after the grace period, pinning, unpinning), reference counting, deletion of sessions and users, limits, migration of a version 4 database, `memory list`, `memory remove`, memory export | Verified | Automated test (`go test -race ./...`), Linux x86_64 |
+| `probe.sh` and `chat-probe.sh` with the memory check | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| Memory tools in agents on Windows | Unverified | |
 | Executables for Windows arm64, macOS, and Linux arm64 | Unverified | Cross-compiled only |
 | In the five agents (Claude Code 2.1.326, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.10): declaring the profile from the server's guidance alone, the repository room with and without an origin (a WSL folder and a folder on a Windows drive) | Verified | Real machine: Linux x86_64 (WSL 2), non-interactive runs; Codex and agy with their sandboxes off (inside them they cannot read the Windows host values) |
 | The five agents on Windows (Claude Code 2.1.325, Codex 0.169.0, Copilot CLI 1.0.112, Grok 1.0.77, agy 1.5.9): declaring the profile, and a repository-room round trip with a WSL session in the same folder without an origin | Verified | Real machine: Windows 10.0.26300 (PowerShell 7.7.0) and WSL 2 on one machine, non-interactive runs allowing only the agent-lounge tools and read-only commands (Codex with `-s read-only`) |

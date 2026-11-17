@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -84,7 +83,7 @@ type MemoryView struct {
 	Truncated   bool         `json:"truncated,omitempty" jsonschema:"true when the body was cut to its first 500 characters: call memory_get for all of it. Absent otherwise"`
 	Pinned      bool         `json:"pinned" jsonschema:"true when the memory is pinned: it never fades"`
 	Faded       bool         `json:"faded" jsonschema:"true when the memory has faded: plain searches leave it out, and memory_get brings it back"`
-	Retention   float64      `json:"retention" jsonschema:"retention score from 0 to 1: 1 when just used or pinned, lower as time passes without use"`
+	Retention   float64      `json:"retention" jsonschema:"retention score from 0 to 1, rounded down to 2 decimals: 1 when just used or pinned, lower as time passes without use. faded tells whether the memory has faded"`
 	AccessCount int          `json:"access_count" jsonschema:"number of counted references"`
 	CreatedAt   string       `json:"created_at" jsonschema:"time the memory was created (RFC 3339, UTC)"`
 	UpdatedAt   string       `json:"updated_at" jsonschema:"time its title, body or tags last changed (RFC 3339, UTC)"`
@@ -100,7 +99,7 @@ func memoryView(m store.Memory) MemoryView {
 	}
 	return MemoryView{
 		ID: m.ID, Scope: m.Scope.Kind, ScopeID: m.Scope.ID, Title: m.Title, Tags: tags, Body: m.Body,
-		Pinned: m.Pinned, Faded: m.Faded, Retention: math.Round(m.Retention*100) / 100, AccessCount: m.AccessCount,
+		Pinned: m.Pinned, Faded: m.Faded, Retention: store.RoundRetention(m.Retention), AccessCount: m.AccessCount,
 		CreatedAt: formatTime(m.CreatedAt), UpdatedAt: formatTime(m.UpdatedAt), AccessedAt: optionalTime(m.AccessedAt),
 		CreatedBy: MemoryAuthor(m.CreatedBy), UpdatedBy: MemoryAuthor(m.UpdatedBy),
 	}

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"slices"
@@ -11,6 +12,8 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+
+	"modernc.org/sqlite"
 )
 
 // Memories are short-lived pieces of knowledge that sessions share within a scope, as messages
@@ -23,6 +26,23 @@ import (
 // Memories fade and are deleted by the forgetting model (retention.go). Reading a memory by ID
 // and finding it near the top of a search count as references, which slow its fading; see
 // countReference for the rules.
+
+// init registers the SQL function fold_case, which returns its text argument with every letter
+// in lower case (strings.ToLower), for the search of terms shorter than a trigram: the trigram
+// index ignores the case of all letters, not only of ASCII ones, and so must the scan that
+// stands in for it. Functions registered with the driver reach every connection it opens.
+func init() {
+	sqlite.MustRegisterDeterministicScalarFunction("fold_case", 1, func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		switch v := args[0].(type) {
+		case string:
+			return strings.ToLower(v), nil
+		case []byte:
+			return strings.ToLower(string(v)), nil
+		default:
+			return v, nil
+		}
+	})
+}
 
 // Bounds of memories and searches. The body limit is Limits.MaxMemoryBytes.
 const (
@@ -567,8 +587,8 @@ type searchCandidate struct {
 // Other results are ordered by retention score. Ties go to the later update, then the larger
 // ID. Faded memories are left out unless q.IncludeFaded.
 //
-// When the query has terms, the first SearchCountedResults results that have not faded count
-// as references (countReference). The order and the values returned are those before counting.
+// When the query has terms, the first SearchCountedResults results count as references
+// (countReference), except those that have faded. The order and the values returned are those before counting.
 func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySearch) (memories []Memory, more bool, err error) {
 	terms, err := searchTerms(q.Query)
 	if err != nil {
@@ -628,8 +648,9 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 			rank = "bm25(memories_fts)"
 		}
 		for _, t := range short {
-			// lower() folds ASCII letters only, as the trigram index does for these terms.
-			where = append(where, "instr(lower(memories_fts.title || char(10) || memories_fts.body || char(10) || memories_fts.tags), lower(?)) > 0")
+			// SQLite's lower() folds ASCII letters only; fold_case folds every letter, as the
+			// trigram index does (see init).
+			where = append(where, "instr(fold_case(memories_fts.title || char(10) || memories_fts.body || char(10) || memories_fts.tags), fold_case(?)) > 0")
 			args = append(args, t)
 		}
 		if len(tags) > 0 {
@@ -706,15 +727,10 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 		if len(terms) == 0 {
 			return nil
 		}
-		counted := 0
-		for _, m := range memories {
-			if counted == SearchCountedResults {
-				break
-			}
+		for _, m := range memories[:min(len(memories), SearchCountedResults)] {
 			if m.Faded {
 				continue
 			}
-			counted++
 			if _, err := s.countReference(ctx, tx, m.ID, sess.ID, now, false); err != nil {
 				return err
 			}
@@ -740,10 +756,14 @@ func (s *Store) deleteForgottenMemories(ctx context.Context, tx *sql.Tx, now tim
 	}
 	// A memory never referenced fades soonest: HalfLife × log2(1/Threshold) after it was last
 	// touched. A memory touched more recently than that plus the grace period cannot be due.
-	cutoff := millis(now.Add(-p.fadeAfter(0) - p.Grace))
+	least := p.fadeAfter(0) + p.Grace
+	if least < 0 {
+		return 0, nil // the sum overflows: no memory can be due before the year 2262
+	}
+	cutoff := millis(now.Add(-least))
 	rows, err := tx.QueryContext(ctx, `
 		SELECT id, updated_at, accessed_at, access_count FROM memories
-		WHERE pinned = 0 AND max(updated_at, accessed_at) < ?`, cutoff)
+		WHERE pinned = 0 AND max(updated_at, accessed_at) <= ?`, cutoff)
 	if err != nil {
 		return 0, err
 	}
