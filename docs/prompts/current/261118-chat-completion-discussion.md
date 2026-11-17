@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-18 02:32:09 JST
+最終更新日時: 2026-11-18 02:45:13 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261118-chat-completion-design.md` (最終仕様)、`261118-chat-completion-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -16,9 +16,9 @@
 
 検討 ID: chat-completion
 
-版: 3
+版: 4
 
-状態: 実施中 (最終仕様の承認済み)
+状態: 成果物の承認待ち
 
 ## 作業 WBS と進捗管理
 
@@ -40,7 +40,7 @@
     - ✅ 3.1. `docs/prompts/current/261118-chat-completion-design.md` の作成 (ツールの引数と結果、送達状態の移り変わり、読み返しの範囲、期限切れと削除の処理、セッションの削除、書き出し、設定、確認の手順、受入条件)
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート)
-- 🔄 4. 承認された最終仕様に従った作業の実施
+- ✅ 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. ブランチの準備と、検討の記録のコミット (`feature/chat-completion`)
     - ✅ 4.2. スキーマの版 4 と、送信の時点の送信者の値の保存 (`internal/store/schema/0004_sender_snapshot.sql`、`internal/store/`)
     - ✅ 4.3. 送達の確認 (`internal/store/`、`internal/tools/`: `chat_ack`、`chat_status`)
@@ -51,14 +51,14 @@
     - ✅ 4.8. `lounge_help`、接続時の案内文、ツールの説明文の更新
     - ✅ 4.9. 自動テストの追加 (時刻を進めた試験、版 3 からの移行を含む)、`chat-probe.sh` の更新
     - ✅ 4.10. 実装のレビューと、指摘の修正
-    - 🔄 4.11. エージェントでの確認 (WSL の側の 5 つの CLI)、結果の記録 (`261118-chat-completion-validation.md`)、登録の解除、後片付け ← **CURRENT**
-    - ⏸️ 4.12. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`SKILL.md`、企画提案書)
-    - ⏸️ 4.13. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)
-    - ⏸️ 4.14. 受入条件への適合確認 (全完確認)
-    - ⏸️ 4.15. 残課題一覧の再構築と整理
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付
+    - ✅ 4.11. エージェントでの確認 (WSL の側の 5 つの CLI)、結果の記録 (`261118-chat-completion-validation.md`)、登録の解除、後片付け
+    - ✅ 4.12. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`SKILL.md`、企画提案書)
+    - ✅ 4.13. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)
+    - ✅ 4.14. 受入条件への適合確認 (全完確認)
+    - ✅ 4.15. 残課題一覧の再構築と整理
+- 🚫 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (停止理由: 利用者の承認待ち) ← **CURRENT**
 
 ## 対象と参照資料
 
@@ -995,4 +995,12 @@ Claude Code (このセッション) の運用は、前の案件と同じにし�
 
 ## 反映と検証の記録
 
-まだ、ありません。
+- **実装**: Opus 5.5 のサブエージェントが、スキーマの版 4、`chat_ack`、`chat_status`、`chat_history`、送信の時点の送信者の値、期限切れと削除の定期の処理、期間と上限の起動オプション、`session list`、`session remove`、`export`、自動テスト、確認のスクリプトを実装しました。Claude Code がレビューしました。
+- **最終仕様からの差**: `session remove` を `--yes` なしで実行したときの終了コードを、最終仕様の「2」ではなく、1 にしました。最終仕様は「`user remove` と同じ」としており、`user remove` の実際の終了コードは 1 です (最終仕様の記載の誤り)。削除されたセッションのエラーは、`lounge_who` と `chat_*` のツールが返し、`lounge_help`、`lounge_info`、`lounge_join` は使えます (最終仕様に定めのない点)。`export` は、すべてのユーザーのメッセージを含むことの注意を、標準エラーに表示します。ほかは、最終仕様のとおりです。
+- **追加の修正**: `probe.sh` が、新しい 3 つのツールを確かめていなかったため、加えました。`README.md` に、前の案件から残っていた古い記載 (ユーザーの識別が未実装) があったため、削除しました。`SKILL.md` の、確認のスクリプトの出力の行数の記載が古かったため、書き直しました。
+- **機械的検証**: `gofmt -l .` (出力なし)、`go vet ./...` (Linux、Windows、macOS 向け)、`go test -race ./...`、`make dist` が成功しました。新しい実行ファイルで、`probe.sh` と `chat-probe.sh` が成功しました。
+- **エージェントでの確認**: 到達点 1 から 4 を満たしました (WSL の側の 5 つの CLI。サンドボックスを外すオプションは使っていません)。5 つとも、指示に完了の記録を含めずに、返信の後に `chat_ack` を呼びました。到達点 5 (Windows の側) は、未検証です。結果は、`261118-chat-completion-validation.md` にあります。
+- **文書**: `docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`、`docs/agent-lounge-mcp-proposal.md` を更新しました。
+- **後片付け**: 5 つの CLI の登録を解除し、確認用のサーバーを停止し、データベース、書き出したファイル、フォルダーを削除しました。
+- **残課題**: `261118-chat-completion-backlog.md` を再構築しました (対策した 3 件を除き、1 件を追加して、16 件)。
+- **Git**: ブランチ `feature/chat-completion` にコミットし、origin にプッシュしました。`main` へのマージは、行っていません。
