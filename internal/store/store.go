@@ -18,8 +18,10 @@ type Store struct {
 	db *sql.DB
 	// now is the clock; tests replace it (SetClock).
 	now func() time.Time
-	// limits bound new messages and sessions (SetLimits).
+	// limits bound new messages, sessions and memories (SetLimits).
 	limits Limits
+	// retention is the forgetting model of memories (SetRetention).
+	retention RetentionPolicy
 }
 
 // SetClock replaces the clock that stamps the times the store records and that the cleanup
@@ -69,7 +71,7 @@ func openUnmigrated(path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	return &Store{db: db, now: time.Now, limits: DefaultLimits()}, nil
+	return &Store{db: db, now: time.Now, limits: DefaultLimits(), retention: DefaultRetention()}, nil
 }
 
 // Close releases the database. It checkpoints the write-ahead log when it is the last connection.

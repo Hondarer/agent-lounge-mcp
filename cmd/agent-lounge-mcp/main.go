@@ -3,9 +3,9 @@
 //
 //	agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
 //
-// Users and their tokens are managed with the user subcommand (see user.go), sessions with the
-// session subcommand, and the export subcommand writes the messages as Markdown files (see
-// admin.go). Diagnostics go to standard error.
+// Users and their tokens are managed with the user subcommand (see user.go), sessions and
+// memories with the session and memory subcommands, and the export subcommand writes the
+// messages and memories as Markdown files (see admin.go). Diagnostics go to standard error.
 package main
 
 import (
@@ -58,6 +58,8 @@ func main() {
 		os.Exit(runUser(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "session":
 		os.Exit(runSession(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	case "memory":
+		os.Exit(runMemory(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "export":
 		os.Exit(runExport(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "version", "--version", "-version":
@@ -75,10 +77,13 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--allowed-host NAME]... [--db FILE] [--inbox-wait-max DURATION]")
 	fmt.Fprintln(w, "           [--expire-after DURATION] [--retain-for DURATION] [--session-idle DURATION] [--cleanup-interval DURATION]")
 	fmt.Fprintln(w, "           [--max-body-bytes N] [--max-unread N] [--max-sessions-per-user N]")
+	fmt.Fprintln(w, "           [--memory-half-life DURATION] [--memory-fade-threshold X] [--memory-grace DURATION]")
+	fmt.Fprintln(w, "           [--max-memory-bytes N] [--max-memories-per-scope N]")
 	fmt.Fprintln(w, "           start the server; see agent-lounge-mcp serve -h")
 	fmt.Fprintln(w, "       agent-lounge-mcp user add|list|rotate|remove ...  (manage users and their tokens; see agent-lounge-mcp user -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp session list|remove ...          (list and remove sessions; see agent-lounge-mcp session -h)")
-	fmt.Fprintln(w, "       agent-lounge-mcp export --out DIR [--format markdown] [--db FILE]  (write every message as Markdown files)")
+	fmt.Fprintln(w, "       agent-lounge-mcp memory list|remove ...           (list and remove memories; see agent-lounge-mcp memory -h)")
+	fmt.Fprintln(w, "       agent-lounge-mcp export --out DIR [--format markdown] [--db FILE]  (write every message and memory as Markdown files)")
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
@@ -110,6 +115,13 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		fmt.Sprintf("largest message body in bytes of UTF-8 (1 to %d)", config.MaxMaxBodyBytes))
 	fs.IntVar(&cfg.MaxUnread, "max-unread", cfg.MaxUnread, "most unread messages one session can hold (1 or more)")
 	fs.IntVar(&cfg.MaxSessionsPerUser, "max-sessions-per-user", cfg.MaxSessionsPerUser, "most sessions one user can have (1 or more)")
+	addMemoryRetentionFlags(fs, &cfg)
+	fs.Var(config.DurationValue{D: &cfg.MemoryGrace}, "memory-grace",
+		"time after a memory faded after which the cleanup deletes it (0: never)")
+	fs.IntVar(&cfg.MaxMemoryBytes, "max-memory-bytes", cfg.MaxMemoryBytes,
+		fmt.Sprintf("largest memory body in bytes of UTF-8 (1 to %d)", config.MaxMaxBodyBytes))
+	fs.IntVar(&cfg.MaxMemoriesPerScope, "max-memories-per-scope", cfg.MaxMemoriesPerScope,
+		"most memories one scope (one user, one repository) can hold, faded and pinned ones included (1 or more)")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -117,6 +129,15 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		return cfg, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
 	return cfg, cfg.Validate()
+}
+
+// addMemoryRetentionFlags adds the options that decide when a memory fades. memory list takes
+// them too, to show the state the server would give.
+func addMemoryRetentionFlags(fs *flag.FlagSet, cfg *config.Config) {
+	fs.Var(config.DurationValue{D: &cfg.MemoryHalfLife}, "memory-half-life",
+		"half-life of the retention score of a memory never referenced; references lengthen it (0: memories never fade)")
+	fs.Float64Var(&cfg.MemoryFadeThreshold, "memory-fade-threshold", cfg.MemoryFadeThreshold,
+		"retention score below which a memory has faded and leaves plain searches (above 0, below 1)")
 }
 
 // listenAddr returns the address to show for a listener: the host as configured (the listener
@@ -177,17 +198,20 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 	if err != nil {
 		return err
 	}
-	// The cleanup runs while the server serves, and stops before the store is closed.
+	sess := server.Session{Store: st, LocalUser: local}
+	// server.New applies the limits and the retention of memories to the store: the cleanup,
+	// which reads them, starts after it. It runs while the server serves, and stops before the
+	// store is closed.
+	srv := server.New(cfg, sess)
 	stopCleanup := startCleanup(ctx, st, cfg)
 	defer stopCleanup()
-	sess := server.Session{Store: st, LocalUser: local}
-	srv := server.New(cfg, sess)
 	hs := &http.Server{Handler: server.Handler(srv, sess)}
 
 	log.Printf("version %s, database %s", version.Version, cfg.DBPath)
 	addr := listenAddr(cfg.Listen, ln.Addr())
 	log.Printf("serving MCP at http://%s%s", addr, server.MCPPath)
 	log.Print(describeCleanupPolicy(cfg))
+	log.Print(describeMemoryPolicy(cfg))
 	if cfg.ListensRemote() {
 		log.Printf("warning: listening on %s without TLS: tokens and messages travel unencrypted. "+
 			"Use it only on a trusted network, or put an HTTPS reverse proxy in front.", addr)

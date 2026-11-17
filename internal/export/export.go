@@ -1,11 +1,12 @@
-// Package export writes the messages of the lounge as Markdown files, one file per
-// conversation. It holds the file layout, the file name rules and the Markdown form; the
-// messages come from store.Store.Export, and no SQL lives here.
+// Package export writes the messages and memories of the lounge as Markdown files, one file
+// per conversation and one per scope of memories. It holds the file layout, the file name
+// rules and the Markdown form; the data comes from store.Store.Export, and no SQL lives here.
 //
 // Layout under the output directory:
 //
 //	chat/<scope>-<scope id>/room-<room>.md            messages to a room
 //	chat/<scope>-<scope id>/direct-<A>--<B>.md        messages between two sessions
+//	memory/<scope>-<scope id>.md                      the memories of a scope
 //
 // A and B are the addresses (user/name) of the two sessions, in address order. Each name is
 // passed through SafeName.
@@ -25,8 +26,12 @@ import (
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
 
-// ChatDir is the directory under the output directory that holds the conversations.
-const ChatDir = "chat"
+// ChatDir is the directory under the output directory that holds the conversations, and
+// MemoryDir the one that holds the memories.
+const (
+	ChatDir   = "chat"
+	MemoryDir = "memory"
+)
 
 // SafeName returns name as a file name: every character other than A-Z a-z 0-9 . _ - is
 // replaced with _. When a character is replaced, a hyphen and the first 8 hexadecimal digits
@@ -90,18 +95,48 @@ func (c conversation) path() string {
 type Summary struct {
 	Files    int
 	Messages int
+	Memories int
 }
 
-// WriteMarkdown writes the messages that read passes to its callback into Markdown files under
-// dir, which is created when missing. read must pass the messages of one conversation one after
-// another, oldest first (store.Store.Export does). A file of the same name is overwritten;
-// other files in dir are left alone.
-func WriteMarkdown(dir string, read func(fn func(store.ExportMessage) error) error) (Summary, error) {
+// Reader passes the data to export to its two callbacks, as store.Store.Export does: the
+// messages of one conversation one after another, oldest first, then the memories of one scope
+// one after another.
+type Reader func(onMessage func(store.ExportMessage) error, onMemory func(store.Memory) error) error
+
+// WriteMarkdown writes what read passes into Markdown files under dir, which is created when
+// missing. A file of the same name is overwritten; other files in dir are left alone. The
+// memory directory is created only when there is a memory.
+func WriteMarkdown(dir string, read Reader) (Summary, error) {
 	var sum Summary
 	var cur *os.File
 	var w *bufio.Writer
 	var curConv conversation
+	var curScope store.Scope
 	written := map[string]bool{}
+	// open starts writing the file rel, or continues it when it was written before in this run
+	// (a group should come in one run; should it come again, its file is continued rather than
+	// overwritten). It reports whether the file is new.
+	open := func(rel string) (bool, error) {
+		path := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return false, err
+		}
+		flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+		if written[rel] {
+			flags = os.O_WRONLY | os.O_APPEND
+		}
+		f, err := os.OpenFile(path, flags, 0o644)
+		if err != nil {
+			return false, err
+		}
+		cur, w = f, bufio.NewWriter(f)
+		if written[rel] {
+			return false, nil
+		}
+		written[rel] = true
+		sum.Files++
+		return true, nil
+	}
 	closeCur := func() error {
 		if cur == nil {
 			return nil
@@ -113,36 +148,41 @@ func WriteMarkdown(dir string, read func(fn func(store.ExportMessage) error) err
 		cur = nil
 		return err
 	}
+	inMemories := false
 	err := read(func(m store.ExportMessage) error {
 		c := conversationOf(m)
 		if cur == nil || c != curConv {
 			if err := closeCur(); err != nil {
 				return err
 			}
-			rel := c.path()
-			path := filepath.Join(dir, rel)
-			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-				return err
-			}
-			// A conversation comes in one run; should it come again, its file is continued
-			// rather than overwritten.
-			flags := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
-			if written[rel] {
-				flags = os.O_WRONLY | os.O_APPEND
-			}
-			f, err := os.OpenFile(path, flags, 0o644)
+			isNew, err := open(c.path())
 			if err != nil {
 				return err
 			}
-			cur, w, curConv = f, bufio.NewWriter(f), c
-			if !written[rel] {
-				written[rel] = true
-				sum.Files++
+			curConv = c
+			if isNew {
 				writeHeader(w, c)
 			}
 		}
 		writeMessage(w, m)
 		sum.Messages++
+		return nil
+	}, func(m store.Memory) error {
+		if !inMemories || m.Scope != curScope {
+			if err := closeCur(); err != nil {
+				return err
+			}
+			isNew, err := open(memoryPath(m.Scope))
+			if err != nil {
+				return err
+			}
+			inMemories, curScope = true, m.Scope
+			if isNew {
+				writeMemoryHeader(w, m.Scope)
+			}
+		}
+		writeMemory(w, m)
+		sum.Memories++
 		return nil
 	})
 	if cerr := closeCur(); err == nil {
@@ -152,6 +192,63 @@ func WriteMarkdown(dir string, read func(fn func(store.ExportMessage) error) err
 		return sum, fmt.Errorf("export: %w", err)
 	}
 	return sum, nil
+}
+
+// memoryPath returns the path of the file of the memories of a scope, relative to the output
+// directory.
+func memoryPath(sc store.Scope) string {
+	return filepath.Join(MemoryDir, SafeName(sc.Kind+"-"+sc.ID)+".md")
+}
+
+func writeMemoryHeader(w io.Writer, sc store.Scope) {
+	fmt.Fprintln(w, "# agent-lounge memories")
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "- Scope: %s\n", code(sc.Kind))
+	fmt.Fprintf(w, "- Scope ID: %s\n", code(sc.ID))
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Memories are written by the sessions named with them. Times are UTC.")
+}
+
+func writeMemory(w io.Writer, m store.Memory) {
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "## Memory %d", m.ID)
+	if m.Title != "" {
+		fmt.Fprintf(w, ": %s", code(m.Title))
+	}
+	fmt.Fprintln(w)
+	fmt.Fprintln(w)
+	if len(m.Tags) > 0 {
+		tags := make([]string, len(m.Tags))
+		for i, t := range m.Tags {
+			tags[i] = code(t)
+		}
+		fmt.Fprintf(w, "- Tags: %s\n", strings.Join(tags, ", "))
+	} else {
+		fmt.Fprintln(w, "- Tags: none")
+	}
+	fmt.Fprintf(w, "- Pinned: %s\n", map[bool]string{true: "yes", false: "no"}[m.Pinned])
+	fmt.Fprintf(w, "- Created: %s by %s\n", formatTime(m.CreatedAt), author(m.CreatedBy))
+	fmt.Fprintf(w, "- Updated: %s by %s\n", formatTime(m.UpdatedAt), author(m.UpdatedBy))
+	if m.AccessedAt.IsZero() {
+		fmt.Fprintln(w, "- Last referenced: never")
+	} else {
+		fmt.Fprintf(w, "- Last referenced: %s\n", formatTime(m.AccessedAt))
+	}
+	fmt.Fprintf(w, "- References: %d\n", m.AccessCount)
+	fmt.Fprintln(w)
+	fence := Fence(m.Body)
+	fmt.Fprintln(w, fence+"text")
+	fmt.Fprintln(w, m.Body)
+	fmt.Fprintln(w, fence)
+}
+
+// author renders who wrote a memory: user/session, with the agent name when there is one.
+func author(a store.Author) string {
+	s := code(address(a.User, a.Session))
+	if a.Agent != "" {
+		s += " (" + code(a.Agent) + ")"
+	}
+	return s
 }
 
 func writeHeader(w io.Writer, c conversation) {

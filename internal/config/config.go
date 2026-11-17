@@ -54,6 +54,17 @@ type Config struct {
 	MaxBodyBytes       int
 	MaxUnread          int
 	MaxSessionsPerUser int
+	// MaxMemoryBytes and MaxMemoriesPerScope bound memories in the same way.
+	MaxMemoryBytes      int
+	MaxMemoriesPerScope int
+
+	// The forgetting model of memories (see store.RetentionPolicy), the same for every scope.
+	// MemoryHalfLife is the half-life of a memory never referenced (0 disables forgetting),
+	// MemoryFadeThreshold the retention score below which a memory has faded, and MemoryGrace
+	// how long a faded memory is kept before the cleanup deletes it (0 keeps it).
+	MemoryHalfLife      time.Duration
+	MemoryFadeThreshold float64
+	MemoryGrace         time.Duration
 }
 
 // Bounds of the options.
@@ -66,7 +77,15 @@ const (
 
 // Limits returns the limits of the stored data.
 func (c Config) Limits() store.Limits {
-	return store.Limits{MaxBodyBytes: c.MaxBodyBytes, MaxUnread: c.MaxUnread, MaxSessionsPerUser: c.MaxSessionsPerUser}
+	return store.Limits{
+		MaxBodyBytes: c.MaxBodyBytes, MaxUnread: c.MaxUnread, MaxSessionsPerUser: c.MaxSessionsPerUser,
+		MaxMemoryBytes: c.MaxMemoryBytes, MaxMemoriesPerScope: c.MaxMemoriesPerScope,
+	}
+}
+
+// Retention returns the forgetting model of memories.
+func (c Config) Retention() store.RetentionPolicy {
+	return store.RetentionPolicy{HalfLife: c.MemoryHalfLife, Threshold: c.MemoryFadeThreshold, Grace: c.MemoryGrace}
 }
 
 // CleanupPolicy returns the periods of the periodic cleanup.
@@ -93,6 +112,12 @@ func Default() Config {
 		MaxBodyBytes:       store.DefaultMaxBodyBytes,
 		MaxUnread:          store.DefaultMaxUnread,
 		MaxSessionsPerUser: store.DefaultMaxSessionsPerUser,
+
+		MaxMemoryBytes:      store.DefaultMaxMemoryBytes,
+		MaxMemoriesPerScope: store.DefaultMaxMemoriesPerScope,
+		MemoryHalfLife:      store.DefaultMemoryHalfLife,
+		MemoryFadeThreshold: store.DefaultMemoryThreshold,
+		MemoryGrace:         store.DefaultMemoryGrace,
 	}
 }
 
@@ -110,7 +135,8 @@ func (c Config) Validate() error {
 	for _, p := range []struct {
 		name string
 		d    time.Duration
-	}{{"--expire-after", c.ExpireAfter}, {"--retain-for", c.RetainFor}, {"--session-idle", c.SessionIdle}} {
+	}{{"--expire-after", c.ExpireAfter}, {"--retain-for", c.RetainFor}, {"--session-idle", c.SessionIdle},
+		{"--memory-half-life", c.MemoryHalfLife}, {"--memory-grace", c.MemoryGrace}} {
 		if p.d < 0 {
 			return fmt.Errorf("%s %s: must not be negative (0 disables it)", p.name, p.d)
 		}
@@ -127,6 +153,15 @@ func (c Config) Validate() error {
 	if c.MaxSessionsPerUser < 1 {
 		return fmt.Errorf("--max-sessions-per-user %d: use 1 or more", c.MaxSessionsPerUser)
 	}
+	if err := ValidateFadeThreshold(c.MemoryFadeThreshold); err != nil {
+		return err
+	}
+	if c.MaxMemoryBytes < 1 || c.MaxMemoryBytes > MaxMaxBodyBytes {
+		return fmt.Errorf("--max-memory-bytes %d: use a number from 1 to %d", c.MaxMemoryBytes, MaxMaxBodyBytes)
+	}
+	if c.MaxMemoriesPerScope < 1 {
+		return fmt.Errorf("--max-memories-per-scope %d: use 1 or more", c.MaxMemoriesPerScope)
+	}
 	host, _, err := net.SplitHostPort(c.Listen)
 	if err != nil {
 		return fmt.Errorf("--listen: %w", err)
@@ -141,6 +176,14 @@ func (c Config) Validate() error {
 		if !validHostName(h) {
 			return fmt.Errorf("--allowed-host %q: give a host name or IP address without scheme, port or path (for example lounge.example.com)", h)
 		}
+	}
+	return nil
+}
+
+// ValidateFadeThreshold checks a --memory-fade-threshold value: above 0 and below 1.
+func ValidateFadeThreshold(v float64) error {
+	if !(v > 0 && v < 1) {
+		return fmt.Errorf("--memory-fade-threshold %v: use a number above 0 and below 1, such as 0.1", v)
 	}
 	return nil
 }

@@ -8,7 +8,8 @@ import (
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
 )
 
-var finalToolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history", "lounge_info"}
+var finalToolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history",
+	"memory_put", "memory_search", "memory_get", "memory_pin", "memory_forget", "lounge_info"}
 
 func TestFinalToolNames(t *testing.T) {
 	catalog := Catalog()
@@ -70,5 +71,26 @@ func TestGuideRetentionAndLimits(t *testing.T) {
 	cfg.RetainFor = 0
 	if g := guide(cfg); !strings.Contains(g, "Messages are not deleted for their age.") {
 		t.Error("guide does not say that messages are kept")
+	}
+}
+
+// The guide states the forgetting model and the memory limits in effect.
+func TestGuideMemory(t *testing.T) {
+	g := guide(config.Default())
+	for _, want := range []string{"## Memory", "falling by half every 7d", "below 0.1", "about 23 days", "about 47 days",
+		"deleted 30d after it faded", "at most 16384 bytes", "at most 10000 memories", "up to 10 memories", "first 3 results",
+		"memory_search with words of the task"} {
+		if !strings.Contains(g, want) {
+			t.Errorf("guide does not contain %q", want)
+		}
+	}
+	cfg := config.Default()
+	cfg.MemoryGrace = 0
+	if g := guide(cfg); !strings.Contains(g, "Faded memories are not deleted on this server") {
+		t.Error("guide does not follow --memory-grace 0")
+	}
+	cfg.MemoryHalfLife = 0
+	if g := guide(cfg); !strings.Contains(g, "Memories do not fade on this server") || strings.Contains(g, "falling by half") {
+		t.Error("guide does not follow --memory-half-life 0")
 	}
 }

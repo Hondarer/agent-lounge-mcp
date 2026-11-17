@@ -26,7 +26,7 @@ const (
 
 // Limits bound what sessions can store. The server sets them from its startup options (see
 // package config); the usage guide (lounge_help) states the values in effect. Lowering a limit
-// deletes nothing: it applies to new messages and new sessions.
+// deletes nothing: it applies to new messages, sessions and memories.
 type Limits struct {
 	// MaxBodyBytes is the largest message body, in bytes of UTF-8.
 	MaxBodyBytes int
@@ -36,18 +36,28 @@ type Limits struct {
 	// MaxSessionsPerUser is the most sessions one user can have. Joining under a new name fails
 	// beyond it; joining under an existing name still works.
 	MaxSessionsPerUser int
+	// MaxMemoryBytes is the largest memory body, in bytes of UTF-8.
+	MaxMemoryBytes int
+	// MaxMemoriesPerScope is the most memories one scope (one user, one repository unit) can
+	// hold, faded and pinned ones included. Creating a memory fails beyond it.
+	MaxMemoriesPerScope int
 }
 
 // Default limits, used until SetLimits is called.
 const (
-	DefaultMaxBodyBytes       = 65536
-	DefaultMaxUnread          = 1000
-	DefaultMaxSessionsPerUser = 500
+	DefaultMaxBodyBytes        = 65536
+	DefaultMaxUnread           = 1000
+	DefaultMaxSessionsPerUser  = 500
+	DefaultMaxMemoryBytes      = 16384
+	DefaultMaxMemoriesPerScope = 10000
 )
 
 // DefaultLimits returns the limits a store has when it is opened.
 func DefaultLimits() Limits {
-	return Limits{MaxBodyBytes: DefaultMaxBodyBytes, MaxUnread: DefaultMaxUnread, MaxSessionsPerUser: DefaultMaxSessionsPerUser}
+	return Limits{
+		MaxBodyBytes: DefaultMaxBodyBytes, MaxUnread: DefaultMaxUnread, MaxSessionsPerUser: DefaultMaxSessionsPerUser,
+		MaxMemoryBytes: DefaultMaxMemoryBytes, MaxMemoriesPerScope: DefaultMaxMemoriesPerScope,
+	}
 }
 
 // SetLimits replaces the limits. Call it before the store is used concurrently.

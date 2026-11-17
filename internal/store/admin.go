@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
-// The functions in this file serve the administration commands (session, export), which open
+// The functions in this file serve the administration commands (session, memory, export), which open
 // the database file directly, possibly while a server uses it.
 
 // ErrNoSessionToRemove is returned by CountSessionData and RemoveSession for a session that
@@ -146,14 +147,63 @@ type ExportDelivery struct {
 	ExpiredAt   time.Time
 }
 
-// Export reads every message with its deliveries in one read transaction, so that the result
-// is the content of the database at one moment, and passes them to fn one at a time. Messages
+// Export reads every message with its deliveries, then every memory, in one read transaction,
+// so that the result is the content of the database at one moment, and passes them to
+// onMessage and onMemory one at a time. onMemory may be nil, which skips the memories.
+// Memories come in the order scope, scope ID, ID, with their tags; their retention is left
+// unset, since it depends on the moment they are read. Messages
 // come grouped by conversation (the room of one scope, or the pair of sessions of a message
 // addressed to a session, in one scope) in the order scope, scope ID, rooms before pairs, room
 // name or pair, and oldest first within a conversation. Deliveries are in the order of the
-// recipients' user/name. When fn fails, Export stops and returns its error.
-func (s *Store) Export(ctx context.Context, fn func(ExportMessage) error) error {
+// recipients' user/name. When a callback fails, Export stops and returns its error.
+func (s *Store) Export(ctx context.Context, onMessage func(ExportMessage) error, onMemory func(Memory) error) error {
 	return s.readTx(ctx, func(tx *sql.Tx) error {
+		if err := exportMessages(ctx, tx, onMessage); err != nil {
+			return err
+		}
+		if onMemory == nil {
+			return nil
+		}
+		return exportMemories(ctx, tx, onMemory)
+	})
+}
+
+// exportMemories passes every memory to fn, in the order scope, scope ID, ID.
+func exportMemories(ctx context.Context, tx *sql.Tx, fn func(Memory) error) error {
+	rows, err := tx.QueryContext(ctx, "SELECT id FROM memories ORDER BY scope, scope_id, id")
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for chunk := range slices.Chunk(ids, 500) {
+		ms, err := loadMemories(ctx, tx, chunk)
+		if err != nil {
+			return err
+		}
+		for _, id := range chunk {
+			if err := fn(ms[id]); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// exportMessages passes every message to fn; see Export.
+func exportMessages(ctx context.Context, tx *sql.Tx, fn func(ExportMessage) error) error {
+	{
 		rows, err := tx.QueryContext(ctx, `
 			WITH msg AS (
 				SELECT m.id, m.scope, m.scope_id, coalesce(r.name, '') AS room,
@@ -215,5 +265,5 @@ func (s *Store) Export(ctx context.Context, fn func(ExportMessage) error) error 
 			return fn(*cur)
 		}
 		return nil
-	})
+	}
 }

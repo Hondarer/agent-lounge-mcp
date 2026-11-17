@@ -181,6 +181,25 @@ func TestValidateCleanupAndLimits(t *testing.T) {
 			t.Errorf("%s: %v", want, err)
 		}
 	}
+	for want, bad := range map[string]func(*Config){
+		"--memory-half-life":       func(c *Config) { c.MemoryHalfLife = -time.Second },
+		"--memory-grace":           func(c *Config) { c.MemoryGrace = -time.Second },
+		"--memory-fade-threshold":  func(c *Config) { c.MemoryFadeThreshold = 0 },
+		"--max-memory-bytes":       func(c *Config) { c.MaxMemoryBytes = MaxMaxBodyBytes + 1 },
+		"--max-memories-per-scope": func(c *Config) { c.MaxMemoriesPerScope = 0 },
+	} {
+		cfg := Default()
+		bad(&cfg)
+		if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%s: %v", want, err)
+		}
+	}
+	if p := Default().Retention(); p.HalfLife != 7*Day || p.Threshold != 0.1 || p.Grace != 30*Day {
+		t.Errorf("Retention = %+v", p)
+	}
+	if l := Default().Limits(); l.MaxMemoryBytes != 16384 || l.MaxMemoriesPerScope != 10000 {
+		t.Errorf("memory limits = %+v", l)
+	}
 	if l := Default().Limits(); l.MaxBodyBytes != 65536 || l.MaxUnread != 1000 || l.MaxSessionsPerUser != 500 {
 		t.Errorf("Limits = %+v", l)
 	}

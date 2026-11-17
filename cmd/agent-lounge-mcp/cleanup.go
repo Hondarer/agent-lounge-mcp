@@ -52,13 +52,18 @@ func cleanupOnce(ctx context.Context, st *store.Store, cfg config.Config) {
 func describeCleanup(r store.CleanupResult) string {
 	var parts []string
 	if r.Expired > 0 {
-		parts = append(parts, fmt.Sprintf("%d unread deliveries expired", r.Expired))
+		parts = append(parts, plural(r.Expired, "unread delivery", "unread deliveries")+" expired")
 	}
 	if r.Messages > 0 {
-		parts = append(parts, fmt.Sprintf("%d old messages deleted (%d deliveries)", r.Messages, r.MessageDeliveries))
+		parts = append(parts, plural(r.Messages, "old message", "old messages")+" deleted ("+
+			plural(r.MessageDeliveries, "delivery", "deliveries")+")")
 	}
 	if r.Sessions > 0 {
-		parts = append(parts, fmt.Sprintf("%d unused sessions deleted (%d messages, %d deliveries)", r.Sessions, r.SessionMessages, r.SessionDeliveries))
+		parts = append(parts, plural(r.Sessions, "unused session", "unused sessions")+" deleted ("+
+			plural(r.SessionMessages, "message", "messages")+", "+plural(r.SessionDeliveries, "delivery", "deliveries")+")")
+	}
+	if r.Memories > 0 {
+		parts = append(parts, plural(r.Memories, "forgotten memory", "forgotten memories")+" deleted")
 	}
 	return "cleanup: " + strings.Join(parts, "; ")
 }
@@ -76,4 +81,17 @@ func describeCleanupPolicy(cfg config.Config) string {
 		parts[2] = "sessions unused for " + config.FormatDuration(cfg.SessionIdle) + " are deleted"
 	}
 	return "cleanup every " + config.FormatDuration(cfg.CleanupInterval) + ": " + strings.Join(parts, "; ")
+}
+
+// describeMemoryPolicy states the forgetting model of memories for the start-up log.
+func describeMemoryPolicy(cfg config.Config) string {
+	if cfg.MemoryHalfLife == 0 {
+		return "memories: forgetting is disabled (they never fade and are never deleted)"
+	}
+	s := fmt.Sprintf("memories: half-life %s, longer with references; they fade below a retention score of %v",
+		config.FormatDuration(cfg.MemoryHalfLife), cfg.MemoryFadeThreshold)
+	if cfg.MemoryGrace == 0 {
+		return s + " and are never deleted"
+	}
+	return s + " and are deleted " + config.FormatDuration(cfg.MemoryGrace) + " after they fade"
 }

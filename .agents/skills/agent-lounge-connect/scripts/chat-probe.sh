@@ -8,7 +8,9 @@
 # with unacked, and no unread message. Then the repository scope: probe-a and probe-b declare one repository in two
 # forms of its origin, probe-c declares a folder without origin; a message to the repository room
 # reaches probe-b and not probe-c, and a message to probe-b in scope repository reaches it. Then
-# one connection waits in chat_inbox (wait_seconds) and receives a message sent while it waits;
+# memories: a memory of the repository scope is found, read and deleted by another session of the
+# repository, and not found from another repository. Then one connection waits in chat_inbox
+# (wait_seconds) and receives a message sent while it waits;
 # the probe sends only after /healthz reports the wait.
 #
 # With a second user's token, the probe also checks the repository scope across two users: a
@@ -329,6 +331,27 @@ expect 'lounge_who' "chat_send to a session outside the scope" "$outside"
 out=$(call "$a" chat_inbox '{"limit":100}')
 reject "folder-$mark" "chat_inbox of another repository" "$out"
 echo "OK: probe-c's repository room reaches no other probe session; a session outside the scope gives the error of a missing one"
+
+# Memories: probe-a saves one in the repository scope; probe-b (the same repository) finds it by
+# a two-character Japanese term and the run's mark, with a tag in another case, reads it whole
+# and deletes it; probe-c (another repository) does not find it. Nothing of it stays.
+out=$(call "$a" memory_put "{\"scope\":\"repository\",\"body\":\"認証 memo-$mark\",\"tags\":[\"Probe\"]}")
+# The text copy of the result keeps the order of the fields (escaped): the memory's id comes first.
+mem=$(printf '%s' "$out" | grep -o '\\"memory\\":{\\"id\\":[0-9]*' | head -n 1 | grep -o '[0-9]*$')
+[ -n "$mem" ] || ng "memory_put returned no memory ID: $out"
+expect '"created":true' "memory_put" "$out"
+out=$(call "$b" memory_search "{\"query\":\"認証 memo-$mark\",\"tags\":[\"PROBE\"]}")
+expect "{\\\"id\\\":$mem,\\\"scope\\\":\\\"repository\\\"" "memory_search of probe-b" "$out"
+expect '"count":1' "memory_search of probe-b" "$out"
+out=$(call "$c" memory_search "{\"query\":\"memo-$mark\"}")
+expect '"count":0' "memory_search of probe-c (another repository)" "$out"
+out=$(call "$b" memory_get "{\"id\":$mem}")
+expect "\"body\":\"認証 memo-$mark\"" "memory_get" "$out"
+expect '"access_count":1' "memory_get (the search counted one reference)" "$out"
+call "$b" memory_forget "{\"id\":$mem}" >/dev/null
+out=$(call_error "$a" memory_get "{\"id\":$mem}")
+expect 'no memory with ID' "memory_get after memory_forget" "$out"
+echo "OK: a repository memory saved by probe-a is found and read by probe-b, not by probe-c, and deleted"
 
 # probe-b waits in chat_inbox in the background; probe-a sends while it waits. The waiting call
 # uses its own headers file and a longer timeout than the wait.
