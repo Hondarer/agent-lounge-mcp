@@ -43,9 +43,10 @@ func main() {
 		case err != nil:
 			log.Fatal(err)
 		}
-		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		if err := serve(ctx, cfg, nil); err != nil {
+		sigs := make(chan os.Signal, 2)
+		signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+		ctx, force := watchSignals(sigs)
+		if err := serve(ctx, force, cfg, nil); err != nil {
 			log.Fatal(err)
 		}
 	case "version", "--version", "-version":
@@ -81,9 +82,31 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 	return cfg, cfg.Validate()
 }
 
-// serve runs the HTTP server until ctx is cancelled. When ready is not nil, it receives the
-// address the server listens on (useful with port 0).
-func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error {
+// watchSignals turns the signals received on sigs into the stop requests of serve: the first
+// signal cancels the returned context (stop gracefully), the second closes force (stop now).
+// Later signals are received and ignored, so they do not kill the process.
+func watchSignals(sigs <-chan os.Signal) (context.Context, <-chan struct{}) {
+	ctx, cancel := context.WithCancel(context.Background())
+	force := make(chan struct{})
+	go func() {
+		<-sigs
+		cancel()
+		<-sigs
+		close(force)
+		for range sigs {
+		}
+	}()
+	return ctx, force
+}
+
+// errForced is the cause of the shutdown context when force is closed.
+var errForced = errors.New("stop forced")
+
+// serve runs the HTTP server until ctx is cancelled, then stops it gracefully within
+// cfg.ShutdownTimeout; when force is closed during that stop, it closes the listener and every
+// connection at once instead of waiting. force may be nil. When ready is not nil, it receives
+// the address the server listens on (useful with port 0).
+func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready chan<- net.Addr) error {
 	st, err := store.Open(ctx, cfg.DBPath)
 	if err != nil {
 		return err
@@ -120,7 +143,7 @@ func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error 
 
 	// Agents keep an event stream open, so stopping usually takes the whole timeout: say so at
 	// once, or the operator cannot tell whether the signal was received.
-	log.Printf("shutting down (waiting up to %s for open connections)", cfg.ShutdownTimeout)
+	log.Printf("shutting down (waiting up to %s for open connections; press Ctrl+C again to stop now)", cfg.ShutdownTimeout)
 
 	// Tell agents first: tool calls fail with the shutdown error from now on, waiting chat_inbox
 	// calls return it, and clients that set a log level receive it as a log notification. Keep
@@ -128,12 +151,26 @@ func serve(ctx context.Context, cfg config.Config, ready chan<- net.Addr) error 
 	// /healthz reports "stopping" instead of the connection being refused. Then close the
 	// listener, let in-flight requests finish, and drop what remains (such as open event
 	// streams). All of it shares one deadline of ShutdownTimeout.
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	// A second signal (force) cancels the shared deadline at once, with errForced as its cause.
+	forceCtx, forceStop := context.WithCancelCause(context.Background())
+	defer forceStop(nil)
+	shutdownCtx, cancel := context.WithTimeout(forceCtx, cfg.ShutdownTimeout)
 	defer cancel()
+	go func() {
+		select {
+		case <-force:
+			forceStop(errForced)
+		case <-shutdownCtx.Done():
+		}
+	}()
 	srv.BeginShutdown(shutdownCtx)
 	srv.WaitForSessions(shutdownCtx)
 	if err := hs.Shutdown(shutdownCtx); err != nil {
 		hs.Close()
+	}
+	if errors.Is(context.Cause(shutdownCtx), errForced) {
+		log.Print("stopped (forced)")
+		return nil
 	}
 	log.Print("stopped")
 	return nil

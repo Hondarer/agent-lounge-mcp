@@ -23,6 +23,8 @@ func registerChat(r *Registry, d *Deps) {
 		Name:  toolSend,
 		Title: "Send a message",
 		Description: "Send a message to one session ('to') or to every other session in a room ('room'); give exactly one of them. " +
+			"With room, scope chooses the space: user (default) reaches the other sessions of your user; " +
+			"repository reaches every other session that declared your repository at lounge_join, whatever its user or machine. " +
 			"The message waits on the server until the recipient calls chat_inbox. " +
 			"Do not include secrets or personal data.",
 		Annotations: additive(false),
@@ -44,6 +46,8 @@ type SendInput struct {
 	To   string `json:"to,omitempty" jsonschema:"session name to send to (see lounge_who). Give either to or room"`
 	Room string `json:"room,omitempty" jsonschema:"room to post to; the only room is lounge. Give either to or room"`
 	Body string `json:"body" jsonschema:"message text"`
+	// Scope is user or repository; empty means user.
+	Scope string `json:"scope,omitempty" jsonschema:"space of the room: user (default; the sessions of your user) or repository (the sessions that declared your repository). repository works only with room"`
 }
 
 // SendOutput is the result of the chat_send tool.
@@ -51,6 +55,8 @@ type SendOutput struct {
 	MessageID  int64    `json:"message_id" jsonschema:"ID of the stored message"`
 	SentAt     string   `json:"sent_at" jsonschema:"time the message was accepted (RFC 3339, UTC)"`
 	Recipients []string `json:"recipients" jsonschema:"session names the message is queued for"`
+	Scope      string   `json:"scope" jsonschema:"space of the message: user or repository"`
+	Repository string   `json:"repository,omitempty" jsonschema:"repository the message was sent to; only for scope repository"`
 	unreadField
 }
 
@@ -59,7 +65,15 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 	if err != nil {
 		return nil, SendOutput{}, err
 	}
+	switch in.Scope {
+	case "", store.ScopeUser, store.ScopeRepository:
+	default:
+		return nil, SendOutput{}, fmt.Errorf("invalid scope %q: use %s (default) or %s", in.Scope, store.ScopeUser, store.ScopeRepository)
+	}
+	repository := in.Scope == store.ScopeRepository
 	switch {
+	case repository && in.To != "":
+		return nil, SendOutput{}, fmt.Errorf("scope %s works only with room (%s), not with to: send to a session without scope", store.ScopeRepository, store.LoungeRoom)
 	case in.To != "" && in.Room != "":
 		return nil, SendOutput{}, errors.New("give either to (a session name) or room, not both")
 	case in.To == "" && in.Room == "":
@@ -69,9 +83,12 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 	}
 
 	var sent store.Sent
-	if in.To != "" {
+	switch {
+	case in.To != "":
 		sent, err = d.Store.SendToSession(ctx, me, in.To, in.Body)
-	} else {
+	case repository:
+		sent, err = d.Store.SendToRepositoryRoom(ctx, me, in.Room, in.Body)
+	default:
 		sent, err = d.Store.SendToRoom(ctx, me, in.Room, in.Body)
 	}
 	switch {
@@ -79,13 +96,19 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 		return nil, SendOutput{}, fmt.Errorf("no session named %q: call lounge_who to list session names", in.To)
 	case errors.Is(err, store.ErrSendToSelf):
 		return nil, SendOutput{}, fmt.Errorf("%q is your own session: send to another session", in.To)
+	case errors.Is(err, store.ErrNoRepository):
+		return nil, SendOutput{}, fmt.Errorf("your session has no repository: call %s with the same name and your origin, "+
+			"or your folder and machine (see %s), then send again", toolJoin, toolHelp)
 	case errors.Is(err, store.ErrNoSuchRoom):
 		return nil, SendOutput{}, fmt.Errorf("no room named %q: the only room is %s", in.Room, store.LoungeRoom)
 	case err != nil:
 		return nil, SendOutput{}, err
 	}
 	d.notify.wake(sent.RecipientIDs...)
-	return nil, SendOutput{MessageID: sent.MessageID, SentAt: formatTime(sent.SentAt), Recipients: sent.Recipients}, nil
+	return nil, SendOutput{
+		MessageID: sent.MessageID, SentAt: formatTime(sent.SentAt), Recipients: sent.Recipients,
+		Scope: sent.Scope, Repository: sent.Repository,
+	}, nil
 }
 
 // InboxInput defines arguments for the chat_inbox tool.
@@ -99,10 +122,14 @@ type InboxMessage struct {
 	MessageID int64  `json:"message_id" jsonschema:"ID of the message"`
 	From      string `json:"from" jsonschema:"session name of the sender"`
 	FromAgent string `json:"from_agent" jsonschema:"agent name the sender declared"`
-	Scope     string `json:"scope" jsonschema:"space the message belongs to: user (sessions of your own user)"`
-	Room      string `json:"room,omitempty" jsonschema:"room the message was posted to; absent for a message addressed to your session"`
-	Body      string `json:"body" jsonschema:"message text, written by the sender"`
-	SentAt    string `json:"sent_at" jsonschema:"time the message was sent (RFC 3339, UTC)"`
+	// FromOSUser and FromMachine are the sender's current declarations.
+	FromOSUser  string `json:"from_os_user,omitempty" jsonschema:"OS user name the sender declared; absent when not declared"`
+	FromMachine string `json:"from_machine,omitempty" jsonschema:"machine name the sender declared; absent when not declared"`
+	Scope       string `json:"scope" jsonschema:"space the message belongs to: user (sessions of your own user) or repository (sessions of one repository)"`
+	Repository  string `json:"repository,omitempty" jsonschema:"repository the message was sent to; only for scope repository"`
+	Room        string `json:"room,omitempty" jsonschema:"room the message was posted to; absent for a message addressed to your session"`
+	Body        string `json:"body" jsonschema:"message text, written by the sender"`
+	SentAt      string `json:"sent_at" jsonschema:"time the message was sent (RFC 3339, UTC)"`
 }
 
 // InboxOutput is the result of the chat_inbox tool.
@@ -199,13 +226,16 @@ func inboxOutput(msgs []store.InboxMessage, waited *int) InboxOutput {
 	out := InboxOutput{Messages: make([]InboxMessage, 0, len(msgs)), WaitedSeconds: waited}
 	for _, m := range msgs {
 		out.Messages = append(out.Messages, InboxMessage{
-			MessageID: m.MessageID,
-			From:      m.From,
-			FromAgent: m.FromAgent,
-			Scope:     m.Scope,
-			Room:      m.Room,
-			Body:      m.Body,
-			SentAt:    formatTime(m.SentAt),
+			MessageID:   m.MessageID,
+			From:        m.From,
+			FromAgent:   m.FromAgent,
+			FromOSUser:  m.FromOSUser,
+			FromMachine: m.FromMachine,
+			Scope:       m.Scope,
+			Repository:  m.Repository,
+			Room:        m.Room,
+			Body:        m.Body,
+			SentAt:      formatTime(m.SentAt),
 		})
 	}
 	return out

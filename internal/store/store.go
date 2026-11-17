@@ -35,6 +35,19 @@ var pragmas = []string{
 // Open opens the database file at path, creating it when missing, and migrates its schema to
 // the version this binary expects.
 func Open(ctx context.Context, path string) (*Store, error) {
+	s, err := openUnmigrated(path)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.migrate(ctx); err != nil {
+		s.db.Close()
+		return nil, fmt.Errorf("open %s: %w", path, err)
+	}
+	return s, nil
+}
+
+// openUnmigrated opens the database file without touching its schema.
+func openUnmigrated(path string) (*Store, error) {
 	// The driver splits the data source name at the first '?'.
 	if path == "" || strings.ContainsRune(path, '?') {
 		return nil, fmt.Errorf("invalid database path %q", path)
@@ -49,12 +62,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	s := &Store{db: db, now: time.Now}
-	if err := s.migrate(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("open %s: %w", path, err)
-	}
-	return s, nil
+	return &Store{db: db, now: time.Now}, nil
 }
 
 // Close releases the database. It checkpoints the write-ahead log when it is the last connection.
@@ -68,8 +76,18 @@ func (s *Store) SchemaVersion(ctx context.Context) (int, error) {
 }
 
 // tx runs fn in a write transaction: it commits when fn returns nil and rolls back otherwise.
-func (s *Store) tx(ctx context.Context, fn func(tx *sql.Tx) error) (err error) {
-	tx, err := s.db.BeginTx(ctx, nil)
+func (s *Store) tx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	return txOn(ctx, s.db, fn)
+}
+
+// txBeginner is implemented by *sql.DB and *sql.Conn.
+type txBeginner interface {
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+}
+
+// txOn is tx on a given pool or connection.
+func txOn(ctx context.Context, db txBeginner, fn func(tx *sql.Tx) error) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

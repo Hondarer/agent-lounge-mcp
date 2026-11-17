@@ -72,7 +72,7 @@ func TestServe(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, cfg, ready) }()
+	go func() { done <- serve(ctx, nil, cfg, ready) }()
 
 	var addr net.Addr
 	select {
@@ -120,7 +120,7 @@ func TestServeStopsWhileWaiting(t *testing.T) {
 	defer cancel()
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, cfg, ready) }()
+	go func() { done <- serve(ctx, nil, cfg, ready) }()
 	var addr net.Addr
 	select {
 	case addr = <-ready:
@@ -180,7 +180,7 @@ func TestServeStopsWhileWaiting(t *testing.T) {
 
 // startServe runs serve in the background with cfg on a free loopback port. It returns the
 // address, the function that stops the server (as a signal does), and the result of serve.
-func startServe(t *testing.T, cfg config.Config) (net.Addr, context.CancelFunc, <-chan error) {
+func startServe(t *testing.T, cfg config.Config, force <-chan struct{}) (net.Addr, context.CancelFunc, <-chan error) {
 	t.Helper()
 	cfg.Listen = "127.0.0.1:0"
 	cfg.DBPath = filepath.Join(t.TempDir(), "lounge.db")
@@ -188,7 +188,7 @@ func startServe(t *testing.T, cfg config.Config) (net.Addr, context.CancelFunc, 
 	t.Cleanup(cancel)
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
-	go func() { done <- serve(ctx, cfg, ready) }()
+	go func() { done <- serve(ctx, force, cfg, ready) }()
 	select {
 	case addr := <-ready:
 		return addr, cancel, done
@@ -221,7 +221,7 @@ func TestServeGracePeriod(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	cfg := config.Default()
 	cfg.ShutdownTimeout = 500 * time.Millisecond
-	addr, stop, done := startServe(t, cfg)
+	addr, stop, done := startServe(t, cfg, nil)
 
 	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
 	testutil.Call[struct{}](t, cs, "lounge_join", map[string]any{"name": "agent"})
@@ -257,7 +257,7 @@ func TestServeStopsPromptlyWithoutClients(t *testing.T) {
 	t.Cleanup(func() { log.SetOutput(os.Stderr) })
 	cfg := config.Default()
 	cfg.ShutdownTimeout = 5 * time.Second
-	addr, stop, done := startServe(t, cfg)
+	addr, stop, done := startServe(t, cfg, nil)
 	if got := healthState(addr); got != "ok" {
 		t.Fatalf("health = %q", got)
 	}
@@ -274,6 +274,92 @@ func TestServeStopsPromptlyWithoutClients(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Errorf("stopping without clients took %s", elapsed)
+	}
+}
+
+// A second signal during the stop closes the connections at once instead of waiting for the
+// connected agent, and serve still ends without an error (exit code 0).
+func TestServeSecondSignalStopsNow(t *testing.T) {
+	logged := &syncBuffer{}
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	cfg := config.Default()
+	cfg.ShutdownTimeout = 30 * time.Second
+	force := make(chan struct{})
+	addr, stop, done := startServe(t, cfg, force)
+
+	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
+	testutil.Call[struct{}](t, cs, "lounge_join", map[string]any{"name": "agent"})
+
+	stop()
+	testutil.WaitFor(t, func() bool {
+		return strings.Contains(logged.String(),
+			"shutting down (waiting up to 30s for open connections; press Ctrl+C again to stop now)")
+	}, "the shutdown is not announced with the hint for a second Ctrl+C")
+	if healthState(addr) != "stopping" {
+		t.Fatal("the server is not in its grace period")
+	}
+	start := time.Now()
+	close(force)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("serve did not stop after the second signal")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("forced stop took %s", elapsed)
+	}
+	if out := logged.String(); !strings.Contains(out, "stopped (forced)") {
+		t.Errorf("log output:\n%s", out)
+	}
+	if healthState(addr) != "" {
+		t.Error("the listener is still open")
+	}
+}
+
+// Without a second signal, the stop is reported as a normal one.
+func TestServeStopWithoutSecondSignalIsNotForced(t *testing.T) {
+	logged := &syncBuffer{}
+	log.SetOutput(logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	force := make(chan struct{})
+	_, stop, done := startServe(t, config.Default(), force)
+	stop()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if out := logged.String(); strings.Contains(out, "forced") || !strings.Contains(out, "stopped") {
+		t.Errorf("log output:\n%s", out)
+	}
+}
+
+func TestWatchSignals(t *testing.T) {
+	sigs := make(chan os.Signal)
+	ctx, force := watchSignals(sigs)
+	select {
+	case <-ctx.Done():
+		t.Fatal("stopped before a signal")
+	case <-force:
+		t.Fatal("forced before a signal")
+	default:
+	}
+	sigs <- os.Interrupt
+	<-ctx.Done()
+	select {
+	case <-force:
+		t.Fatal("forced after one signal")
+	case <-time.After(20 * time.Millisecond):
+	}
+	sigs <- os.Interrupt
+	<-force
+	// Further signals are received (they do not block the sender) and ignored.
+	select {
+	case sigs <- os.Interrupt:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a third signal is not received")
 	}
 }
 

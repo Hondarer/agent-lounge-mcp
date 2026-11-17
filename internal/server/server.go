@@ -95,15 +95,17 @@ func Handler(s *Server, sess Session) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(MCPPath, mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.MCP }, nil))
 	mux.HandleFunc("GET "+HealthPath, func(w http.ResponseWriter, r *http.Request) {
-		health(r.Context(), w, sess, s.d.Stopping())
+		health(r.Context(), w, sess, s.d.Stopping(), s.d.WaitingCalls())
 	})
 	// Agents are not browsers: reject cross-origin browser requests, which could otherwise
 	// reach a server on the loopback interface from any web page.
 	return http.NewCrossOriginProtection().Handler(mux)
 }
 
-// health answers the liveness check. While the server stops, the state is "stopping".
-func health(ctx context.Context, w http.ResponseWriter, sess Session, stopping bool) {
+// health answers the liveness check. While the server stops, the state is "stopping". waiting
+// is the number of chat_inbox calls waiting for messages now; scripts use it to know that a
+// call has started to wait before they send.
+func health(ctx context.Context, w http.ResponseWriter, sess Session, stopping bool, waiting int) {
 	w.Header().Set("Content-Type", "application/json")
 	v, err := sess.Store.SchemaVersion(ctx)
 	if err != nil {
@@ -115,5 +117,5 @@ func health(ctx context.Context, w http.ResponseWriter, sess Session, stopping b
 	if stopping {
 		state = "stopping"
 	}
-	json.NewEncoder(w).Encode(map[string]any{"state": state, "version": version.Version, "schema_version": v})
+	json.NewEncoder(w).Encode(map[string]any{"state": state, "version": version.Version, "schema_version": v, "waiting": waiting})
 }

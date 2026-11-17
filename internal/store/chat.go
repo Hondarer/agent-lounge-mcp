@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/hondarer/agent-lounge-mcp/internal/profile"
 )
 
 // Names fixed while requests are not authenticated and rooms cannot be created.
@@ -17,6 +19,9 @@ const (
 	LoungeRoom = "lounge"
 	// ScopeUser is the space visible to the sessions of one user.
 	ScopeUser = "user"
+	// ScopeRepository is the space of the sessions that declare the same repository unit,
+	// whatever user they belong to.
+	ScopeRepository = "repository"
 
 	// localTokenHash marks a user without a token. Token hashes are hexadecimal digests, so no
 	// token can match it.
@@ -28,16 +33,39 @@ var (
 	ErrNoSuchSession = errors.New("no such session")
 	ErrNoSuchRoom    = errors.New("no such room")
 	ErrSendToSelf    = errors.New("the destination is the sending session")
+	// ErrNoRepository is returned for a message to the repository space from a session that
+	// declared no repository.
+	ErrNoRepository = errors.New("the sending session has no repository")
+	// ErrMachineRequired is returned by JoinSession when the session would have a folder
+	// without an origin and without a machine.
+	ErrMachineRequired = profile.ErrMachineRequired
 )
 
 // Session is a named unit of work of one user. It outlives connections: joining again with the
 // same name continues it, including its unread messages.
 type Session struct {
-	ID         int64
-	UserID     int64
-	Name       string
-	Agent      string
+	ID     int64
+	UserID int64
+	Name   string
+	Agent  string
+	Profile
 	LastSeenAt time.Time
+}
+
+// Profile holds the values a session declared at lounge_join, normalized by package profile,
+// and the repository unit decided from them. Empty strings mean no value.
+type Profile struct {
+	OSUser     string
+	Machine    string
+	Origin     string
+	Folder     string
+	Repository string
+}
+
+// Location is the place a session works in: the normalized origin and folder.
+type Location struct {
+	Origin string
+	Folder string
 }
 
 // Sent describes an accepted message.
@@ -47,6 +75,10 @@ type Sent struct {
 	Recipients []string // session names
 	// RecipientIDs are the session IDs of Recipients, in the same order.
 	RecipientIDs []int64
+	// Scope is the space of the message.
+	Scope string
+	// Repository is the repository unit of a message to the repository space, else "".
+	Repository string
 }
 
 // InboxMessage is a message handed to its recipient.
@@ -54,10 +86,15 @@ type InboxMessage struct {
 	MessageID int64
 	From      string // sender's session name
 	FromAgent string
-	Scope     string
-	Room      string // empty for a message addressed to the session
-	Body      string
-	SentAt    time.Time
+	// FromOSUser and FromMachine are the sender's declared values ("" when not declared).
+	FromOSUser  string
+	FromMachine string
+	Scope       string
+	Room        string // empty for a message addressed to the session
+	// Repository is the repository unit the message was sent to, for scope repository.
+	Repository string
+	Body       string
+	SentAt     time.Time
 }
 
 // JoinParams are the arguments of JoinSession.
@@ -65,8 +102,12 @@ type JoinParams struct {
 	UserID int64
 	// Name is the session name. When empty, a free name is generated.
 	Name string
-	// Agent replaces the recorded agent name when not nil.
-	Agent *string
+	// Agent, OSUser and Machine replace the recorded value when not nil ("" clears it).
+	Agent   *string
+	OSUser  *string
+	Machine *string
+	// Location replaces the recorded origin and folder together when not nil.
+	Location *Location
 }
 
 func millis(t time.Time) int64      { return t.UnixMilli() }
@@ -97,8 +138,14 @@ func (s *Store) EnsureLocalUser(ctx context.Context) (int64, error) {
 	return id, nil
 }
 
-// JoinSession returns the user's session named p.Name, creating it when missing. resumed
-// reports that the session existed.
+// JoinSession returns the user's session named p.Name, creating it when missing, and records
+// the declared values of p. resumed reports that the session existed.
+//
+// origin and folder are replaced as one set (p.Location), never one at a time: a session that
+// moves from a repository with an origin to a folder without one must not keep the old origin,
+// which would decide its repository unit. The unit is decided again from the resulting values;
+// a folder without an origin and without a machine fails with ErrMachineRequired and changes
+// nothing.
 func (s *Store) JoinSession(ctx context.Context, p JoinParams) (sess Session, resumed bool, err error) {
 	err = s.tx(ctx, func(tx *sql.Tx) error {
 		now := s.now()
@@ -109,35 +156,52 @@ func (s *Store) JoinSession(ctx context.Context, p JoinParams) (sess Session, re
 			}
 		}
 		sess = Session{UserID: p.UserID, Name: name, LastSeenAt: now.UTC().Truncate(time.Millisecond)}
-		err := tx.QueryRowContext(ctx, "SELECT id, agent FROM sessions WHERE user_id = ? AND name = ?", p.UserID, name).
-			Scan(&sess.ID, &sess.Agent)
+		err := tx.QueryRowContext(ctx,
+			"SELECT id, agent, os_user, machine, origin, folder FROM sessions WHERE user_id = ? AND name = ?", p.UserID, name).
+			Scan(&sess.ID, &sess.Agent, &sess.OSUser, &sess.Machine, &sess.Origin, &sess.Folder)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
-			if p.Agent != nil {
-				sess.Agent = *p.Agent
-			}
-			res, err := tx.ExecContext(ctx,
-				"INSERT INTO sessions (user_id, name, agent, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
-				p.UserID, name, sess.Agent, millis(now), millis(now))
-			if err != nil {
-				return err
-			}
-			sess.ID, err = res.LastInsertId()
-			return err
 		case err != nil:
 			return err
+		default:
+			resumed = true
 		}
-		resumed = true
-		if p.Agent != nil {
-			sess.Agent = *p.Agent
+		setIf(&sess.Agent, p.Agent)
+		setIf(&sess.OSUser, p.OSUser)
+		setIf(&sess.Machine, p.Machine)
+		if p.Location != nil {
+			sess.Origin, sess.Folder = p.Location.Origin, p.Location.Folder
 		}
-		_, err = tx.ExecContext(ctx, "UPDATE sessions SET agent = ?, last_seen_at = ? WHERE id = ?", sess.Agent, millis(now), sess.ID)
+		if sess.Repository, err = profile.Repository(sess.Origin, sess.Machine, sess.Folder); err != nil {
+			return err
+		}
+		if resumed {
+			_, err = tx.ExecContext(ctx, `
+				UPDATE sessions SET agent = ?, os_user = ?, machine = ?, origin = ?, folder = ?, repository = ?, last_seen_at = ?
+				WHERE id = ?`,
+				sess.Agent, sess.OSUser, sess.Machine, sess.Origin, sess.Folder, sess.Repository, millis(now), sess.ID)
+			return err
+		}
+		res, err := tx.ExecContext(ctx, `
+			INSERT INTO sessions (user_id, name, agent, os_user, machine, origin, folder, repository, created_at, last_seen_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			p.UserID, name, sess.Agent, sess.OSUser, sess.Machine, sess.Origin, sess.Folder, sess.Repository, millis(now), millis(now))
+		if err != nil {
+			return err
+		}
+		sess.ID, err = res.LastInsertId()
 		return err
 	})
 	if err != nil {
 		return Session{}, false, fmt.Errorf("join session: %w", err)
 	}
 	return sess, resumed, nil
+}
+
+func setIf(dst *string, v *string) {
+	if v != nil {
+		*dst = *v
+	}
 }
 
 // freeSessionName generates a session name the user does not use yet.
@@ -177,7 +241,8 @@ func (s *Store) Seen(ctx context.Context, sessionID int64) (unread int, err erro
 // reports that the user has more.
 func (s *Store) ListSessions(ctx context.Context, userID int64, limit int) (sessions []Session, truncated bool, err error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT id, name, agent, last_seen_at FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC, id DESC LIMIT ?",
+		`SELECT id, name, agent, os_user, machine, origin, folder, repository, last_seen_at
+		FROM sessions WHERE user_id = ? ORDER BY last_seen_at DESC, id DESC LIMIT ?`,
 		userID, limit+1)
 	if err != nil {
 		return nil, false, fmt.Errorf("list sessions: %w", err)
@@ -186,7 +251,8 @@ func (s *Store) ListSessions(ctx context.Context, userID int64, limit int) (sess
 	for rows.Next() {
 		sess := Session{UserID: userID}
 		var seen int64
-		if err := rows.Scan(&sess.ID, &sess.Name, &sess.Agent, &seen); err != nil {
+		if err := rows.Scan(&sess.ID, &sess.Name, &sess.Agent, &sess.OSUser, &sess.Machine, &sess.Origin, &sess.Folder,
+			&sess.Repository, &seen); err != nil {
 			return nil, false, fmt.Errorf("list sessions: %w", err)
 		}
 		sess.LastSeenAt = fromMillis(seen)
@@ -248,7 +314,7 @@ func (s *Store) SendToSession(ctx context.Context, sender Session, to, body stri
 			"INSERT INTO deliveries (message_id, recipient_session_id, queued_at) VALUES (?, ?, ?)", id, recipient, millis(now)); err != nil {
 			return err
 		}
-		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: []string{to}, RecipientIDs: []int64{recipient}}
+		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: []string{to}, RecipientIDs: []int64{recipient}, Scope: ScopeUser}
 		return nil
 	})
 	if err != nil {
@@ -271,47 +337,96 @@ func (s *Store) SendToRoom(ctx context.Context, sender Session, room, body strin
 		case err != nil:
 			return err
 		}
-		now := s.now()
-		res, err := tx.ExecContext(ctx,
-			"INSERT INTO messages (scope, sender_session_id, room_id, body, sent_at) VALUES (?, ?, ?, ?, ?)",
-			ScopeUser, sender.ID, roomID, body, millis(now))
-		if err != nil {
-			return err
-		}
-		id, err := res.LastInsertId()
-		if err != nil {
-			return err
-		}
-		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO deliveries (message_id, recipient_session_id, queued_at)
-			SELECT ?, id, ? FROM sessions WHERE user_id = ? AND id <> ?`, id, millis(now), sender.UserID, sender.ID); err != nil {
-			return err
-		}
-		rows, err := tx.QueryContext(ctx, `
-			SELECT s.id, s.name FROM deliveries d JOIN sessions s ON s.id = d.recipient_session_id
-			WHERE d.message_id = ? ORDER BY s.name`, id)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		recipients := []string{}
-		var recipientIDs []int64
-		for rows.Next() {
-			var recipientID int64
-			var name string
-			if err := rows.Scan(&recipientID, &name); err != nil {
-				return err
-			}
-			recipients = append(recipients, name)
-			recipientIDs = append(recipientIDs, recipientID)
-		}
-		sent = Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: recipients, RecipientIDs: recipientIDs}
-		return rows.Err()
+		sent, err = s.postToRoom(ctx, tx, sender.ID, ScopeUser, roomID, body,
+			"SELECT id FROM sessions WHERE user_id = ? AND id <> ?", sender.UserID, sender.ID)
+		return err
 	})
 	if err != nil {
 		return Sent{}, fmt.Errorf("send to room %q: %w", room, err)
 	}
 	return sent, nil
+}
+
+// SendToRepositoryRoom queues a message for every other session that records the sender's
+// repository unit now, whatever its user and whether it is connected or not. The unit is read
+// from the database at the time of sending, so it is the one the sender declared last. A session
+// that declares the unit later does not receive the message, and one that changes its
+// declaration keeps what it received. Only the room named lounge exists in a repository space;
+// it is created at the first message to the unit.
+func (s *Store) SendToRepositoryRoom(ctx context.Context, sender Session, room, body string) (Sent, error) {
+	if room != LoungeRoom {
+		return Sent{}, fmt.Errorf("send to room %q: %w", room, ErrNoSuchRoom)
+	}
+	var sent Sent
+	err := s.tx(ctx, func(tx *sql.Tx) error {
+		var repository string
+		if err := tx.QueryRowContext(ctx, "SELECT repository FROM sessions WHERE id = ?", sender.ID).Scan(&repository); err != nil {
+			return err
+		}
+		if repository == "" {
+			return ErrNoRepository
+		}
+		if _, err := tx.ExecContext(ctx,
+			"INSERT INTO rooms (scope, user_id, repository, name, created_at) VALUES (?, NULL, ?, ?, ?) ON CONFLICT DO NOTHING",
+			ScopeRepository, repository, room, millis(s.now())); err != nil {
+			return err
+		}
+		var roomID int64
+		if err := tx.QueryRowContext(ctx, "SELECT id FROM rooms WHERE scope = ? AND repository = ? AND name = ?",
+			ScopeRepository, repository, room).Scan(&roomID); err != nil {
+			return err
+		}
+		var err error
+		sent, err = s.postToRoom(ctx, tx, sender.ID, ScopeRepository, roomID, body,
+			"SELECT id FROM sessions WHERE repository = ? AND id <> ?", repository, sender.ID)
+		sent.Repository = repository
+		return err
+	})
+	if err != nil {
+		return Sent{}, fmt.Errorf("send to the %s room of the repository: %w", room, err)
+	}
+	return sent, nil
+}
+
+// postToRoom stores a message to a room and queues it for the sessions selected by
+// recipientsQuery (with recipientsArgs), which returns session IDs.
+func (s *Store) postToRoom(ctx context.Context, tx *sql.Tx, senderID int64, scope string, roomID int64, body string,
+	recipientsQuery string, recipientsArgs ...any) (Sent, error) {
+	now := s.now()
+	res, err := tx.ExecContext(ctx,
+		"INSERT INTO messages (scope, sender_session_id, room_id, body, sent_at) VALUES (?, ?, ?, ?, ?)",
+		scope, senderID, roomID, body, millis(now))
+	if err != nil {
+		return Sent{}, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Sent{}, err
+	}
+	args := append([]any{id, millis(now)}, recipientsArgs...)
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO deliveries (message_id, recipient_session_id, queued_at)
+		SELECT ?, id, ? FROM (`+recipientsQuery+`)`, args...); err != nil {
+		return Sent{}, err
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT s.id, s.name FROM deliveries d JOIN sessions s ON s.id = d.recipient_session_id
+		WHERE d.message_id = ? ORDER BY s.name, s.id`, id)
+	if err != nil {
+		return Sent{}, err
+	}
+	defer rows.Close()
+	sent := Sent{MessageID: id, SentAt: fromMillis(millis(now)), Recipients: []string{}, Scope: scope}
+	for rows.Next() {
+		var recipientID int64
+		var name string
+		if err := rows.Scan(&recipientID, &name); err != nil {
+			return Sent{}, err
+		}
+		sent.Recipients = append(sent.Recipients, name)
+		sent.RecipientIDs = append(sent.RecipientIDs, recipientID)
+	}
+	return sent, rows.Err()
 }
 
 // FetchInbox hands the session its oldest unread messages, up to limit, and marks them
@@ -321,7 +436,8 @@ func (s *Store) FetchInbox(ctx context.Context, sessionID int64, limit int) ([]I
 	msgs := []InboxMessage{}
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		rows, err := tx.QueryContext(ctx, `
-			SELECT m.id, s.name, s.agent, m.scope, coalesce(r.name, ''), m.body, m.sent_at
+			SELECT m.id, s.name, s.agent, s.os_user, s.machine, m.scope, coalesce(r.name, ''), coalesce(r.repository, ''),
+				m.body, m.sent_at
 			FROM deliveries d
 			JOIN messages m ON m.id = d.message_id
 			JOIN sessions s ON s.id = m.sender_session_id
@@ -335,7 +451,8 @@ func (s *Store) FetchInbox(ctx context.Context, sessionID int64, limit int) ([]I
 		for rows.Next() {
 			var m InboxMessage
 			var sentAt int64
-			if err := rows.Scan(&m.MessageID, &m.From, &m.FromAgent, &m.Scope, &m.Room, &m.Body, &sentAt); err != nil {
+			if err := rows.Scan(&m.MessageID, &m.From, &m.FromAgent, &m.FromOSUser, &m.FromMachine, &m.Scope, &m.Room,
+				&m.Repository, &m.Body, &sentAt); err != nil {
 				return err
 			}
 			m.SentAt = fromMillis(sentAt)

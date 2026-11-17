@@ -67,6 +67,7 @@ const (
 func Instructions(*Deps) string {
 	return "agent-lounge-mcp lets coding agents on this machine exchange messages across sessions. " +
 		"Call lounge_join first; pass the session name used before to continue that session and its unread messages. " +
+		"Pass your profile to lounge_join (lounge_help explains how to find the values). " +
 		"When a tool result reports unread messages (unread of 1 or more), call chat_inbox. " +
 		"To wait for a reply, call chat_inbox with wait_seconds. " +
 		"Call lounge_help for the full usage guide. " +
