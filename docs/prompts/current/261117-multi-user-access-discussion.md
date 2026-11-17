@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-17 20:52:02 JST
+最終更新日時: 2026-11-17 22:40:31 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261117-multi-user-access-design.md` (最終仕様)、`261117-multi-user-access-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -16,9 +16,9 @@
 
 検討 ID: multi-user-access
 
-版: 4
+版: 5
 
-状態: 最終仕様の承認済み (作業の実施中)
+状態: 作業の実施済み (成果物の承認待ち)
 
 ## 作業 WBS と進捗管理
 
@@ -41,24 +41,24 @@
     - ✅ 3.2. `docs/prompts/current/261117-multi-user-access-design.md` の作成 (トークンの形式と保存、管理コマンド、認証の処理、待ち受けるアドレスの規則、ユーザーをまたぐ一覧と宛先、上限、確認の手順、受入条件)
     - ✅ 3.3. 最終仕様における受入条件と整合性の確認
     - ✅ 3.4. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート)
-- 🔄 4. 承認された最終仕様に従った作業の実施
+- ✅ 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. ブランチの準備
-    - 🔄 4.2. トークンの発行と照合 (`internal/store/`、管理コマンド `user add` / `list` / `remove` / `rotate`) ← **CURRENT**
-    - ⏸️ 4.3. 接続の認証 (`internal/server/`: `Authorization` ヘッダー、トークンのない接続の扱い、接続とユーザーの対応づけ)
-    - ⏸️ 4.4. ループバック以外での待ち受け (`internal/config/`、`cmd/agent-lounge-mcp/`: アドレスの規則、`Host` の検査、警告または明示のオプション)
-    - ⏸️ 4.5. スコープと対象の組み合わせ (`internal/tools/`、`internal/store/`: `chat_send` の `scope` と `to`、`lounge_who` の `scopes` と `address`、`chat_inbox` の `scope_id`、`from_user`、`reply_to`)
-    - ⏸️ 4.6. 本文の大きさと件数の上限 (BL-008)
-    - ⏸️ 4.7. `lounge_help`、接続時の案内文、ツールの説明文の更新
-    - ⏸️ 4.8. 自動テストの追加、`probe.sh` と `chat-probe.sh` の更新
-    - ⏸️ 4.9. サブエージェントの成果のレビューと、指摘の修正
-    - ⏸️ 4.10. 確認の手順の作成と、エージェントでの確認 (WSL の側、Windows の側、2 人の利用者)、結果の記録、登録の解除、後片付け
-    - ⏸️ 4.11. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`SKILL.md`、企画提案書)
-    - ⏸️ 4.12. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)
-    - ⏸️ 4.13. 受入条件への適合確認 (全完確認)
-    - ⏸️ 4.14. 残課題一覧の再構築と整理
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付
+    - ✅ 4.2. トークンの発行と照合 (`internal/store/`、管理コマンド `user add` / `list` / `remove` / `rotate`)
+    - ✅ 4.3. 接続の認証 (`internal/server/`: `Authorization` ヘッダー、トークンのない接続の扱い、接続とユーザーの対応づけ)
+    - ✅ 4.4. ループバック以外での待ち受け (`internal/config/`、`cmd/agent-lounge-mcp/`: アドレスの規則、`Host` の検査、警告または明示のオプション)
+    - ✅ 4.5. スコープと対象の組み合わせ (`internal/tools/`、`internal/store/`: `chat_send` の `scope` と `to`、`lounge_who` の `scopes` と `address`、`chat_inbox` の `scope_id`、`from_user`、`reply_to`)
+    - ✅ 4.6. 本文の大きさと件数の上限 (BL-008)
+    - ✅ 4.7. `lounge_help`、接続時の案内文、ツールの説明文の更新
+    - ✅ 4.8. 自動テストの追加、`probe.sh` と `chat-probe.sh` の更新
+    - ✅ 4.9. サブエージェントの成果のレビューと、指摘の修正
+    - ✅ 4.10. 確認の手順の作成と、エージェントでの確認 (WSL の側、Windows の側、2 人の利用者)、結果の記録、登録の解除、後片付け
+    - ✅ 4.11. 文書の更新 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`SKILL.md`、企画提案書)
+    - ✅ 4.12. 機械的検証 (`gofmt -l .`、`go vet` を 3 つの OS 向けに実行、`go test -race ./...`、`make dist`)
+    - ✅ 4.13. 受入条件への適合確認 (全完確認)
+    - ✅ 4.14. 残課題一覧の再構築と整理
+- 🚫 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (利用者の承認待ち) ← **CURRENT**
 
 ## 対象と参照資料
 
@@ -873,4 +873,12 @@ Claude Code は、「1 回の呼び出しで、届く相手をすべて返し、
 
 ## 反映と検証の記録
 
-まだ、反映していません。
+- **実装**: Opus 5.5 のサブエージェントが、トークンとユーザーの管理、接続の認証、ループバック以外での待ち受け、スコープと対象の組み合わせ、上限、スキーマの版 3、自動テスト、確認のスクリプトを実装しました。Claude Code がレビューしました。
+- **最終仕様からの差**: メッセージのスコープの識別子を、個別のセッション宛てだけでなく、すべてのメッセージに記録します (既存のメッセージにも、移行で値を入れます)。`user list` に見出しの行があります。終了コード 2 は、`--allow-remote` のないループバック以外の指定の場合です。ほかは、最終仕様のとおりです。
+- **対話での確認**: トークンの先頭の目印 (`alm_`) は、今のままとします (利用者の確認、2026-11-17)。検索のための正規表現を、文書に追記しました。
+- **機械的検証**: `gofmt -l .` (出力なし)、`go vet ./...` (Linux、Windows、macOS 向け)、`go test -race ./...`、`make dist` が成功しました。
+- **エージェントでの確認**: 到達点 1 から 4 を満たしました (WSL の側の 5 つが `alice`、Windows の側の 5 つが `bob`)。到達点 5 (物理的に別のマシン) は、未検証です。結果は、`261117-multi-user-access-validation.md` にあります。
+- **文書**: `docs/ja/reference.md`、`docs/ja/user-guide.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`、`docs/agent-lounge-mcp-proposal.md` を更新しました。
+- **後片付け**: 両方の側の登録を解除し、確認用のユーザー、データベース、フォルダーを削除しました。
+- **残課題**: `261117-multi-user-access-backlog.md` を再構築しました (対策した 3 件を除き、3 件を追加して、18 件)。
+- **Git**: ブランチ `feature/multi-user-access` にコミットし、origin にプッシュしました。`main` へのマージは、行っていません。
