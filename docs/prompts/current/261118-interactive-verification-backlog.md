@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 残課題一覧 (backlog)
-最終更新日時: 2026-11-18 06:16:36 JST
+最終更新日時: 2026-11-18 08:05:33 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 上流文書: `261118-interactive-verification-discussion.md` (検討用 Markdown)、`261118-interactive-verification-design.md` (最終仕様)。転記元: `../past/261118-memory-backlog.md` (前の案件の残課題一覧)。いずれも未作成の場合や、削除されている場合があります。
@@ -197,7 +197,7 @@
 
 - **摘出契機**: 案件 `chat-autonomy` の確認 (到達点 4) で判明しました。BL-017 の対処の残りです。
 - **今回の見送り理由**: 最終仕様で、ログ通知の見え方は「記録する」項目としました。対話の画面での確認には、検証の基盤 (BL-018) が必要です。
-- **継続作業での経緯と対処**: `261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件の主題として、検討を始めました (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-001)。 サーバーに、接続の診断を出力する起動オプションを加えて、切り分けます (Q-007)。他の手段は、ツールの一覧の変更通知、リソースの更新通知、各 CLI が持つ独自の通知の仕組みを調べ、使える手段が見つかったら、この案件の中で実装します (Q-009、Q-010)。 最終仕様 (`261118-interactive-verification-design.md`) を作成し、承認を受けました (2026-11-18)。
+- **継続作業での経緯と対処**: `261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件の主題として、検討を始めました (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-001)。 サーバーに、接続の診断を出力する起動オプションを加えて、切り分けます (Q-007)。他の手段は、ツールの一覧の変更通知、リソースの更新通知、各 CLI が持つ独自の通知の仕組みを調べ、使える手段が見つかったら、この案件の中で実装します (Q-009、Q-010)。 最終仕様 (`261118-interactive-verification-design.md`) を作成し、承認を受けました (2026-11-18)。 調査の結果、5 つの CLI とも、ログのレベルを設定せず、停止のログ通知は届きませんでした。ツールの一覧の変更通知とリソースの更新通知も、画面とモデルに届きませんでした。Claude Code のチャンネル (`notifications/claude/channel`) だけが、待機中のエージェントに届きました。実装するかどうかを、追加の確認 (検討用 Markdown の Q-022 から Q-028) で決めます。
 
 ### 影響範囲とリスク
 
