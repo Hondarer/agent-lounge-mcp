@@ -11,7 +11,7 @@ from .. import screen
 from ..lounge import Client
 from .common import Context, FileWatch, answer, ask, connections
 
-# Instruction files any of the CLIs may read; each gets its own passphrase in scenario 5.
+# Instruction files any of the CLIs may read; each gets its own code name in scenario 5.
 CANDIDATE_FILES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "GROK.md", ".github/copilot-instructions.md"]
 RUNS = 3
 TASK = ("Create a file named notes.txt in this folder with three lines: alpha, beta and gamma. "
@@ -60,12 +60,14 @@ def instruction_files(ctx: Context) -> None:
         phrases[name] = screen.token()
         path = folder / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"# Notes\n\nThe passphrase of this file ({name}) is {phrases[name]}.\n", encoding="utf-8")
+        path.write_text(f"# Project notes\n\nThe code name of this project, from {name}, is {phrases[name]}.\n",
+                        encoding="utf-8")
     agent = ctx.agent(folder).start()
     no = screen.token()
-    reply, added = ask(agent, "Do not call any tool. Your instruction files may give you passphrases. Write every "
-                              "passphrase you were given, each in capital letters. If you were given none, write "
-                              f'the word "{no}" in capital letters.')
+    # Asked as code names of the project: some models refuse to repeat a "passphrase".
+    reply, added = ask(agent, "Do not call any tool. What code names of this project do your instructions for this "
+                              "folder give? Write each code name in capital letters. If they give none, write the "
+                              f'word "{no}" in capital letters.')
     read = [name for name, p in phrases.items() if screen.contains(added, p.upper())]
     v["discovery_reply_complete"] = reply.complete
     v["files_read"] = read

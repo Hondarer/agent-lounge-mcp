@@ -29,7 +29,7 @@ def _one_shot(ctx: Context, token: str, prompt: str, cwd: Path, timeout: float =
     env["AGENT_LOUNGE_TOKEN"] = token  # Codex reads the token from this variable
     began = time.monotonic()
     try:
-        out = subprocess.run([command(ctx.definition.executable), *ctx.definition.one_shot(prompt)], cwd=cwd, env=env,
+        out = subprocess.run([command(ctx.definition.executable), *ctx.definition.one_shot(prompt), *ctx.definition.settings_args(str(cwd))], cwd=cwd, env=env,
                              capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
         text, code, timed_out = out.stdout + "\n" + out.stderr, out.returncode, False
     except subprocess.TimeoutExpired as e:

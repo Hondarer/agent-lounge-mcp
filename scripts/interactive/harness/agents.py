@@ -13,10 +13,12 @@ terminal setup; nothing else is answered.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Sequence
 
 from . import screen
@@ -59,6 +61,17 @@ class Definition:
     instruction_files: Sequence[str] = ()
     version: Sequence[str] = ("--version",)
     env: dict[str, str] = field(default_factory=dict)
+    # A settings file the CLI takes with settings_option (written next to the working folder).
+    settings: dict | None = None
+    settings_option: str = "--settings"
+
+    def settings_args(self, cwd: str) -> list[str]:
+        """Write the settings file for a run in cwd, and return the options that pass it."""
+        if self.settings is None:
+            return []
+        path = Path(cwd).resolve().parent / f".{self.name}-settings.json"
+        path.write_text(json.dumps(self.settings), encoding="utf-8")
+        return [self.settings_option, str(path)]
 
 
 def _claude_register(url: str, token: str) -> list[str]:
@@ -124,7 +137,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         one_shot=lambda prompt: ["-p", prompt, "--allow", f"mcp__{SERVER}"],
         register=_grok_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
         ready=["Shift+Tab:mode", "Ctrl+x:shortcuts", "always-approve", "Resume session"],
-        dialogs=[("Yes, I trust this folder", [ENTER])],
+        dialogs=[("Yes, I trust this folder", [ENTER]), ("Do you trust the contents of this directory", ["y"])],
         instruction_files=["AGENTS.md", "GROK.md", "CLAUDE.md"],
     ),
     Definition(
@@ -135,6 +148,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         ready=["? for shortcuts"],
         dialogs=[("Yes, I trust this folder", [ENTER])],
         instruction_files=["GEMINI.md", "AGENTS.md"],
+        settings={"permissions": {"allow": [f"mcp({SERVER}/*)"]}},
     ),
 ]}
 
@@ -168,7 +182,8 @@ class Agent:
         env.update(self.env)
         self.term = open_terminal()
         # The environment replaces the inherited one, so that removed variables stay removed.
-        self.term.start([command(self.d.executable), *self.d.interactive, *self.extra_args], cwd=self.cwd, env=env,
+        self.term.start([command(self.d.executable), *self.d.interactive, *self.d.settings_args(self.cwd),
+                         *self.extra_args], cwd=self.cwd, env=env,
                         inherit=False)
         deadline = time.monotonic() + timeout
         since = 0
