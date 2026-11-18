@@ -161,11 +161,37 @@ class Terminal:
             raise TerminalClosed()
         self._write(data)
 
-    def type_line(self, text: str, submit: str = "\r", pause: float = 0.5) -> None:
-        """Type text and submit it. The pause before submit keeps the program from taking the
-        whole input as one pasted block, in which the submit key would become a new line."""
-        self.write(text)
-        time.sleep(pause)
+    def type_line(self, text: str, submit: str = "\r", pause: float = 0.5, confirm: float = 3,
+                  shown: str = "") -> None:
+        """Type text and submit it.
+
+        The pause before submit keeps the program from taking the whole input as one pasted
+        block, in which the submit key would become a new line. The pause grows with the
+        text, because a console can deliver a long text slowly.
+
+        shown is a part of text that must be on the screen before the submit key is sent. A
+        program that redraws its screen just after it started can drop what was typed; the
+        text is then typed again, up to two times.
+
+        When the program writes nothing for confirm seconds after the submit key, the key is
+        sent once more: a program that took the key as part of a paste shows a still screen,
+        while a program that started to work keeps drawing.
+        """
+        for _ in range(3):
+            self.write(text)
+            time.sleep(pause + len(text) / 400)
+            if not shown or screen.contains(self.display(), shown):
+                break
+            time.sleep(2)
+            if screen.contains(self.display(), shown):
+                break
+        self.write(submit)
+        sent = self.mark()
+        deadline = time.monotonic() + confirm
+        while time.monotonic() < deadline:
+            if self.mark() != sent:
+                return
+            time.sleep(0.2)
         self.write(submit)
 
     def stop(self, keys: Sequence[str] = (), timeout: float = 15) -> None:

@@ -236,7 +236,8 @@ class Agent:
         word, ask = screen.completion()
         start = self.term.mark()
         began = time.monotonic()
-        self.term.type_line(f"{instruction} {ask}")
+        # The lower-case token of the completion word shows that the instruction was typed.
+        self.term.type_line(f"{instruction} {ask}", shown=word[len("IVDONE"):].lower())
         found = self.term.wait_for([word], timeout, start=start)
         complete = False
         if found:
