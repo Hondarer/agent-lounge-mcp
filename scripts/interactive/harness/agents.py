@@ -106,9 +106,6 @@ def _agy_register(url: str, token: str) -> list[str]:
     return args + (["--header", f"Authorization: Bearer {token}"] if token else []) + [SERVER, url]
 
 
-# Read-only commands that lounge_help tells agents to run for their profile.
-_PROFILE_COMMANDS = ["cmd.exe", "git", "hostname", "whoami", "pwd", "uname", "echo", "id", "powershell.exe", "pwsh"]
-
 # Unquoted: Codex reads a value that is not TOML as a string, and quotes do not survive the
 # .cmd launcher of Codex on Windows.
 _CODEX_APPROVE = f"mcp_servers.{SERVER}.default_tools_approval_mode=approve"
@@ -136,9 +133,10 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
     ),
     Definition(
         name="copilot", title="Copilot CLI", executable="copilot",
-        # The commands lounge_help lists for the profile are allowed one by one.
-        interactive=["--allow-tool", SERVER, "--allow-tool", "write",
-                     *[arg for c in _PROFILE_COMMANDS for arg in ("--allow-tool", f"shell({c})")]],
+        # All shell commands are allowed: for its profile the model runs commands of its own
+        # choice (Get-Location, $env:USERNAME, git remote ...), which a list of allowed
+        # commands does not cover. The check folders are temporary and hold nothing to protect.
+        interactive=["--allow-tool", SERVER, "--allow-tool", "write", "--allow-tool", "shell"],
         one_shot=lambda prompt: ["-p", prompt, "--allow-tool", SERVER],
         register=_copilot_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
         ready=["Type @ to mention", "shift+tab", "ctrl+c Exit", "/ commands"],
