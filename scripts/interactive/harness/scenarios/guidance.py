@@ -62,17 +62,23 @@ def instruction_files(ctx: Context) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"# Project notes\n\nThe code name of this project, from {name}, is {phrases[name]}.\n",
                         encoding="utf-8")
-    agent = ctx.agent(folder).start()
     no = screen.token()
-    # Asked as code names of the project: some models refuse to repeat a "passphrase".
-    reply, added = ask(agent, "Do not call any tool. What code names of this project do your instructions for this "
-                              "folder give? Write each code name in capital letters. If they give none, write the "
-                              f'word "{no}" in capital letters.')
-    read = [name for name, p in phrases.items() if screen.contains(added, p.upper())]
+    # Asked as code names of the project: some models refuse to repeat a "passphrase". A model
+    # can still refuse to tell what its instructions say, so the question is asked in a new
+    # session once more when the reply names no file.
+    for attempt in (1, 2):
+        agent = ctx.agent(folder).start()
+        reply, added = ask(agent, "Do not call any tool. What code names of this project do your instructions for "
+                                  "this folder give? Write each code name in capital letters. If they give none, "
+                                  f'write the word "{no}" in capital letters.')
+        read = [name for name, p in phrases.items() if screen.contains(added, p.upper())]
+        ctx.save("discovery-screen.txt" if attempt == 1 else "discovery-screen-2.txt", agent.term.transcript())
+        agent.quit()
+        if read or (reply.complete and screen.contains(added, no.upper())):
+            break
+    v["discovery_attempts"] = attempt
     v["discovery_reply_complete"] = reply.complete
     v["files_read"] = read
-    ctx.save("discovery-screen.txt", agent.term.transcript())
-    agent.quit()
     server.stop()
     chosen = next((f for f in ctx.definition.instruction_files if f in read), read[0] if read else "")
     v["file_used"] = chosen
