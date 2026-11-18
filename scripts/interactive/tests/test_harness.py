@@ -15,7 +15,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from harness import screen  # noqa: E402
-from harness.agents import ENTER, Agent, AgentNotReady, Definition  # noqa: E402
+from harness.agents import ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
 from harness.scenarios.common import answer, new_lines  # noqa: E402
 from harness.server import Server  # noqa: E402
 
@@ -92,6 +92,14 @@ class ServerEventsTest(unittest.TestCase):
                          [(1, "request tools/call lounge_join"), (2, "log level info")])
         self.assertEqual(len(s.tool_calls("lounge_join", since=1.5)), 1)
         self.assertEqual(s.tool_calls("lounge_join", since=2.5), [])
+
+
+class EnvironmentTest(unittest.TestCase):
+    @unittest.skipUnless(os.name == "posix", "PWD is a POSIX convention")
+    def test_pwd_names_the_working_folder(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(clean_environment(tmp)["PWD"], os.path.abspath(tmp))
+            self.assertNotIn("OLDPWD", clean_environment(tmp))
 
 
 def fake(dialog: bool = False) -> Definition:

@@ -25,7 +25,7 @@ _CLI_HOMES = [".claude", ".claude.json", ".codex", ".copilot", ".grok", ".gemini
 
 
 def _one_shot(ctx: Context, token: str, prompt: str, cwd: Path, timeout: float = 180) -> dict:
-    env = clean_environment()
+    env = clean_environment(cwd)
     env["AGENT_LOUNGE_TOKEN"] = token  # Codex reads the token from this variable
     began = time.monotonic()
     try:

@@ -40,8 +40,15 @@ def command(executable: str) -> str:
     return shutil.which(executable) or executable
 
 
-def clean_environment() -> dict[str, str]:
-    return {k: v for k, v in os.environ.items() if not k.upper().startswith(_INHERITED_PREFIXES)}
+def clean_environment(cwd: str | os.PathLike | None = None) -> dict[str, str]:
+    """The environment for a CLI. For a CLI that starts in cwd, PWD names that folder: a
+    process started in another folder otherwise inherits the PWD of the harness, and a shell
+    command of the agent that reads $PWD reports (and asks permission for) the wrong folder."""
+    env = {k: v for k, v in os.environ.items() if not k.upper().startswith(_INHERITED_PREFIXES)}
+    if cwd is not None and os.name == "posix":
+        env["PWD"] = os.path.abspath(cwd)
+        env.pop("OLDPWD", None)
+    return env
 
 
 @dataclass(frozen=True)
@@ -99,7 +106,12 @@ def _agy_register(url: str, token: str) -> list[str]:
     return args + (["--header", f"Authorization: Bearer {token}"] if token else []) + [SERVER, url]
 
 
-_CODEX_APPROVE = f'mcp_servers.{SERVER}.default_tools_approval_mode="approve"'
+# Read-only commands that lounge_help tells agents to run for their profile.
+_PROFILE_COMMANDS = ["cmd.exe", "git", "hostname", "whoami", "pwd", "uname", "echo", "id", "powershell.exe", "pwsh"]
+
+# Unquoted: Codex reads a value that is not TOML as a string, and quotes do not survive the
+# .cmd launcher of Codex on Windows.
+_CODEX_APPROVE = f"mcp_servers.{SERVER}.default_tools_approval_mode=approve"
 
 DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
     Definition(
@@ -124,7 +136,9 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
     ),
     Definition(
         name="copilot", title="Copilot CLI", executable="copilot",
-        interactive=["--allow-tool", SERVER, "--allow-tool", "write"],
+        # The commands lounge_help lists for the profile are allowed one by one.
+        interactive=["--allow-tool", SERVER, "--allow-tool", "write",
+                     *[arg for c in _PROFILE_COMMANDS for arg in ("--allow-tool", f"shell({c})")]],
         one_shot=lambda prompt: ["-p", prompt, "--allow-tool", SERVER],
         register=_copilot_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
         ready=["Type @ to mention", "shift+tab", "ctrl+c Exit", "/ commands"],
@@ -177,7 +191,7 @@ class Agent:
 
     def start(self, timeout: float = 120) -> "Agent":
         """Start the interactive screen, answer the start-up dialogs, and wait until ready."""
-        env = clean_environment()
+        env = clean_environment(self.cwd)
         env.update(self.d.env)
         env.update(self.env)
         self.term = open_terminal()
