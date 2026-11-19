@@ -8,7 +8,9 @@ waiting for text, typing, stopping) is shared here.
 
 from __future__ import annotations
 
+import bisect
 import os
+import subprocess
 import threading
 import time
 from typing import Mapping, Sequence
@@ -17,6 +19,11 @@ from . import screen
 
 COLUMNS = 160
 ROWS = 50
+
+# How much text before the newly arrived output wait_for searches again: a needle can begin in
+# the output of an earlier look and end in the new output.
+_OVERLAP = 4000
+_OVERLAP_LINES = 5
 
 
 class TerminalClosed(Exception):
@@ -29,6 +36,9 @@ class Terminal:
     def __init__(self) -> None:
         self._lock = threading.Condition()
         self._raw: list[str] = []
+        self._ends: list[int] = []  # length of the output through each piece of _raw
+        self._plain = screen.PlainStream()
+        self._plain_at: list[int] = []  # length of the plain text after each piece of _raw
         self._closed = False
         self._reader: threading.Thread | None = None
         self._screen = screen.Screen(COLUMNS, ROWS)
@@ -81,6 +91,9 @@ class Terminal:
                     self._lock.notify_all()
                     return
                 self._raw.append(chunk)
+                self._ends.append((self._ends[-1] if self._ends else 0) + len(chunk))
+                self._plain.feed(chunk)
+                self._plain_at.append(self._plain.length)
                 self._screen.feed(chunk)
                 self._lock.notify_all()
 
@@ -89,9 +102,24 @@ class Terminal:
         with self._lock:
             return "".join(self._raw)
 
+    def _raw_slice(self, start: int, end: int) -> str:
+        """raw()[start:end], without joining the whole output. Call with the lock held."""
+        i = bisect.bisect_right(self._ends, start)
+        j = bisect.bisect_left(self._ends, end)
+        before = self._ends[i - 1] if i else 0
+        return "".join(self._raw[i:j + 1])[start - before:end - before]
+
+    def _plain_offset(self, start: int) -> int:
+        """Where the plain text of the output from offset start of raw() begins. start is a
+        value of mark, which lies between two pieces of output. Call with the lock held."""
+        i = bisect.bisect_right(self._ends, start)
+        return self._plain_at[i - 1] if i else 0
+
     def text(self, start: int = 0) -> str:
-        """All output so far from offset start of raw(), as plain text (see screen.plain)."""
-        return screen.plain(self.raw()[start:])
+        """All output so far from offset start of raw() (a value of mark), as plain text (see
+        screen.plain)."""
+        with self._lock:
+            return self._plain.text(self._plain_offset(start))
 
     def display(self) -> str:
         """The screen as it looks now."""
@@ -106,25 +134,44 @@ class Terminal:
     def mark(self) -> int:
         """The current end of the output, to pass as start to text and wait_for."""
         with self._lock:
-            return sum(len(c) for c in self._raw)
+            return self._ends[-1] if self._ends else 0
 
     def closed(self) -> bool:
         with self._lock:
             return self._closed
 
-    def wait_for(self, needles: Sequence[str], timeout: float, start: int = 0) -> str | None:
+    def wait_for(self, needles: Sequence[str], timeout: float, start: int = 0,
+                 on_screen: Sequence[str] = ()) -> str | None:
         """Wait until one of needles shows (see screen.contains), on the screen or its history,
-        or in the plain output after start.
+        or in the plain output after start; or until one of on_screen shows on the screen as it
+        looks now (text that asks for an answer, such as a permission prompt: its old copies
+        in the history must not count).
 
-        Returns the needle found, or None when the timeout passed or the program ended first.
+        Returns the text found, or None when the timeout passed or the program ended first.
+
+        The first look covers everything; later looks cover only what arrived since, with some
+        of the text before it, so that a long session does not search its whole output again
+        for every piece of output.
         """
         deadline = time.monotonic() + timeout
         with self._lock:
+            begin = self._plain_offset(start)
+            searched, history = begin, None
             while True:
-                texts = (self._screen.transcript(), screen.plain("".join(self._raw)[start:]))
+                plain = self._plain.text(max(begin, searched - _OVERLAP))
+                if history is None:
+                    shown = self._screen.transcript()
+                else:
+                    shown = "\n".join(self._screen.history[max(0, history - _OVERLAP_LINES):] + self._screen.lines())
+                searched, history = self._plain.length, len(self._screen.history)
                 for needle in needles:
-                    if any(screen.contains(text, needle) for text in texts):
+                    if screen.contains(shown, needle) or screen.contains(plain, needle):
                         return needle
+                if on_screen:
+                    now = self._screen.display()
+                    for needle in on_screen:
+                        if screen.contains(now, needle, 0):
+                            return needle
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or self._closed:
                     return None
@@ -147,9 +194,10 @@ class Terminal:
             if now != last:
                 # Start a little earlier, so that an escape sequence split between two reads
                 # is not taken for letters.
-                raw = self.raw()
                 back = max(0, last - 64)
-                if screen.words(raw[back:now]) > screen.words(raw[back:last]):
+                with self._lock:
+                    old, new = self._raw_slice(back, last), self._raw_slice(back, now)
+                if screen.words(new) > screen.words(old):
                     since = time.monotonic()
                 last = now
             if time.monotonic() - since >= quiet:
@@ -162,7 +210,7 @@ class Terminal:
         self._write(data)
 
     def type_line(self, text: str, submit: str = "\r", pause: float = 0.5, confirm: float = 3,
-                  shown: str = "") -> None:
+                  shown: str = "", clear: Sequence[str] = ()) -> None:
         """Type text and submit it.
 
         The pause before submit keeps the program from taking the whole input as one pasted
@@ -171,13 +219,19 @@ class Terminal:
 
         shown is a part of text that must be on the screen before the submit key is sent. A
         program that redraws its screen just after it started can drop what was typed; the
-        text is then typed again, up to two times.
+        text is then typed again, up to two times. clear are the keys that empty the input
+        field, sent before the text is typed again: a program that dropped only a part of the
+        text would otherwise get the rest of it twice.
 
         When the program writes nothing for confirm seconds after the submit key, the key is
         sent once more: a program that took the key as part of a paste shows a still screen,
         while a program that started to work keeps drawing.
         """
-        for _ in range(3):
+        for attempt in range(3):
+            if attempt:
+                for key in clear:
+                    self.write(key)
+                    time.sleep(0.3)
             self.write(text)
             time.sleep(pause + len(text) / 400)
             if not shown or screen.contains(self.display(), shown):
@@ -234,3 +288,28 @@ def new_process_group() -> dict:
 def interrupt_process(proc) -> None:
     """Send the process the signal of Ctrl+C (SIGINT; on Windows, CTRL_BREAK_EVENT)."""
     _platform().interrupt_process(proc)
+
+
+def run(argv: Sequence[str], timeout: float, **kwargs) -> subprocess.CompletedProcess:
+    """subprocess.run with captured output that, at the timeout, ends the whole process tree.
+
+    subprocess.run ends only the process it started. A CLI started through a launcher (a .cmd
+    file on Windows, a shell script elsewhere) is a child of that process: it survives, keeps
+    the output pipes open, and subprocess.run then waits for it without a limit.
+
+    Raises subprocess.TimeoutExpired like subprocess.run, with the output collected so far.
+    """
+    kwargs.setdefault("stdin", subprocess.DEVNULL)
+    proc = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, **new_process_group(), **kwargs)
+    try:
+        out, err = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        _platform().kill_tree(proc)
+        try:
+            out, err = proc.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            # A process that left the tree still holds the pipes: give the output up.
+            proc.kill()
+            out, err = None, None
+        raise subprocess.TimeoutExpired(argv, timeout, output=out, stderr=err) from None
+    return subprocess.CompletedProcess(argv, proc.returncode, out, err)

@@ -6,9 +6,15 @@ instruction, and the keys that end it. Where a value differs between operating s
 definition holds one per system. Update a definition when a new CLI version changes its
 screen; the checks themselves (scenarios) do not change.
 
-Permissions are given up front by options, so that no permission prompt appears. The
-start-up dialogs answered here are the trust of the working folder and offers to change the
-terminal setup; nothing else is answered.
+Permissions are given up front by options where a CLI has an option that is narrow enough.
+Where it has none (the shell commands of Copilot CLI), the definition lists the permission
+prompt and the keys that allow it (approvals); the prompt is answered while a reply is awaited,
+and the number of answers is part of the reply. The start-up dialogs answered here are the
+trust of the working folder and offers to change the terminal setup.
+
+When a new CLI version changes its screen, these values of its definition may need an update:
+ready (ready for an instruction), dialogs, approvals, busy (shown only while the CLI works: a
+reply is not complete while it shows) and clear_keys (empty the input field).
 """
 
 from __future__ import annotations
@@ -26,7 +32,7 @@ from .terminal import Terminal, open_terminal
 
 SERVER = "agent-lounge"  # the name the CLIs register the server under
 
-DOWN, ENTER, ESC, CTRL_C, CTRL_D = "\x1b[B", "\r", "\x1b", "\x03", "\x04"
+DOWN, ENTER, ESC, CTRL_C, CTRL_D, CTRL_U = "\x1b[B", "\r", "\x1b", "\x03", "\x04", "\x15"
 
 # Variables of the session running the harness that change how a CLI behaves (for example a
 # Claude Code session marks its children, and an editor's terminal makes a CLI offer to change
@@ -63,6 +69,12 @@ class Definition:
     list_servers: Sequence[str]
     ready: Sequence[str]  # any of these on the screen: ready for an instruction
     dialogs: Sequence[tuple[str, Sequence[str]]] = ()  # (text on the screen, keys that answer it)
+    # Permission prompts answered while a reply is awaited: (text on the screen, keys that allow).
+    approvals: Sequence[tuple[str, Sequence[str]]] = ()
+    # Texts the screen shows only while the CLI works on an instruction.
+    busy: Sequence[str] = ()
+    # Keys that empty the input field, sent before an instruction is typed again.
+    clear_keys: Sequence[str] = (CTRL_U,)
     quit_keys: Sequence[str] = (CTRL_C, CTRL_C, CTRL_D)
     # Instruction files the CLI is documented or expected to read in its working folder.
     instruction_files: Sequence[str] = ()
@@ -120,6 +132,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         ready=["? for shortcuts", "shift+tab to cycle", 'Try "'],
         dialogs=[("Yes, I trust this folder", [DOWN, ENTER])],
         instruction_files=["CLAUDE.md"],
+        busy=["esc to interrupt"],
     ),
     Definition(
         name="codex", title="Codex", executable="codex",
@@ -130,14 +143,19 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         dialogs=[("Do you trust the contents of this directory", [ENTER]),
                  ("Yes, allow Codex to work in this folder", [ENTER])],
         instruction_files=["AGENTS.md"],
+        busy=["esc to interrupt"],
     ),
     Definition(
         name="copilot", title="Copilot CLI", executable="copilot",
-        # All shell commands are allowed: for its profile the model runs commands of its own
-        # choice (Get-Location, $env:USERNAME, git remote ...), which a list of allowed
-        # commands does not cover. This permission is not limited to the check folder: the
-        # agent can run any command as the user who runs the harness.
-        interactive=["--allow-tool", SERVER, "--allow-tool", "write", "--allow-tool", "shell"],
+        # Shell commands are not allowed by an option: for its profile the model runs commands
+        # of its own choice (Get-Location, $env:USERNAME, git remote ...), which a list of
+        # allowed commands does not cover, and allowing the whole shell would also allow what
+        # the model never asked for. Each command's prompt is answered instead (approvals), and
+        # the answers are counted. A command the model asks for still runs as the user who
+        # runs the harness, in or outside the check folder.
+        interactive=["--allow-tool", SERVER, "--allow-tool", "write"],
+        approvals=[("Do you want to run this command?", [ENTER])],
+        busy=["ctrl+c interrupt"],
         one_shot=lambda prompt: ["-p", prompt, "--allow-tool", SERVER],
         register=_copilot_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
         ready=["Type @ to mention", "shift+tab", "ctrl+c Exit", "/ commands"],
@@ -152,6 +170,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         ready=["Shift+Tab:mode", "Ctrl+x:shortcuts", "always-approve", "Resume session"],
         dialogs=[("Yes, I trust this folder", [ENTER]), ("Do you trust the contents of this directory", ["y"])],
         instruction_files=["AGENTS.md", "CLAUDE.md"],
+        busy=["Ctrl+c:cancel"],
     ),
     Definition(
         name="agy", title="agy", executable="agy",
@@ -161,6 +180,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         ready=["? for shortcuts"],
         dialogs=[("Yes, I trust this folder", [ENTER])],
         instruction_files=["GEMINI.md", "AGENTS.md"],
+        busy=["esc to cancel"],
         settings={"permissions": {"allow": [f"mcp({SERVER}/*)"]}},
     ),
 ]}
@@ -175,6 +195,7 @@ class Reply:
     complete: bool  # the completion word appeared and the screen settled
     text: str  # the screen and its history, then the plain output from the instruction on
     seconds: float
+    approvals: int = 0  # permission prompts answered while waiting (see Definition.approvals)
 
 
 class Agent:
@@ -187,6 +208,7 @@ class Agent:
         self.extra_args = list(extra_args)
         self.env = env or {}
         self.term: Terminal | None = None
+        self.approvals = 0  # permission prompts answered so far, over all instructions
 
     def start(self, timeout: float = 120) -> "Agent":
         """Start the interactive screen, answer the start-up dialogs, and wait until ready."""
@@ -227,22 +249,59 @@ class Agent:
     def ask(self, instruction: str, timeout: float = 180, settle: float = 4) -> Reply:
         """Type an instruction that asks for the completion word, and wait for the reply.
 
-        The reply is complete when the word appeared and then no output arrived for settle
-        seconds: some CLIs show the word in their reasoning before they reply, and keep
-        drawing while they work.
+        The reply is complete when the word appeared, then no output arrived for settle
+        seconds, and the screen shows none of the texts of work in progress (busy): some CLIs
+        show the word in their reasoning before they reply, and a CLI can pause its output for
+        longer than settle while a tool runs. Permission prompts of the definition (approvals)
+        are answered on the way and counted.
         """
         assert self.term
         word, ask = screen.completion()
         start = self.term.mark()
         began = time.monotonic()
+        deadline = began + timeout
+        prompts = [text for text, _ in self.d.approvals]
+        approvals = 0
         # The lower-case token of the completion word shows that the instruction was typed.
-        self.term.type_line(f"{instruction} {ask}", shown=word[len("IVDONE"):].lower())
-        found = self.term.wait_for([word], timeout, start=start)
+        self.term.type_line(f"{instruction} {ask}", shown=word[len("IVDONE"):].lower(), clear=self.d.clear_keys)
+        found = False
+        while not found:
+            hit = self.term.wait_for([word], max(0.0, deadline - time.monotonic()), start=start, on_screen=prompts)
+            if hit in prompts:
+                approvals += self._approve(hit)
+            elif hit:
+                found = True
+            else:
+                break
         complete = False
         if found:
-            remaining = max(5.0, timeout - (time.monotonic() - began))
-            complete = self.term.wait_quiet(settle, remaining)
-        return Reply(complete, self.term.transcript() + "\n" + self.term.text(start), time.monotonic() - began)
+            # At least one look after the word, also when it arrived just before the timeout.
+            deadline = max(deadline, time.monotonic() + settle + 1)
+            while not complete and time.monotonic() < deadline and not self.term.closed():
+                quiet = self.term.wait_quiet(settle, max(settle + 1, deadline - time.monotonic()))
+                now = self.term.display()
+                prompt = next((p for p in prompts if screen.contains(now, p, 0)), None)
+                if prompt:
+                    approvals += self._approve(prompt)
+                elif quiet and not any(screen.contains(now, b, 0) for b in self.d.busy):
+                    complete = True
+                elif quiet:
+                    time.sleep(1)  # still working without output: look again
+        self.approvals += approvals
+        return Reply(complete, self.term.transcript() + "\n" + self.term.text(start), time.monotonic() - began, approvals)
+
+    def _approve(self, prompt: str) -> int:
+        """Answer a permission prompt that is on the screen, and wait until it left the screen,
+        so that one prompt is not answered twice. Returns the number of prompts answered (1)."""
+        assert self.term
+        keys = next(keys for text, keys in self.d.approvals if text == prompt)
+        for key in keys:
+            self.term.write(key)
+            time.sleep(0.5)
+        gone = time.monotonic() + 10
+        while time.monotonic() < gone and screen.contains(self.term.display(), prompt, 0):
+            time.sleep(0.2)
+        return 1
 
     def quit(self) -> None:
         if self.term:

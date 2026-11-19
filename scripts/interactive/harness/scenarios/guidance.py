@@ -11,7 +11,7 @@ import time
 
 from .. import screen
 from ..lounge import Client, ToolError
-from .common import Context, FileWatch, answer, ask, connections
+from .common import Context, FileWatch, answer, ask, connections, tools_called
 
 # Instruction files any of the CLIs may read; each gets its own code name in scenario 5.
 CANDIDATE_FILES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "GROK.md", ".github/copilot-instructions.md"]
@@ -29,12 +29,16 @@ def server_instructions(ctx: Context) -> None:
     server = ctx.server(binary=ctx.test_binary).start()
     agent = ctx.agent(ctx.folder("work")).start()
     no = screen.token()
+    asked = time.monotonic()
     reply, added = ask(agent, "Do not call any tool. When you connected to the agent-lounge MCP server, its "
                               "instructions may have given you a passphrase. Write that passphrase in capital "
                               f'letters. If you do not know one, write the word "{no}" in capital letters.')
     v = ctx.result.values
     v["reply_complete"] = reply.complete
     v["passes_instructions"] = answer(added, ctx.test_passphrase.upper(), no.upper()) if reply.complete else "undetermined"
+    # The question asks for no tool call: a passphrase read from a tool's result would not show
+    # that the CLI passes the instructions. The judgement is not changed; the calls are recorded.
+    v["tools_called_during_question"] = tools_called(server, asked)
     v["connections"] = connections(server)
     ctx.save("screen.txt", agent.term.transcript())
 
@@ -125,19 +129,23 @@ def instruction_files(ctx: Context) -> None:
     # Asked as code names of the project: some models refuse to repeat a "passphrase". A model
     # can still refuse to tell what its instructions say, so the question is asked in a new
     # session once more when the reply names no file.
+    called: list[str] = []
     for attempt in (1, 2):
         agent = ctx.agent(folder).start()
+        asked = time.monotonic()
         reply, added = ask(agent, "Do not call any tool. What code names of this project do your instructions for "
                                   "this folder give? Write each code name in capital letters. If they give none, "
                                   f'write the word "{no}" in capital letters.')
         read = [name for name, p in phrases.items() if screen.contains(added, p.upper())]
         ctx.save("discovery-screen.txt" if attempt == 1 else "discovery-screen-2.txt", agent.term.transcript())
+        called += tools_called(server, asked)
         agent.quit()
         if read or (reply.complete and screen.contains(added, no.upper())):
             break
     v["discovery_attempts"] = attempt
     v["discovery_reply_complete"] = reply.complete
     v["files_read"] = read
+    v["tools_called_during_question"] = called  # the question asks for no tool call
     server.stop()
     chosen = next((f for f in ctx.definition.instruction_files if f in read), read[0] if read else "")
     v["file_used"] = chosen

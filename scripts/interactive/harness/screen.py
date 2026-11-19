@@ -14,6 +14,7 @@ inside it; contains allows for that.
 
 from __future__ import annotations
 
+import bisect
 import re
 import secrets
 import unicodedata
@@ -40,6 +41,55 @@ def plain(raw: str) -> str:
     text = _ESCAPES.sub("", text)
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     return _CONTROLS.sub("", text)
+
+
+# An escape sequence that is not complete at the end of the output: more output may finish it.
+_INCOMPLETE = re.compile(
+    r"(?:\x1b\[|\x9b)[0-?]*[ -/]*\Z"
+    r"|\x1b\][^\x07\x1b]*\x1b?\Z"
+    r"|\x1b[PX^_][^\x1b]*\x1b?\Z"
+    r"|\x1b[ -/]*\Z"
+)
+# An unfinished sequence longer than this is not waited for (a string that never ends).
+_MAX_HELD = 4096
+
+
+class PlainStream:
+    """plain of output that arrives in pieces, without converting the whole output again for
+    every piece: the cost of a wait would otherwise grow with the square of the output.
+
+    The end of a piece can fall inside an escape sequence or between a carriage return and its
+    line feed. Such an end is held back and converted with the next piece, so that the text
+    is the same as plain of the whole output.
+    """
+
+    def __init__(self) -> None:
+        self._parts: list[str] = []
+        self._ends: list[int] = []  # length of the text through each part
+        self._held = ""
+        self.length = 0  # of the text converted so far, without the held end
+
+    def feed(self, data: str) -> None:
+        buf = self._held + data
+        m = _INCOMPLETE.search(buf)
+        cut = m.start() if m and len(buf) - m.start() <= _MAX_HELD else len(buf)
+        if cut and buf[cut - 1] == "\r":
+            cut -= 1
+        self._held = buf[cut:]
+        if cut:
+            part = plain(buf[:cut])
+            if part:
+                self.length += len(part)
+                self._parts.append(part)
+                self._ends.append(self.length)
+
+    def text(self, start: int = 0) -> str:
+        """The text from offset start on (see length), with the held end as it reads now."""
+        i = bisect.bisect_right(self._ends, start)
+        if i >= len(self._parts):
+            return plain(self._held)
+        before = self._ends[i - 1] if i else 0
+        return self._parts[i][start - before:] + "".join(self._parts[i + 1:]) + plain(self._held)
 
 
 def words(raw: str) -> int:

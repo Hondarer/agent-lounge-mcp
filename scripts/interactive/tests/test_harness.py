@@ -5,6 +5,8 @@ Windows (Windows needs pywinpty):
 """
 
 import os
+import random
+import subprocess
 import sys
 import tempfile
 import time
@@ -14,8 +16,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-from harness import screen  # noqa: E402
-from harness.agents import ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
+from harness import screen, terminal  # noqa: E402
+from harness.agents import CTRL_U, ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
 from harness.scenarios.common import answer, connections, new_lines  # noqa: E402
 from harness.server import Server  # noqa: E402
 
@@ -39,6 +41,38 @@ class PlainTest(unittest.TestCase):
     def test_words(self):
         self.assertEqual(screen.words("\x1b[31m◐◓\x1b[0m"), 0)
         self.assertEqual(screen.words("\x1b[31mab1\x1b[0m"), 3)
+
+
+class PlainStreamTest(unittest.TestCase):
+    RAW = ("\x1b[1mBold\x1b[0m text\r\nnext\x1b[3Cgap\x1b]0;a title\x1b\\after\x1b]8;;x\x07link\r"
+           "over\x1b(Bcharset\x1bPstring\x1b\\end\x1b7saved\x9b31mred\r\n" * 3)
+
+    def test_pieces_give_the_text_of_the_whole(self):
+        whole = screen.plain(self.RAW)
+        rnd = random.Random(1)
+        for _ in range(200):
+            s, i = screen.PlainStream(), 0
+            while i < len(self.RAW):
+                n = rnd.randint(1, 9)
+                s.feed(self.RAW[i:i + n])
+                i += n
+            self.assertEqual(s.text(), whole)
+            self.assertEqual(s.text(5), whole[5:])
+
+    def test_unfinished_end_is_held(self):
+        s = screen.PlainStream()
+        s.feed("one\x1b[3")
+        self.assertEqual(s.text(), "one3")  # read as it stands, like plain of the output so far
+        s.feed("1mtwo\r")
+        self.assertEqual(s.text(), "onetwo\n")
+        s.feed("\nthree")
+        self.assertEqual(s.text(), "onetwo\nthree")
+        self.assertEqual(s.text(len("onetwo")), "\nthree")
+
+    def test_a_string_that_never_ends_is_not_held_for_ever(self):
+        s = screen.PlainStream()
+        s.feed("\x1b]" + "x" * 5000)
+        self.assertGreater(s.length, 4000)
 
 
 class ScreenTest(unittest.TestCase):
@@ -116,6 +150,73 @@ class EnvironmentTest(unittest.TestCase):
             self.assertNotIn("OLDPWD", clean_environment(tmp))
 
 
+class TypedTwice(terminal.Terminal):
+    """A terminal whose program drops the first text typed into it."""
+
+    def __init__(self):
+        super().__init__()
+        self.written, self.field = [], ""
+
+    def write(self, data):
+        self.written.append(data)
+        if data == CTRL_U:
+            self.field = ""
+        elif data != "\r":
+            # The first text loses its end; later texts arrive whole.
+            self.field += data[:4] if len(self.written) == 1 else data
+
+    def display(self):
+        return self.field
+
+    def mark(self):
+        return len(self.written)
+
+
+class TypeLineTest(unittest.TestCase):
+    def test_input_field_is_cleared_before_typing_again(self):
+        t = TypedTwice()
+        t.type_line("say token123", pause=0, confirm=0, shown="token123", clear=[CTRL_U])
+        self.assertEqual(t.written[:3], ["say token123", CTRL_U, "say token123"])
+        self.assertEqual(t.field, "say token123")  # not "say say token123"
+
+
+def _alive(pid: int) -> bool:
+    if os.name == "nt":
+        out = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"], capture_output=True, text=True).stdout
+        return str(pid) in out
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    # A process that ended and was not yet collected by its parent still has an entry.
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0] != "Z"
+    except OSError:
+        return True
+
+
+class RunTest(unittest.TestCase):
+    def test_timeout_ends_the_process_tree(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            pid_file = Path(tmp) / "child.pid"
+            began = time.monotonic()
+            with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                terminal.run([sys.executable, str(HERE / "fake_tree.py"), str(pid_file)], 3, text=True)
+            # Without ending the tree, the child keeps the output open for two minutes.
+            self.assertLess(time.monotonic() - began, 30)
+            self.assertIn("started", raised.exception.output or "")
+            pid = int(pid_file.read_text())
+            deadline = time.monotonic() + 10
+            while _alive(pid) and time.monotonic() < deadline:
+                time.sleep(0.2)
+            self.assertFalse(_alive(pid), "the child of the timed-out process is still running")
+
+    def test_result_without_timeout(self):
+        out = terminal.run([sys.executable, "-c", "print('ok')"], 30, text=True)
+        self.assertEqual((out.returncode, out.stdout.strip()), (0, "ok"))
+
+
 def fake(dialog: bool = False) -> Definition:
     return Definition(
         name="fake", title="Fake", executable=sys.executable,
@@ -123,6 +224,7 @@ def fake(dialog: bool = False) -> Definition:
         one_shot=lambda p: [], register=lambda u, t: [], unregister=[], list_servers=[],
         ready=["? for shortcuts"], dialogs=[("Yes, I trust this folder", [ENTER])],
         quit_keys=["quit\r"], env={"FAKE_DIALOG": "1"} if dialog else {},
+        approvals=[("Do you want to run this command?", [ENTER])], busy=["esc to interrupt"],
     )
 
 
@@ -142,6 +244,31 @@ class AgentTest(unittest.TestCase):
         term = a.term
         a.quit()
         self.assertFalse(term.alive())
+
+    def test_permission_prompts_are_answered_and_counted(self):
+        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        reply = a.ask("Say hello after permission and permission.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual((reply.approvals, a.approvals), (2, 2))
+        reply = a.ask("Say hello.", timeout=20, settle=1)
+        self.assertEqual((reply.approvals, a.approvals), (0, 2))
+        a.quit()
+
+    def test_reply_is_not_complete_while_busy(self):
+        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        reply = a.ask("Say hello and pause.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        # The word came 3 seconds before the work ended: the reply covers the work.
+        self.assertIn("LATEWORK", reply.text)
+        a.quit()
+
+    def test_busy_until_the_timeout_is_not_complete(self):
+        d = fake()
+        d = Definition(**{**d.__dict__, "busy": ["Fake Agent"]})  # a text that stays on the screen
+        a = Agent(d, self.tmp.name).start(timeout=30)
+        reply = a.ask("Say hello.", timeout=4, settle=1)
+        self.assertFalse(reply.complete)
+        a.quit()
 
     def test_no_reply_times_out(self):
         a = Agent(fake(), self.tmp.name).start(timeout=30)

@@ -30,7 +30,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from harness import screen  # noqa: E402
+from harness import screen, terminal  # noqa: E402
 from harness.agents import DEFINITIONS, SERVER, AgentNotReady, clean_environment, command  # noqa: E402
 from harness.report import Result, summary  # noqa: E402
 from harness.scenarios import SCENARIOS  # noqa: E402
@@ -40,8 +40,8 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def _cli(definition, *args: str, timeout: float = 60) -> subprocess.CompletedProcess:
-    return subprocess.run([command(definition.executable), *args], capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", env=clean_environment(), timeout=timeout, stdin=subprocess.DEVNULL)
+    return terminal.run([command(definition.executable), *args], timeout, text=True, encoding="utf-8",
+                        errors="replace", env=clean_environment())
 
 
 def _registered(definition) -> bool:
@@ -104,6 +104,8 @@ def run(args: argparse.Namespace) -> int:
                     result.status, result.reason = "unverified", ctx.scrub(f"{type(e).__name__}: {e}")[:4000]
                     ctx.save("error.txt", traceback.format_exc())
                 finally:
+                    if d.approvals:
+                        result.values["approvals"] = ctx.approvals()
                     ctx.close()
                     result.seconds = round(time.monotonic() - began, 1)
                     result.write(base)

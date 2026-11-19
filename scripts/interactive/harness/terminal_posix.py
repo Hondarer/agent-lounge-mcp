@@ -78,3 +78,11 @@ def new_process_group() -> dict:
 
 def interrupt_process(proc: subprocess.Popen) -> None:
     proc.send_signal(signal.SIGINT)
+
+
+def kill_tree(proc: subprocess.Popen) -> None:
+    """End proc and its descendants: proc leads a process group (see new_process_group)."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
