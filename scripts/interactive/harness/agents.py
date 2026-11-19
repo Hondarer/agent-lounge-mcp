@@ -119,7 +119,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         list_servers=["mcp", "list"],
         ready=["? for shortcuts", "shift+tab to cycle", 'Try "'],
         dialogs=[("Yes, I trust this folder", [DOWN, ENTER])],
-        instruction_files=["CLAUDE.md", "AGENTS.md"],
+        instruction_files=["CLAUDE.md"],
     ),
     Definition(
         name="codex", title="Codex", executable="codex",
@@ -151,7 +151,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         register=_grok_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
         ready=["Shift+Tab:mode", "Ctrl+x:shortcuts", "always-approve", "Resume session"],
         dialogs=[("Yes, I trust this folder", [ENTER]), ("Do you trust the contents of this directory", ["y"])],
-        instruction_files=["AGENTS.md", "GROK.md", "CLAUDE.md"],
+        instruction_files=["AGENTS.md", "CLAUDE.md"],
     ),
     Definition(
         name="agy", title="agy", executable="agy",

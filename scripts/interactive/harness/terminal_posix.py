@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 import fcntl
 import os
 import pty
@@ -20,10 +21,17 @@ class PosixTerminal(Terminal):
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", rows, columns, 0, 0))
         # A new session makes the terminal the program's controlling terminal, so that keys
         # such as Ctrl+C reach it as they would from a user.
-        self._proc = subprocess.Popen(list(argv), cwd=cwd, env=dict(env), stdin=slave, stdout=slave,
-                                      stderr=slave, start_new_session=True, close_fds=True)
-        os.close(slave)
+        try:
+            self._proc = subprocess.Popen(list(argv), cwd=cwd, env=dict(env), stdin=slave, stdout=slave,
+                                          stderr=slave, start_new_session=True, close_fds=True)
+        except BaseException:
+            os.close(master)
+            raise
+        finally:
+            os.close(slave)
         self._fd = master
+        # A character can be split between two reads.
+        self._decoder = codecs.getincrementaldecoder("utf-8")("replace")
 
     def _read_chunk(self) -> str:
         try:
@@ -31,7 +39,7 @@ class PosixTerminal(Terminal):
         except OSError:
             # EIO: every process holding the terminal has ended.
             return ""
-        return data.decode("utf-8", errors="replace")
+        return self._decoder.decode(data, final=not data)
 
     def _write(self, data: str) -> None:
         os.write(self._fd, data.encode("utf-8"))
@@ -40,16 +48,20 @@ class PosixTerminal(Terminal):
         return self._proc.poll() is None
 
     def _kill(self) -> None:
-        if self._proc.poll() is None:
-            try:
-                os.killpg(self._proc.pid, signal.SIGTERM)
-                self._proc.wait(timeout=5)
-            except (ProcessLookupError, subprocess.TimeoutExpired):
-                try:
-                    os.killpg(self._proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                self._proc.wait()
+        # The whole process group, also when the program itself has ended: it may have left
+        # children that hold the terminal.
+        try:
+            os.killpg(self._proc.pid, signal.SIGTERM)
+            self._proc.wait(timeout=5)
+        except (ProcessLookupError, PermissionError):
+            pass
+        except subprocess.TimeoutExpired:
+            pass
+        try:
+            os.killpg(self._proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        self._proc.wait()
         try:
             os.close(self._fd)
         except OSError:

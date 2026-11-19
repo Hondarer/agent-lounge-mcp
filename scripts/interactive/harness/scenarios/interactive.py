@@ -49,7 +49,10 @@ def shutdown_notice(ctx: Context) -> None:
                               "you any notice? If it did, quote the notice. If it did not, write the word "
                               f'"{no}" in capital letters.', timeout=180)
     v["question_reply_complete"] = reply.complete
-    v["conveyed_to_model"] = answer(added, SHUTDOWN_TEXT, no.upper()) if reply.complete else "undetermined"
+    # Judged on the lines the reply added: a notice that the CLI itself shows would otherwise
+    # be taken for the model's answer when the screen is drawn again.
+    said = "\n".join(line for line in added.split("\n") if line not in set(shown.split("\n")))
+    v["conveyed_to_model"] = answer(said, SHUTDOWN_TEXT, no.upper()) if reply.complete else "undetermined"
     v["connections"] = connections(server)
     ctx.save("screen.txt", before + "\n----- after the stop -----\n" + agent.term.transcript())
     ctx.save("server.log", server.log())
@@ -82,6 +85,8 @@ def several_instructions(ctx: Context) -> None:
     inbox_conn = [n for n, c in conns.items() if "chat_inbox" in c["tools"]]
     v["same_connection"] = bool(join_conn and inbox_conn and join_conn[0] == inbox_conn[-1])
     v["passed"] = v["code_word_in_reply"] and v["delivery_state"] in (["delivered"], ["acked"])
+    if not reply.complete and not v["passed"]:
+        ctx.result.status, ctx.result.reason = "unverified", "the reply did not finish in time"
     peer.close()
     ctx.save("screen.txt", agent.term.transcript())
     ctx.save("server.log", server.log())
@@ -117,6 +122,8 @@ def join_again(ctx: Context) -> None:
     v["sessions"] = sessions
     v["one_session"] = sessions.count(ctx.session) == 1 and len(sessions) == 2
     v["passed"] = v["code_word_in_reply"] and v["one_session"]
+    if not reply.complete and not v["passed"]:
+        ctx.result.status, ctx.result.reason = "unverified", "the reply did not finish in time"
     v["connections"] = connections(server)
     peer.close()
     ctx.save("screen.txt", first + "\n----- after the restart -----\n" + agent.term.transcript())

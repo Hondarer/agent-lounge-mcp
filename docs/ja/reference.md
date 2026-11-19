@@ -96,7 +96,7 @@ warning: listening on <アドレス> without TLS: tokens and messages travel une
 
 ### 接続の診断
 
-`--log-connections` を付けると、MCP の接続ごとに、次の行を標準エラーに出力します。エージェントがどの版のクライアントで接続したか、いつどのツールを呼んだか、停止の通知を受け取れる状態か ([停止するときの通知](#停止するときの通知)) を調べるために使います。
+`--log-connections` を付けると、MCP の接続ごとに、次の行を標準エラーに出力します。エージェントがどの版のクライアントで接続したか、どの順にどのツールを呼んだか、停止の通知を受け取れる状態か ([停止するときの通知](#停止するときの通知)) を調べるために使います。
 
 | 出力する時点 | 行の形式 |
 |---|---|
@@ -104,15 +104,16 @@ warning: listening on <アドレス> without TLS: tokens and messages travel une
 | 要求を受けたとき | `connection <番号>: request <メソッド>`。ツールの呼び出しは、`connection <番号>: request tools/call <ツール名>` |
 | ログのレベルが設定されたとき | `connection <番号>: log level <レベル>` |
 | 停止の通知を送ったとき | `connection <番号>: shutdown notice sent` |
-| 停止の通知を送らなかったとき | `connection <番号>: shutdown notice not sent (the client set no log level)` |
+| 停止の通知を送らなかったとき | `connection <番号>: shutdown notice not sent (the client set no log level)`。クライアントが設定したレベルが `warning` より上の場合は、`connection <番号>: shutdown notice not sent (the log level <レベル> is above warning)` |
 | 停止の通知の送信に失敗したとき | `connection <番号>: shutdown notice failed` |
 
 Table: 接続の診断の行
 
-各行の先頭には、他の診断と同じく、日時が付きます。
+各行の先頭には、他の診断と同じく、`agent-lounge-mcp: ` が付きます。日時は付きません。
 
 - `<番号>` は、サーバーの起動から数えた接続の通し番号 (1 から) です。MCP のセッション ID は、接続を引き継げる値のため、出力しません。
-- クライアントの名前と版は、クライアントが送った値から、制御文字、改行にあたる文字、引用符を除き、64 文字までにしたものです。
+- クライアントの名前と版は、クライアントが送った値から、制御文字、書式の制御の文字 (文字の向きを変える文字など)、改行にあたる文字、引用符を除き、64 文字までにしたものです。
+- クライアントが、まずプロトコルの版 2026-07-28 で `server/discover` を送り、続けて、初期化で接続し直す場合は、2 つの番号の行になります。1 つ目の行のプロトコルの版は、クライアントが求めた版です。1 つ目の接続は、その後に使われません。
 - ツールの呼び出しは、ツールの名前だけを出力します。引数と結果 (メッセージの本文、メモリの内容、セッション名) は出力しません。トークンとユーザー名も出力しません。
 - 応答を求めないメッセージ (通知) は、出力しません。
 

@@ -96,8 +96,10 @@ def instruction_files(ctx: Context) -> None:
         agent = ctx.agent(folder).start()
         watch = FileWatch(folder / "notes.txt")
         began = time.monotonic()
-        reply, _ = ask(agent, TASK, timeout=300)
-        watch.stop()
+        try:
+            reply, _ = ask(agent, TASK, timeout=300)
+        finally:
+            watch.stop()
         events = [e for e in server.events(began)]
         tools = [(e.at, e.text[len("request tools/call "):]) for e in events if e.text.startswith("request tools/call ")]
         created = watch.seen
@@ -106,14 +108,18 @@ def instruction_files(ctx: Context) -> None:
             "notes_created": created is not None,
             "tools": [t for _, t in tools],
             "joined": any(t == "lounge_join" for _, t in tools),
-            "inbox_at_start": created is not None and any(t == "chat_inbox" and at < created for at, t in tools),
-            "inbox_after_work": created is not None and any(t == "chat_inbox" and at >= created for at, t in tools),
+            # None when notes.txt was never seen: before and after the work cannot be told apart.
+            "inbox_at_start": None if created is None else any(t == "chat_inbox" and at < created for at, t in tools),
+            "inbox_after_work": None if created is None else any(t == "chat_inbox" and at >= created for at, t in tools),
             "memory_search": any(t == "memory_search" for _, t in tools),
         }
         runs.append(run)
+        v["runs"] = runs  # kept when a later run fails
         ctx.save(f"run{i}-screen.txt", agent.term.transcript())
         agent.quit()
         server.stop()
     v["runs"] = runs
+    # The inbox counts cover only these runs: without notes.txt, before and after are unknown.
+    v["runs_with_notes"] = sum(1 for r in runs if r["notes_created"])
     for key in ("joined", "inbox_at_start", "inbox_after_work", "memory_search"):
         v[f"{key}_count"] = sum(1 for r in runs if r[key])

@@ -185,8 +185,8 @@ class Terminal:
             time.sleep(2)
             if screen.contains(self.display(), shown):
                 break
+        sent = self.mark()  # before the key, so that output that follows it at once is seen
         self.write(submit)
-        sent = self.mark()
         deadline = time.monotonic() + confirm
         while time.monotonic() < deadline:
             if self.mark() != sent:

@@ -28,6 +28,7 @@ class Context:
     result: Result
     test_binary: str = ""  # executable built with a passphrase in its instructions (scenario 4)
     test_passphrase: str = ""
+    secrets: list[str] = field(default_factory=list)  # tokens that must not reach the result files
     _servers: list[Server] = field(default_factory=list)
     _agents: list[Agent] = field(default_factory=list)
 
@@ -60,7 +61,12 @@ class Context:
         """Keep a transcript next to the result."""
         path = self.base / self.result.scenario / self.definition.name / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(text, encoding="utf-8")
+        path.write_text(self.scrub(text), encoding="utf-8")
+
+    def scrub(self, text: str) -> str:
+        for secret in self.secrets:
+            text = text.replace(secret, "<TOKEN>")
+        return text
 
     def close(self) -> None:
         for a in self._agents:
@@ -69,7 +75,10 @@ class Context:
             except Exception:
                 pass
         for s in self._servers:
-            s.stop()
+            try:
+                s.stop()
+            except Exception:
+                pass  # stop the other servers too
 
 
 def join_instruction(session: str) -> str:

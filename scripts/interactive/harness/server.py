@@ -14,7 +14,7 @@ from typing import Sequence
 
 from . import terminal
 
-# A line of --log-connections, after the date and time the server writes before it.
+# A line of --log-connections, after the prefix the server writes before it.
 _CONNECTION = re.compile(r"connection (\d+): (.*)$")
 
 
@@ -50,6 +50,10 @@ class Server:
         return out.stdout
 
     def start(self, timeout: float = 30) -> "Server":
+        # A server left on the address (by a run that was killed) would answer the health check
+        # below, and the scenario would drive it instead of the one started here.
+        if self.health():
+            raise RuntimeError(f"another server already answers at {self.listen}; stop it, or pass --listen")
         argv = [self.binary, "serve", "--listen", self.listen, "--db", self.db, "--log-connections", *self.extra]
         self._proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
                                       encoding="utf-8", errors="replace", **terminal.new_process_group())
@@ -116,7 +120,10 @@ class Server:
     def stop(self) -> None:
         if not self._proc or self._proc.poll() is not None:
             return
-        self.interrupt()
+        try:
+            self.interrupt()
+        except OSError:
+            pass  # go on to end the process
         if self.wait(15) is None:
             self._proc.kill()
             self._proc.wait()

@@ -74,6 +74,10 @@ func TestConnectionLog(t *testing.T) {
 	s, l := logServer(t)
 	a := connectAs(t, s, "agent-a", "1.2.3")
 	b := connectAs(t, s, "agent-b", "4.5")
+	c := connectAs(t, s, "agent-c", "6")
+	if err := c.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "error"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := a.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "info"}); err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +98,7 @@ func TestConnectionLog(t *testing.T) {
 		"connection 2: request tools/list",
 		"connection 1: shutdown notice sent",
 		"connection 2: shutdown notice not sent (the client set no log level)",
+		"connection 3: shutdown notice not sent (the log level error is above warning)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
@@ -127,6 +132,7 @@ func TestClean(t *testing.T) {
 		"a\tb\u0085c":           "abc",
 		strings.Repeat("あ", 70): strings.Repeat("あ", 64),
 		"\"q\"\u2028line\u2029": "qline",
+		"a\u202eb\u2066c\ufeff": "abc",
 	} {
 		if got := clean(in); got != want {
 			t.Errorf("clean(%q) = %q, want %q", in, got, want)

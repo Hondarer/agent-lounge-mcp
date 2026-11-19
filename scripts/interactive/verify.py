@@ -41,11 +41,15 @@ REPO = Path(__file__).resolve().parents[2]
 
 def _cli(definition, *args: str, timeout: float = 60) -> subprocess.CompletedProcess:
     return subprocess.run([command(definition.executable), *args], capture_output=True, text=True, encoding="utf-8",
-                          errors="replace", env=clean_environment(), timeout=timeout)
+                          errors="replace", env=clean_environment(), timeout=timeout, stdin=subprocess.DEVNULL)
 
 
 def _registered(definition) -> bool:
+    """Whether the CLI has a server named agent-lounge. Raises when the CLI cannot list its
+    servers: a registration of the user must not be replaced on a guess."""
     out = _cli(definition, *definition.list_servers)
+    if out.returncode != 0:
+        raise RuntimeError(f"listing the servers failed: {(out.stderr or out.stdout).strip()[:500]}")
     return SERVER in (out.stdout + out.stderr)
 
 
@@ -60,13 +64,21 @@ def run(args: argparse.Namespace) -> int:
     names = args.agents.split(",") if args.agents else list(DEFINITIONS)
     numbers = args.scenarios.split(",") if args.scenarios else list(SCENARIOS)
     print(f"check folder: {base}", flush=True)
+    unknown = [n for n in names if n not in DEFINITIONS] + [n for n in numbers if n not in SCENARIOS]
+    if unknown:
+        print(f"unknown agent or scenario: {', '.join(unknown)}", file=sys.stderr)
+        return 2
     for name in names:
         d = DEFINITIONS[name]
         if shutil.which(d.executable) is None:
             print(f"{name}: not installed, skipped", flush=True)
             continue
-        if _registered(d):
-            print(f"{name}: a server named {SERVER} is already registered; skipped, nothing changed", flush=True)
+        try:
+            if _registered(d):
+                print(f"{name}: a server named {SERVER} is already registered; skipped, nothing changed", flush=True)
+                continue
+        except (RuntimeError, subprocess.TimeoutExpired) as e:
+            print(f"{name}: skipped, nothing changed: {e}", flush=True)
             continue
         url = f"http://{args.listen}/mcp"
         reg = _cli(d, *d.register(url, ""))
@@ -88,20 +100,24 @@ def run(args: argparse.Namespace) -> int:
                 except AgentNotReady as e:
                     result.status, result.reason = "unverified", f"the harness could not drive the CLI: {e}"[:4000]
                 except Exception as e:  # keep going with the other scenarios
-                    result.status, result.reason = "unverified", f"{type(e).__name__}: {e}"[:4000]
+                    # The text of an exception can hold the command line, and with it a token.
+                    result.status, result.reason = "unverified", ctx.scrub(f"{type(e).__name__}: {e}")[:4000]
                     ctx.save("error.txt", traceback.format_exc())
                 finally:
                     ctx.close()
-                    # Scenario 6 registers with a token and unregisters; register again for the next.
-                    if not _registered(d):
-                        _cli(d, *d.register(url, ""))
-                result.seconds = round(time.monotonic() - began, 1)
-                result.write(base)
-                print(f"{name}: scenario {number}: {result.status} {result.reason[:200]}", flush=True)
+                    result.seconds = round(time.monotonic() - began, 1)
+                    result.write(base)
+                    print(f"{name}: scenario {number}: {result.status} {result.reason[:200]}", flush=True)
+                # Scenario 6 registers with a token and unregisters; register again for the next.
+                if not _registered(d):
+                    _cli(d, *d.register(url, ""))
         finally:
-            _cli(d, *d.unregister)
-            if _registered(d):
-                print(f"{name}: warning: {SERVER} is still registered", flush=True)
+            try:
+                _cli(d, *d.unregister)
+                if _registered(d):
+                    print(f"{name}: warning: {SERVER} is still registered", flush=True)
+            except (RuntimeError, subprocess.TimeoutExpired) as e:
+                print(f"{name}: warning: could not confirm that {SERVER} was unregistered: {e}", flush=True)
     print(json.dumps(summary(base), ensure_ascii=False, indent=1))
     return 0
 

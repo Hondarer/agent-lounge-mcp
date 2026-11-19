@@ -56,7 +56,9 @@ type clientRequest interface {
 
 // middleware records the requests of every connection. The client of a connection is written
 // once, after the first request that names it (initialize, server/discover, or any request
-// of a later protocol) was handled, so that it shows the protocol version the server agreed to.
+// of a later protocol) was handled. A client that first asks with server/discover under a
+// protocol the server cannot serve on this transport, and then connects again with initialize,
+// is written as two connections: the first line shows the protocol the client asked for.
 func (c *connLog) middleware() mcp.Middleware {
 	return func(next mcp.MethodHandler) mcp.MethodHandler {
 		return func(ctx context.Context, method string, req mcp.Request) (mcp.Result, error) {
@@ -64,6 +66,9 @@ func (c *connLog) middleware() mcp.Middleware {
 			if !ok {
 				return next(ctx, method, req)
 			}
+			// Taken before the request is handled: the connection may be gone, and its state
+			// dropped, by the time a long request returns.
+			st := c.state(ss)
 			switch method {
 			case "initialize", "server/discover":
 				// Written as the line of the client below.
@@ -92,7 +97,7 @@ func (c *connLog) middleware() mcp.Middleware {
 			}
 			res, err := next(ctx, method, req)
 			if err == nil {
-				c.describe(ss, req)
+				c.describe(st, req)
 			}
 			return res, err
 		}
@@ -100,7 +105,7 @@ func (c *connLog) middleware() mcp.Middleware {
 }
 
 // describe writes the client of a connection, once.
-func (c *connLog) describe(ss *mcp.ServerSession, req mcp.Request) {
+func (c *connLog) describe(st *connState, req mcp.Request) {
 	r, ok := req.(clientRequest)
 	if !ok {
 		return
@@ -110,7 +115,6 @@ func (c *connLog) describe(ss *mcp.ServerSession, req mcp.Request) {
 		return
 	}
 	c.mu.Lock()
-	st := c.stateLocked(ss)
 	if st.described {
 		c.mu.Unlock()
 		return
@@ -133,7 +137,8 @@ func (c *connLog) setLevel(ss *mcp.ServerSession, level string) {
 
 // shutdownNotice writes the outcome of sending the shutdown notice to one connection. The SDK
 // sends a log notification only to a client that set a log level, and reports no error when it
-// drops one, so the outcome follows from the recorded level.
+// drops one, so the outcome follows from the recorded level: the notice has the level warning,
+// and a client that asked for a higher level does not get it.
 func (c *connLog) shutdownNotice(ss *mcp.ServerSession, err error) {
 	c.mu.Lock()
 	st := c.stateLocked(ss)
@@ -144,9 +149,20 @@ func (c *connLog) shutdownNotice(ss *mcp.ServerSession, err error) {
 		c.logf("connection %d: shutdown notice failed", n)
 	case level == "":
 		c.logf("connection %d: shutdown notice not sent (the client set no log level)", n)
+	case aboveWarning[level]:
+		c.logf("connection %d: shutdown notice not sent (the log level %s is above warning)", n, clean(level))
 	default:
 		c.logf("connection %d: shutdown notice sent", n)
 	}
+}
+
+// aboveWarning holds the log levels at which a client does not receive a warning.
+var aboveWarning = map[string]bool{"error": true, "critical": true, "alert": true, "emergency": true}
+
+func (c *connLog) state(ss *mcp.ServerSession) *connState {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.stateLocked(ss)
 }
 
 func (c *connLog) number(ss *mcp.ServerSession) int {
@@ -181,12 +197,13 @@ func (c *connLog) pruneLocked() {
 }
 
 // clean makes a value sent by the client safe to write on one line: it drops control
-// characters, line and paragraph separators and quotes, and keeps at most maxClientInfoRunes characters.
+// characters, format characters (such as those that change the direction of text), line and
+// paragraph separators and quotes, and keeps at most maxClientInfoRunes characters.
 func clean(v string) string {
 	var b strings.Builder
 	n := 0
 	for _, r := range v {
-		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp) || r == '"' || r == '\'' || r == '`' || r == unicode.ReplacementChar {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp, unicode.Cf) || r == '"' || r == '\'' || r == '`' || r == unicode.ReplacementChar {
 			continue
 		}
 		if n == maxClientInfoRunes {

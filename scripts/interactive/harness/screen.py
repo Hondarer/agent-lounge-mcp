@@ -1,9 +1,9 @@
 """Turning terminal output into plain text, and finding text in it.
 
-The harness does not emulate a terminal. Full-screen programs redraw the screen with cursor
-movements and often write only the cells that changed, so the plain text is not the screen:
-it is everything the program wrote, in order, without control sequences. Text a program
-writes in one piece stays in one piece, which is enough to find a word it printed.
+There are two views of the output. plain is everything the program wrote, in order, without
+control sequences. Full-screen programs redraw the screen with cursor movements and often write
+only the cells that changed, so that text is not what a user sees; Screen is a small terminal
+emulator that gives the screen as it looks, and the lines that scrolled off it.
 
 A reply is known to be complete when it contains a completion word, written in capital
 letters: the instruction gives it in small letters only, so the word appears only once the
@@ -149,7 +149,10 @@ class Screen:
             if ch == "\x1b":
                 m = _SEQUENCE.match(data, i)
                 if not m:
-                    if n - i < 64:  # possibly a sequence split between two reads
+                    # Possibly a sequence split between two reads. A string sequence (a title,
+                    # a hyperlink) can be long.
+                    limit = 4096 if data[i + 1:i + 2] in ("]", "P", "X", "^", "_") else 64
+                    if n - i < limit:
                         self._pending = data[i:]
                         return
                     i += 1

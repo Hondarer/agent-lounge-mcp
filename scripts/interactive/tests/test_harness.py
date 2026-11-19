@@ -65,6 +65,12 @@ class ScreenTest(unittest.TestCase):
         s.feed("1;9Hx")
         self.assertEqual(s.lines()[0], "日本    x")
 
+    def test_long_string_sequence_split_between_reads(self):
+        s = screen.Screen(40, 2)
+        s.feed("a\x1b]8;;https://example.com/" + "x" * 200)
+        s.feed("\x07link\x1b]8;;\x07b")
+        self.assertEqual(s.lines()[0], "alinkb")
+
     def test_scroll_region(self):
         s = screen.Screen(10, 4)
         s.feed("top\x1b[2;3r\x1b[2;1Ha\r\nb\r\nc\x1b[4;1Hbottom")
@@ -85,9 +91,9 @@ class JudgingTest(unittest.TestCase):
 class ServerEventsTest(unittest.TestCase):
     def test_events(self):
         s = Server("unused", "unused.db")
-        s._lines = [(1.0, "2026/11/18 06:00:00 version x"),
-                    (2.0, "2026/11/18 06:00:01 connection 1: request tools/call lounge_join"),
-                    (3.0, "2026/11/18 06:00:02 connection 2: log level info")]
+        s._lines = [(1.0, "agent-lounge-mcp: version x"),
+                    (2.0, "agent-lounge-mcp: connection 1: request tools/call lounge_join"),
+                    (3.0, "agent-lounge-mcp: connection 2: log level info")]
         self.assertEqual([(e.connection, e.text) for e in s.events()],
                          [(1, "request tools/call lounge_join"), (2, "log level info")])
         self.assertEqual(len(s.tool_calls("lounge_join", since=1.5)), 1)

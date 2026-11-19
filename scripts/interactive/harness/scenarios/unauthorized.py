@@ -30,7 +30,8 @@ def _one_shot(ctx: Context, token: str, prompt: str, cwd: Path, timeout: float =
     began = time.monotonic()
     try:
         out = subprocess.run([command(ctx.definition.executable), *ctx.definition.one_shot(prompt), *ctx.definition.settings_args(str(cwd))], cwd=cwd, env=env,
-                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout)
+                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                             stdin=subprocess.DEVNULL)
         text, code, timed_out = out.stdout + "\n" + out.stderr, out.returncode, False
     except subprocess.TimeoutExpired as e:
         text = (e.stdout or b"").decode("utf-8", "replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
@@ -67,6 +68,7 @@ def _leftovers(token: str) -> list[str]:
 def token_stopped(ctx: Context) -> None:
     server = ctx.server(extra=("--require-token",))
     token = server.admin("user", "add", USER).strip()
+    ctx.secrets.append(token)
     server.start()
     folder = ctx.folder("work")
     v = ctx.result.values
@@ -77,6 +79,11 @@ def token_stopped(ctx: Context) -> None:
         first = _one_shot(ctx, token, prompt, folder)
         v["joined_before"] = bool(server.tool_calls("lounge_join"))
         ctx.save("before.txt", first["text"])
+        if not v["joined_before"]:
+            # Without a join with the valid token, the run after the rotation shows nothing
+            # about how the CLI reacts to a token that stopped working.
+            ctx.result.status, ctx.result.reason = "unverified", "the agent did not join with the valid token"
+            return
         server.admin("user", "rotate", USER)
         mark = time.monotonic()
         second = _one_shot(ctx, token, prompt, folder)
