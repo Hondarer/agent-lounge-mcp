@@ -135,7 +135,8 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         name="copilot", title="Copilot CLI", executable="copilot",
         # All shell commands are allowed: for its profile the model runs commands of its own
         # choice (Get-Location, $env:USERNAME, git remote ...), which a list of allowed
-        # commands does not cover. The check folders are temporary and hold nothing to protect.
+        # commands does not cover. This permission is not limited to the check folder: the
+        # agent can run any command as the user who runs the harness.
         interactive=["--allow-tool", SERVER, "--allow-tool", "write", "--allow-tool", "shell"],
         one_shot=lambda prompt: ["-p", prompt, "--allow-tool", SERVER],
         register=_copilot_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],

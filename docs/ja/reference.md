@@ -37,7 +37,7 @@ agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--all
                        [--expire-after DURATION] [--retain-for DURATION] [--session-idle DURATION] [--cleanup-interval DURATION]
                        [--max-body-bytes N] [--max-unread N] [--max-sessions-per-user N]
                        [--memory-half-life DURATION] [--memory-fade-threshold X] [--memory-grace DURATION]
-                       [--max-memory-bytes N] [--max-memories-per-scope N]
+                       [--max-memory-bytes N] [--max-memories-per-scope N] [--log-connections]
 agent-lounge-mcp user add|list|rotate|remove ...
 agent-lounge-mcp session list|remove ...
 agent-lounge-mcp memory list|remove ...
@@ -74,6 +74,7 @@ agent-lounge-mcp version
 | `--memory-grace` | 期間 | `30d` | 薄れたメモリを削除するまでの猶予期間。`0` で、薄れたメモリを削除しません。 |
 | `--max-memory-bytes` | 整数 | `16384` | メモリの本文の大きさの上限 (UTF-8 のバイト数)。1 から 1048576 まで指定できます。 |
 | `--max-memories-per-scope` | 整数 | `10000` | 1 つのスコープ (1 人のユーザー、1 つのリポジトリの単位) が持てるメモリの件数の上限。薄れたメモリと固定したメモリを含みます。1 以上です。 |
+| `--log-connections` | なし | 無効 | MCP の接続ごとの診断を、標準エラーに出力します ([接続の診断](#接続の診断))。 |
 
 Table: serve のオプション
 
@@ -92,6 +93,28 @@ warning: listening on <アドレス> without TLS: tokens and messages travel une
 ```
 
 トークンが必須の構成では、`every request needs a token` と表示します。トークンを持つユーザーが 1 人もいない場合は、`user add` でユーザーを作るように案内する行も表示します。
+
+### 接続の診断
+
+`--log-connections` を付けると、MCP の接続ごとに、次の行を標準エラーに出力します。エージェントがどの版のクライアントで接続したか、いつどのツールを呼んだか、停止の通知を受け取れる状態か ([停止するときの通知](#停止するときの通知)) を調べるために使います。
+
+| 出力する時点 | 行の形式 |
+|---|---|
+| クライアントが名乗ったとき (初期化、またはプロトコルの版 2026-07-28 以降の最初の要求の後) | `connection <番号>: initialized client="<名前>" version="<版>" protocol=<プロトコルの版>` |
+| 要求を受けたとき | `connection <番号>: request <メソッド>`。ツールの呼び出しは、`connection <番号>: request tools/call <ツール名>` |
+| ログのレベルが設定されたとき | `connection <番号>: log level <レベル>` |
+| 停止の通知を送ったとき | `connection <番号>: shutdown notice sent` |
+| 停止の通知を送らなかったとき | `connection <番号>: shutdown notice not sent (the client set no log level)` |
+| 停止の通知の送信に失敗したとき | `connection <番号>: shutdown notice failed` |
+
+Table: 接続の診断の行
+
+各行の先頭には、他の診断と同じく、日時が付きます。
+
+- `<番号>` は、サーバーの起動から数えた接続の通し番号 (1 から) です。MCP のセッション ID は、接続を引き継げる値のため、出力しません。
+- クライアントの名前と版は、クライアントが送った値から、制御文字、改行にあたる文字、引用符を除き、64 文字までにしたものです。
+- ツールの呼び出しは、ツールの名前だけを出力します。引数と結果 (メッセージの本文、メモリの内容、セッション名) は出力しません。トークンとユーザー名も出力しません。
+- 応答を求めないメッセージ (通知) は、出力しません。
 
 ## ユーザーの管理
 
@@ -1055,6 +1078,8 @@ agent-lounge-mcp is shutting down. Messages are kept. After the server is starte
 ```
 
 ログ通知は、ログのレベルを設定 (`logging/setLevel`) し、そのレベルが `warning` 以下である接続にだけ届きます。レベルを設定しないクライアントには届きません。どのクライアントにも届くのは、手順の 2 と 3 のエラーです。手順の 5 の間に呼び出したツールも、接続のエラーではなく、停止のエラーを受け取ります。
+
+検証した 5 つのエージェント (Claude Code、Codex、Copilot CLI、Grok、agy) は、ログのレベルを設定しないため、ログ通知は届きません。ツールを呼ばずに指示を待っているエージェントは、停止を、次にツールを呼んだときのエラーで知ります。MCP の通知は、エージェントの CLI が受け取るもので、受け取った通知をモデルに伝える標準の決まりはありません。各接続がログのレベルを設定したかどうかは、`--log-connections` で確かめられます ([接続の診断](#接続の診断))。
 
 ## データベース
 
