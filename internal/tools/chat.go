@@ -219,7 +219,18 @@ func (d *Deps) chatInbox(ctx context.Context, req *mcp.CallToolRequest, in Inbox
 		n := min(int(time.Since(start)/time.Second), wait)
 		return &n
 	}
+	// The token is checked at an interval and before the messages are read after a wake-up, so
+	// that a revoked token neither keeps waiting nor receives a message (see tokenValid).
+	tokenCheck := time.NewTicker(cmp.Or(d.TokenCheckInterval, DefaultTokenCheckInterval))
+	defer tokenCheck.Stop()
 	for checked := false; ; checked = true {
+		if checked {
+			if valid, err := d.tokenValid(ctx, req); err != nil {
+				return nil, InboxOutput{}, err
+			} else if !valid {
+				return nil, InboxOutput{}, errTokenRevoked
+			}
+		}
 		msgs, err := d.Store.FetchInbox(ctx, me.ID, limit)
 		if err != nil {
 			return nil, InboxOutput{}, err
@@ -248,6 +259,8 @@ func (d *Deps) chatInbox(ctx context.Context, req *mcp.CallToolRequest, in Inbox
 			}
 		case <-timer.C:
 			return nil, inboxOutput(me, nil, &wait), nil
+		case <-tokenCheck.C:
+			// Checked at the top of the loop.
 		case <-d.notify.stopped:
 			return nil, InboxOutput{}, errShuttingDown
 		case <-ctx.Done():

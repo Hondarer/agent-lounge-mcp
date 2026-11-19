@@ -327,12 +327,27 @@ func freeSessionName(ctx context.Context, tx *sql.Tx, userID int64) (string, err
 	return "", errors.New("no free session name found; pass a name")
 }
 
-// Seen records that the session was used now and returns its number of unread messages:
-// deliveries still queued. Expired deliveries are not unread.
-func (s *Store) Seen(ctx context.Context, sessionID int64) (unread int, err error) {
-	if _, err := s.db.ExecContext(ctx, "UPDATE sessions SET last_seen_at = ? WHERE id = ?", millis(s.now()), sessionID); err != nil {
-		return 0, fmt.Errorf("update session: %w", err)
+// Touch records that sess was used now and reports whether it is still recorded: the same ID,
+// user and name. The user and name are compared too because a deleted session's ID can be
+// given to a new session. One statement does both, so that every tool call of a joined
+// connection costs a single query to notice a deleted session (deleted by the cleanup of
+// unused sessions, by session remove, or with its user) and to keep the session in use.
+func (s *Store) Touch(ctx context.Context, sess Session) (exists bool, err error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE sessions SET last_seen_at = ? WHERE id = ? AND user_id = ? AND name = ?",
+		millis(s.now()), sess.ID, sess.UserID, sess.Name)
+	if err != nil {
+		return false, fmt.Errorf("update session: %w", err)
 	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("update session: %w", err)
+	}
+	return n > 0, nil
+}
+
+// Unread returns the session's number of unread messages: deliveries still queued. Expired
+// deliveries are not unread.
+func (s *Store) Unread(ctx context.Context, sessionID int64) (unread int, err error) {
 	err = s.db.QueryRowContext(ctx,
 		"SELECT count(*) FROM deliveries WHERE recipient_session_id = ? AND state = 'queued'", sessionID).Scan(&unread)
 	if err != nil {

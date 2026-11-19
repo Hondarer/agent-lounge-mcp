@@ -145,6 +145,19 @@ func (s *Store) UserByTokenHash(ctx context.Context, tokenHash string) (User, er
 	return u, nil
 }
 
+// TokenValid reports whether tokenHash is still the token hash of the user with the ID: false
+// after user rotate, and after user remove (also when a new user got the ID, since its token
+// differs).
+func (s *Store) TokenValid(ctx context.Context, userID int64, tokenHash string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE id = ? AND token_hash = ? AND name <> ?",
+		userID, tokenHash, LocalUser).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("look up the token: %w", err)
+	}
+	return n > 0, nil
+}
+
 // ListUsers returns every user, in name order, with the number of its sessions and their last
 // activity.
 func (s *Store) ListUsers(ctx context.Context) ([]UserSummary, error) {

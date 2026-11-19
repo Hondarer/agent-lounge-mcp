@@ -208,6 +208,9 @@ func (d *Deps) chatHistory(ctx context.Context, req *mcp.CallToolRequest, in His
 		return nil, HistoryOutput{}, fmt.Errorf("invalid scope %q: use %s or %s, or omit it", in.Scope, store.ScopeUser, store.ScopeRepository)
 	case in.Room != "" && in.With != "":
 		return nil, HistoryOutput{}, errors.New("give either room or with, not both")
+	case in.Room != "" && in.Room != store.LoungeRoom:
+		// The same error as chat_send: an empty list would read as "no messages yet".
+		return nil, HistoryOutput{}, fmt.Errorf("no room named %q: the only room is %s", in.Room, store.LoungeRoom)
 	case in.Limit < 0:
 		return nil, HistoryOutput{}, fmt.Errorf("limit must be between 1 and %d", maxHistoryLimit)
 	case in.Before < 0:

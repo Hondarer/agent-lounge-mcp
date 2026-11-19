@@ -91,9 +91,31 @@ func TestOrigin(t *testing.T) {
 	}
 }
 
+// The normalized form host/path is read as a host only when its first segment looks like a
+// host name; another value without a scheme, a colon or a user is a relative local path.
+func TestOriginRelativePath(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"github.com/owner/repo", "github.com/owner/repo"},
+		{"localhost/owner/repo", "localhost/owner/repo"},
+		{"LocalHost/Owner/Repo", "localhost/owner/repo"},
+		{"foo/bar", ""},
+		{"gitserver/team/repo", ""},
+		{"foo", ""},
+		{"repo", ""},
+		{"https://gitserver/team/repo", "gitserver/team/repo"},
+		{"git@gitserver:team/repo", "gitserver/team/repo"},
+		{"gitserver:team/repo", "gitserver/team/repo"},
+		{"user@host/path", "host/path"},
+	} {
+		got, err := Origin(tc.in)
+		if err != nil || got != tc.want {
+			t.Errorf("Origin(%q) = %q, %v; want %q", tc.in, got, err, tc.want)
+		}
+	}
+}
+
 func TestOriginErrors(t *testing.T) {
 	for _, in := range []string{
-		"repo",                     // no path
 		"https://github.com",       // no path
 		"https://github.com/.git",  // no path left
 		"https:///owner/repo",      // no host
@@ -125,6 +147,31 @@ func TestOriginErrorsHideCredentials(t *testing.T) {
 		if strings.Contains(err.Error(), "SECRET") {
 			t.Errorf("Origin(%q) error quotes the credentials: %v", in, err)
 		}
+	}
+}
+
+// A Windows drive seen through the WSL share is the drive path.
+func TestFolderShareDrive(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`\\wsl.localhost\Ubuntu\mnt\c\Work\App`, `c:\work\app`},
+		{`//wsl.localhost/Ubuntu/mnt/c/Work/App/`, `c:\work\app`},
+		{`\\wsl$\Ubuntu\mnt\d`, `d:\`},
+		{`\\wsl.localhost\Ubuntu\mnt\data\x`, `\\wsl.localhost\ubuntu\mnt\data\x`},
+		{`\\wsl.localhost\Ubuntu\home\..\mnt\c\x`, `c:\x`},
+		{`\\wsl.localhost\Ubuntu\mnt`, `\\wsl.localhost\ubuntu\mnt`},
+		{`\\wsl.localhost\Ubuntu`, `\\wsl.localhost\ubuntu`},
+		{`\\wsl.localhost\Ubuntu\home\User\App`, `\\wsl.localhost\ubuntu\home\User\App`},
+	} {
+		got, err := Folder(tc.in, "")
+		if err != nil || got != tc.want {
+			t.Errorf("Folder(%q) = %q, %v; want %q", tc.in, got, err, tc.want)
+		}
+	}
+	// The same folder declared from inside WSL gives the same value.
+	fromWSL, _ := Folder("/mnt/c/Work/App", "Ubuntu")
+	fromShare, _ := Folder(`\\wsl.localhost\Ubuntu\mnt\c\Work\App`, "")
+	if fromWSL != fromShare {
+		t.Errorf("from WSL %q, from the share %q", fromWSL, fromShare)
 	}
 }
 

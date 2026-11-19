@@ -58,9 +58,56 @@ func join(t *testing.T, s *Store, userID int64, name string) Session {
 	return sess
 }
 
+// sessionExists reports whether sess is still recorded, without changing it.
+func sessionExists(ctx context.Context, s *Store, sess Session) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM sessions WHERE id = ? AND user_id = ? AND name = ?",
+		sess.ID, sess.UserID, sess.Name).Scan(&n)
+	return n > 0, err
+}
+
+// Touch updates the time of last use only of the session with the same ID, user and name.
+func TestTouch(t *testing.T) {
+	s, user := openLocal(t)
+	ctx := context.Background()
+	alice := join(t, s, user, "alice")
+	lastSeen := func() int64 {
+		var v int64
+		if err := s.db.QueryRowContext(ctx, "SELECT last_seen_at FROM sessions WHERE id = ?", alice.ID).Scan(&v); err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	if _, err := s.db.ExecContext(ctx, "UPDATE sessions SET last_seen_at = 1 WHERE id = ?", alice.ID); err != nil {
+		t.Fatal(err)
+	}
+	for name, other := range map[string]Session{
+		"another name": {ID: alice.ID, UserID: alice.UserID, Name: "bob"},
+		"another user": {ID: alice.ID, UserID: alice.UserID + 1, Name: alice.Name},
+		"another ID":   {ID: alice.ID + 100, UserID: alice.UserID, Name: alice.Name},
+	} {
+		if exists, err := s.Touch(ctx, other); err != nil || exists {
+			t.Errorf("%s: exists = %v, %v", name, exists, err)
+		}
+	}
+	if lastSeen() != 1 {
+		t.Errorf("a touch of another session changed last_seen_at to %d", lastSeen())
+	}
+	if exists, err := s.Touch(ctx, alice); err != nil || !exists {
+		t.Fatalf("exists = %v, %v", exists, err)
+	}
+	if lastSeen() == 1 {
+		t.Error("last_seen_at was not updated")
+	}
+}
+
+// unread uses the session as a tool call does (Touch), and returns its unread messages.
 func unread(t *testing.T, s *Store, sess Session) int {
 	t.Helper()
-	n, err := s.Seen(context.Background(), sess.ID)
+	if _, err := s.Touch(context.Background(), sess); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.Unread(context.Background(), sess.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -64,7 +64,7 @@ func TestAllSessionsAndRemoveSession(t *testing.T) {
 	if err != nil || data != (SessionData{Messages: 3, Deliveries: 3}) {
 		t.Errorf("remove: %+v %v", data, err)
 	}
-	if exists, _ := s.SessionExists(ctx, alice); exists {
+	if exists, _ := sessionExists(ctx, s, alice); exists {
 		t.Error("alice still exists")
 	}
 	if n := unread(t, s, bob); n != 0 {
