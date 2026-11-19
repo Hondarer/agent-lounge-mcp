@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 簡易 ADR (lightadr)
-最終更新日時: 2026-11-20 04:50:00 JST
+最終更新日時: 2026-11-20 06:10:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `261119-connection-guidance-overview.md` (全体管理文書)、`261119-connection-guidance-discussion.md` (検討用 Markdown)。いずれも削除されている場合があります。
@@ -30,6 +30,7 @@
 | [LADR-009](#ladr-009-確認の回数とモデル) | 確認の回数とモデル | 2026-11-19 | [Q-011](261119-connection-guidance-discussion.md#q-011-確認の回数)、[Q-012](261119-connection-guidance-discussion.md#q-012-確認で使うモデル) |
 | [LADR-010](#ladr-010-作業ブランチと実装の担当) | 作業ブランチと実装の担当 | 2026-11-19 | [Q-013](261119-connection-guidance-discussion.md#q-013-作業ブランチと実装の担当) |
 | [LADR-011](#ladr-011-確認する-os-と-windows-の側の表し方) | 確認する OS と Windows の側の表し方 | 2026-11-19 | [Q-010](261119-connection-guidance-discussion.md#q-010-確認する-os)、[Q-014](261119-connection-guidance-discussion.md#q-014-windows-の側の確認を---で表す範囲)、[Q-015](261119-connection-guidance-discussion.md#q-015-文書での---の表し方) |
+| [LADR-012](#ladr-012-cli-ごとの独自の通知の仕組み) | CLI ごとの独自の通知の仕組み | 2026-11-20 | 対話での指示 |
 
 ## LADR-001 今回の実施範囲
 
@@ -311,3 +312,27 @@ Copilot CLI は、`lounge_help` の出力 (約 43KB) を一度に読めず、一
 | 2026-11-19 22:13 | [Q-010](261119-connection-guidance-discussion.md#q-010-確認する-os) | A: WSL の側だけで確認し、Windows の側は未検証として記録する | 「本質的に必要ない場合は、未検証ではなく `-` で表してください。」 | 新規に決定 (表し方は Q-014、Q-015 で確認) |
 | 2026-11-19 22:54 | [Q-014](261119-connection-guidance-discussion.md#q-014-windows-の側の確認を---で表す範囲) | A: 3 種類すべての Windows の側を `-` で表し、理由を添える | なし | Windows の側の表し方を `-` に改めた |
 | 2026-11-19 22:54 | [Q-015](261119-connection-guidance-discussion.md#q-015-文書での---の表し方) | A: 文書でも使う。`AGENTS.md` の規則に加え、既存の 2 行も改める | なし | 文書と `AGENTS.md` での扱いを加えた |
+
+## LADR-012 CLI ごとの独自の通知の仕組み
+
+決定者: Tetsuo Honda  
+最終更新日: 2026-11-20
+
+### 背景と課題
+
+前の案件 `interactive-verification` で、待機中のエージェントに知らせる手段として、Claude Code のチャンネル (`notifications/claude/channel`) を見つけ、実装しないと決めました (前の案件の検討用 Markdown の Q-022)。この件は、BL-038 として残課題一覧に残り、この案件の残課題一覧に転記されていました。
+
+### 得られた事実
+
+- 使える手段は、Claude Code だけの試験的な仕組みで、開発用の起動のオプションが必要です。他の 4 つの CLI には、同じ種類の仕組みが見つかりませんでした。
+- 今の設計は、エージェントが受信箱を確かめる形で成り立っています。この案件で、作業の途中のメッセージを、5 つの CLI がすべての実行 (25 回中 25 回) で読むようになりました。
+
+### 決定
+
+CLI ごとの独自の通知の仕組みには、対応しません (対応不要)。BL-038 を残課題一覧から除きます。
+
+### 経緯
+
+| 日時 (JST) | 源泉 | ユーザーの選択 | ユーザーのコメント | 決定への反映 |
+| --- | --- | --- | --- | --- |
+| 2026-11-20 06:10 | 対話での指示 (第 3 ゲートの通過の後) | 対応不要 | 「BL-038は、対応不要とコメントしたつもり」 | 新規に決定。BL-038 を残課題一覧から除いた |
