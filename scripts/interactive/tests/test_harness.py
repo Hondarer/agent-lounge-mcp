@@ -16,7 +16,7 @@ sys.path.insert(0, str(HERE.parent))
 
 from harness import screen  # noqa: E402
 from harness.agents import ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
-from harness.scenarios.common import answer, new_lines  # noqa: E402
+from harness.scenarios.common import answer, connections, new_lines  # noqa: E402
 from harness.server import Server  # noqa: E402
 
 
@@ -93,11 +93,19 @@ class ServerEventsTest(unittest.TestCase):
         s = Server("unused", "unused.db")
         s._lines = [(1.0, "agent-lounge-mcp: version x"),
                     (2.0, "agent-lounge-mcp: connection 1: request tools/call lounge_join"),
-                    (3.0, "agent-lounge-mcp: connection 2: log level info")]
+                    (3.0, "agent-lounge-mcp: connection 2: initialized test/1")]
         self.assertEqual([(e.connection, e.text) for e in s.events()],
-                         [(1, "request tools/call lounge_join"), (2, "log level info")])
+                         [(1, "request tools/call lounge_join"), (2, "initialized test/1")])
         self.assertEqual(len(s.tool_calls("lounge_join", since=1.5)), 1)
         self.assertEqual(s.tool_calls("lounge_join", since=2.5), [])
+
+    def test_connections(self):
+        s = Server("unused", "unused.db")
+        s._lines = [(1.0, "agent-lounge-mcp: connection 1: initialized claude-code/2"),
+                    (2.0, "agent-lounge-mcp: connection 1: request tools/call lounge_join"),
+                    (3.0, "agent-lounge-mcp: connection 2: request logging/setLevel")]
+        self.assertEqual(connections(s), {1: {"client": "claude-code/2", "tools": ["lounge_join"]},
+                                          2: {"client": "", "tools": []}})
 
 
 class EnvironmentTest(unittest.TestCase):

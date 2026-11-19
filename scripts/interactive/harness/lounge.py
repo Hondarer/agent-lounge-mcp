@@ -63,15 +63,23 @@ class Client:
         self._post({"jsonrpc": "2.0", "method": "notifications/initialized"})
         return self
 
-    def call(self, tool: str, arguments: dict) -> dict:
-        """Call a tool and return its structured result; raise ToolError on a tool error."""
+    def _tool(self, tool: str, arguments: dict) -> tuple[dict, str]:
         result = self._request("tools/call", {"name": tool, "arguments": arguments})
         text = "".join(c.get("text", "") for c in result.get("content", []) if c.get("type") == "text")
         if result.get("isError"):
             raise ToolError(text)
+        return result, text
+
+    def call(self, tool: str, arguments: dict) -> dict:
+        """Call a tool and return its structured result; raise ToolError on a tool error."""
+        result, text = self._tool(tool, arguments)
         if "structuredContent" in result:
             return result["structuredContent"]
         return json.loads(text) if text.startswith("{") else {"text": text}
+
+    def call_text(self, tool: str, arguments: dict) -> str:
+        """Call a tool and return the text of its result; raise ToolError on a tool error."""
+        return self._tool(tool, arguments)[1]
 
     def close(self) -> None:
         if not self.session:
