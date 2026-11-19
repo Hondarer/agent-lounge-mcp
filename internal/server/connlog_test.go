@@ -68,43 +68,35 @@ func TestConnectionLogOff(t *testing.T) {
 	}
 }
 
-// Each connection is numbered; its client, requests, tool names, log level and the outcome of
-// the shutdown notice are written, and nothing of the tool arguments.
+// Each connection is numbered; its client, requests and tool names are written, and nothing of
+// the tool arguments.
 func TestConnectionLog(t *testing.T) {
 	s, l := logServer(t)
 	a := connectAs(t, s, "agent-a", "1.2.3")
 	b := connectAs(t, s, "agent-b", "4.5")
-	c := connectAs(t, s, "agent-c", "6")
-	if err := c.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "error"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := a.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "info"}); err != nil {
-		t.Fatal(err)
-	}
+	// A client may still try to set a log level; it is written as any other request.
+	a.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "info"})
 	testutil.Call[joined](t, b, "lounge_join", map[string]any{"name": "secret-session-name"})
 	testutil.CallErr(t, b, "chat_send", map[string]any{"to": "nobody", "body": "secret body"})
 	if _, err := b.ListTools(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
-	s.BeginShutdown(context.Background())
+	s.BeginShutdown()
 
 	got := l.text()
 	for _, want := range []string{
 		`connection 1: initialized client="agent-a" version="1.2.3" protocol=`,
 		`connection 2: initialized client="agent-b" version="4.5" protocol=`,
-		"connection 1: log level info",
 		"connection 2: request tools/call lounge_join",
 		"connection 2: request tools/call chat_send",
 		"connection 2: request tools/list",
-		"connection 1: shutdown notice sent",
-		"connection 2: shutdown notice not sent (the client set no log level)",
-		"connection 3: shutdown notice not sent (the log level error is above warning)",
+		"connection 1: request logging/setLevel",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)
 		}
 	}
-	for _, secret := range []string{"secret", "notifications/"} {
+	for _, secret := range []string{"secret", "notifications/", "shutdown", "log level"} {
 		if strings.Contains(got, secret) {
 			t.Errorf("%q written:\n%s", secret, got)
 		}

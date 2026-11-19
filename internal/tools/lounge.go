@@ -40,6 +40,8 @@ func registerLounge(r *Registry, d *Deps) {
 			"Pass your profile (os_user, machine, origin, folder, wsl_distro) as the output of the commands that lounge_help lists; " +
 			"the server normalizes the values, decides your repository, and returns them. " +
 			"When the repository or folder you work in changes, call it again with the same name. " +
+			"After joining, call chat_inbox when a result reports unread messages, after each step of your task that changes files, " +
+			"and before your final reply to the user: nothing notifies you of new messages. " +
 			"If you do not know how to use the lounge, call lounge_help first.",
 		Annotations: additive(true),
 	}, d.loungeJoin)

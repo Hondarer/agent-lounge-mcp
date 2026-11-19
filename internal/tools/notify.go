@@ -5,8 +5,7 @@ import (
 	"sync"
 )
 
-// ShutdownMessage is the text of the error every tool call returns while the server stops, and
-// of the log notification sent to connected clients when the stop begins.
+// ShutdownMessage is the text of the error every tool call returns while the server stops.
 const ShutdownMessage = "agent-lounge-mcp is shutting down. Messages are kept. " +
 	"After the server is started again, call lounge_join with the same session name. " +
 	"If the server cannot be reached, tell the user instead of retrying."

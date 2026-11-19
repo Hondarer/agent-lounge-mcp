@@ -113,18 +113,14 @@ def answer(text: str, yes: str, no: str) -> str:
 
 
 def connections(server: Server) -> dict[int, dict[str, Any]]:
-    """What the diagnostics say about each connection: client, log level, tools, notice."""
+    """What the diagnostics say about each connection: client and tools."""
     out: dict[int, dict[str, Any]] = {}
     for e in server.events():
-        c = out.setdefault(e.connection, {"client": "", "log_level": "", "tools": [], "shutdown_notice": ""})
+        c = out.setdefault(e.connection, {"client": "", "tools": []})
         if e.text.startswith("initialized "):
             c["client"] = e.text[len("initialized "):]
-        elif e.text.startswith("log level "):
-            c["log_level"] = e.text[len("log level "):]
         elif e.text.startswith("request tools/call "):
             c["tools"].append(e.text[len("request tools/call "):])
-        elif e.text.startswith("shutdown notice "):
-            c["shutdown_notice"] = e.text[len("shutdown notice "):]
     return out
 
 

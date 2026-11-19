@@ -18,7 +18,7 @@ import (
 func TestShutdownFailsToolCalls(t *testing.T) {
 	s, cs := waitServer(t, 10*time.Second, "alice")
 	fresh := testutil.Connect(t, s.MCP, nil)
-	s.BeginShutdown(context.Background())
+	s.BeginShutdown()
 	args := map[string]map[string]any{
 		"lounge_join":   {"name": "alice"},
 		"chat_send":     {"to": "bob", "body": "x"},
@@ -42,7 +42,7 @@ func TestShutdownEndsWaitingInbox(t *testing.T) {
 	s, cs := waitServer(t, 10*time.Second, "bob")
 	ch := callAsync(context.Background(), cs[0], "chat_inbox", map[string]any{"wait_seconds": 10})
 	waitingCalls(t, s, 1)
-	s.BeginShutdown(context.Background())
+	s.BeginShutdown()
 	res := receive(t, ch)
 	if !res.IsError || testutil.Text(res) != tools.ShutdownMessage {
 		t.Errorf("waiting call: %s", testutil.Text(res))
@@ -50,24 +50,17 @@ func TestShutdownEndsWaitingInbox(t *testing.T) {
 	waitingCalls(t, s, 0)
 }
 
-// A client that set a log level receives the shutdown message as a warning log notification.
-func TestShutdownLogNotification(t *testing.T) {
+// The server declares no logging capability: the stop reaches agents only as the error of
+// their tool calls.
+func TestNoLoggingCapability(t *testing.T) {
 	s, _ := newServer(t)
-	logs := make(chan *mcp.LoggingMessageParams, 1)
-	cs := testutil.Connect(t, s.MCP, &mcp.ClientOptions{
-		LoggingMessageHandler: func(_ context.Context, req *mcp.LoggingMessageRequest) { logs <- req.Params },
-	})
-	if err := cs.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "info"}); err != nil {
-		t.Fatal(err)
+	cs := testutil.Connect(t, s.MCP, nil)
+	caps := cs.InitializeResult().Capabilities
+	if caps.Logging != nil {
+		t.Errorf("logging capability declared: %+v", caps.Logging)
 	}
-	s.BeginShutdown(context.Background())
-	select {
-	case p := <-logs:
-		if p.Level != "warning" || p.Data != tools.ShutdownMessage {
-			t.Errorf("log notification = %+v", p)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("no log notification")
+	if caps.Tools == nil {
+		t.Error("tools capability missing")
 	}
 }
 
@@ -76,7 +69,7 @@ func TestHealthWhileStopping(t *testing.T) {
 	s, sess := newServer(t)
 	hs := httptest.NewServer(Handler(s, sess))
 	t.Cleanup(hs.Close)
-	s.BeginShutdown(context.Background())
+	s.BeginShutdown()
 	res, err := http.Get(hs.URL + HealthPath)
 	if err != nil {
 		t.Fatal(err)

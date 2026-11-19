@@ -279,7 +279,7 @@ func TestConfiguredLimits(t *testing.T) {
 	if msg := testutil.CallErr(t, alice, "chat_send", map[string]any{"to": "bob", "body": "x"}); !strings.Contains(msg, "(1 unread messages)") {
 		t.Errorf("full inbox: %s", msg)
 	}
-	g := testutil.Call[help](t, alice, "lounge_help", nil).Guide
+	g := guideOf(t, alice)
 	for _, want := range []string{"at most 10 bytes", "at most 1 unread messages", "at most 2 sessions", "within 14d", "deleted 30d after", "not used for 60d"} {
 		if !strings.Contains(g, want) {
 			t.Errorf("guide does not contain %q", want)

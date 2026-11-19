@@ -103,6 +103,9 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 	fs.DurationVar(&cfg.InboxWaitMax, "inbox-wait-max", cfg.InboxWaitMax,
 		"longest time chat_inbox may wait for a message (0 disables waiting, at most "+config.MaxInboxWaitMax.String()+
 			"); keep it below the agents' tool-call time limit")
+	fs.Var(config.DurationValue{D: &cfg.ConnectionIdle}, "connection-idle",
+		"time without a request after which an MCP connection is closed (0: never); the agent joins its session again "+
+			"on a new connection, and nothing is deleted (unlike --session-idle)")
 	fs.Var(config.DurationValue{D: &cfg.ExpireAfter}, "expire-after",
 		"time after which a message nobody read expires (0: never). Durations take h, m, s and d (24h), such as 14d or 1d12h")
 	fs.Var(config.DurationValue{D: &cfg.RetainFor}, "retain-for",
@@ -124,7 +127,7 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		"most memories one scope (one user, one repository) can hold, faded and pinned ones included (1 or more)")
 	fs.BoolVar(&cfg.LogConnections, "log-connections", false,
 		"write diagnostics of every MCP connection to standard error: its client and version, the methods and tools it calls "+
-			"(names only), its log level, and whether the shutdown notice was sent to it")
+			"(names only)")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
@@ -241,8 +244,8 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 	// once, or the operator cannot tell whether the signal was received.
 	log.Printf("shutting down (waiting up to %s for open connections; press Ctrl+C again to stop now)", cfg.ShutdownTimeout)
 
-	// Tell agents first: tool calls fail with the shutdown error from now on, waiting chat_inbox
-	// calls return it, and clients that set a log level receive it as a log notification. Keep
+	// Tell agents first: tool calls fail with the shutdown error from now on, and waiting
+	// chat_inbox calls return it. Keep
 	// accepting requests while agents remain connected, so that their calls get that error and
 	// /healthz reports "stopping" instead of the connection being refused. Then close the
 	// listener, let in-flight requests finish, and drop what remains (such as open event
@@ -259,7 +262,7 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 		case <-shutdownCtx.Done():
 		}
 	}()
-	srv.BeginShutdown(shutdownCtx)
+	srv.BeginShutdown()
 	srv.WaitForSessions(shutdownCtx)
 	if err := hs.Shutdown(shutdownCtx); err != nil {
 		hs.Close()

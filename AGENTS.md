@@ -27,7 +27,7 @@ This applies to `docs/ja/`, `README.md`, `docs/README.md`, and every `SKILL.md`.
 
 - **Use cases**: what the feature is for and when to use it.
 - **Procedures**: the steps, options, and commands to use it now.
-- **Verified scope**: what has been verified, with the method (automated test, CI, real machine) and the environment (OS, CPU, product versions). List unverified items explicitly. Write the status as 検証済 / 未検証, not 成功.
+- **Verified scope**: what has been verified, with the method (automated test, CI, real machine) and the environment (OS, CPU, product versions). List unverified items explicitly. Write the status as 検証済 / 未検証, not 成功. Write - when verification is not needed (for example, on an OS whose code paths the change does not touch), and give the reason.
 - **Limitations**: what is out of scope and known constraints.
 
 ### What documents do not contain
@@ -41,7 +41,7 @@ Dates and numbers that are part of the specification stay: supported versions, m
 ### Updating
 
 - When a result changes, rewrite the specification in place. Do not append a dated section.
-- Record the history of a task (discussions, designs, backlogs, validation records) in `docs/prompts/current/yymmdd-<topic>-<kind>.md`, in Japanese only. `<kind>` is `discussion`, `design`, `backlog`, or `validation`.
+- Record the history of a task (overviews, discussions, decision records, designs, backlogs, validation records) in `docs/prompts/current/yymmdd-<topic>-<kind>.md`, in Japanese only. `<kind>` is `overview`, `discussion`, `lightadr`, `design`, `backlog`, or `validation`.
 - Move the records of a task from `docs/prompts/current/` to `docs/prompts/past/` when every item of its backlog has been resolved or carried over to another backlog. Approval of the deliverables alone is not the condition.
 - Records in `docs/prompts/past/` are snapshots. Do not update them to match the current state.
 - Documents do not link to records in `docs/prompts/`; records may link to documents.

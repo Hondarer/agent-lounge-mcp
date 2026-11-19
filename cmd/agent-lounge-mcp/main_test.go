@@ -89,10 +89,18 @@ func TestParseServeFlags(t *testing.T) {
 	if cfg, err = parse("--expire-after", "14d"); err != nil || cfg.ExpireAfter != 14*24*time.Hour {
 		t.Errorf("--expire-after 14d: %+v %v", cfg, err)
 	}
+	if cfg, err = parse(); err != nil || cfg.ConnectionIdle != time.Hour {
+		t.Errorf("--connection-idle default: %v %v", cfg.ConnectionIdle, err)
+	}
+	for v, want := range map[string]time.Duration{"0": 0, "30s": 30 * time.Second, "1d": 24 * time.Hour} {
+		if cfg, err = parse("--connection-idle", v); err != nil || cfg.ConnectionIdle != want {
+			t.Errorf("--connection-idle %s: %v %v", v, cfg.ConnectionIdle, err)
+		}
+	}
 
 	for _, args := range [][]string{{"--listen", "0.0.0.0:7788"}, {"--db", ""}, {"--allowed-host", "x:1"}, {"extra"}, {"--unknown"},
 		{"--inbox-wait-max", "11m"}, {"--inbox-wait-max", "-1s"}, {"--inbox-wait-max", "60"},
-		{"--expire-after", "-1d"}, {"--retain-for", "1w"}, {"--session-idle", "x"}, {"--cleanup-interval", "999ms"}, {"--cleanup-interval", "0"},
+		{"--connection-idle", "-1s"}, {"--connection-idle", "x"}, {"--expire-after", "-1d"}, {"--retain-for", "1w"}, {"--session-idle", "x"}, {"--cleanup-interval", "999ms"}, {"--cleanup-interval", "0"},
 		{"--max-body-bytes", "0"}, {"--max-body-bytes", "1048577"}, {"--max-unread", "0"}, {"--max-sessions-per-user", "0"}, {"--max-unread", "x"}} {
 		if _, err := parse(args...); err == nil {
 			t.Errorf("%v was accepted", args)
@@ -147,7 +155,7 @@ func TestServe(t *testing.T) {
 }
 
 // Stops the server while a client waits in chat_inbox: the waiting call returns the shutdown
-// error, the client receives the log notification, and the server stops within the timeout.
+// error, and the server stops within the timeout.
 func TestServeStopsWhileWaiting(t *testing.T) {
 	logged := &syncBuffer{}
 	log.SetOutput(logged)
@@ -170,13 +178,7 @@ func TestServeStopsWhileWaiting(t *testing.T) {
 		t.Fatalf("serve stopped early: %v", err)
 	}
 
-	logs := make(chan *mcp.LoggingMessageParams, 1)
-	cs := testutil.ConnectHTTPWith(t, "http://"+addr.String()+server.MCPPath, &mcp.ClientOptions{
-		LoggingMessageHandler: func(_ context.Context, req *mcp.LoggingMessageRequest) { logs <- req.Params },
-	})
-	if err := cs.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "warning"}); err != nil {
-		t.Fatal(err)
-	}
+	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
 	testutil.Call[struct{}](t, cs, "lounge_join", map[string]any{"name": "waiter"})
 
 	waited := make(chan *mcp.CallToolResult, 1)
@@ -198,14 +200,6 @@ func TestServeStopsWhileWaiting(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the waiting chat_inbox did not return")
-	}
-	select {
-	case p := <-logs:
-		if p.Level != "warning" || p.Data != tools.ShutdownMessage {
-			t.Errorf("log notification = %+v", p)
-		}
-	case <-time.After(5 * time.Second):
-		t.Error("no log notification")
 	}
 	select {
 	case err := <-done:

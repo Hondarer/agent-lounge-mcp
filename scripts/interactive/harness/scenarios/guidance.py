@@ -1,19 +1,22 @@
 """Scenarios 4 and 5: whether a CLI passes the server's instructions to its model, which
 instruction files it reads, and whether the snippet of lounge_help, pasted into one, makes
-the agent use the lounge during unrelated work."""
+the agent use the lounge during unrelated work and read a message that arrives in the middle
+of it."""
 
 from __future__ import annotations
 
 import re
+import threading
 import time
 
 from .. import screen
-from ..lounge import Client
+from ..lounge import Client, ToolError
 from .common import Context, FileWatch, answer, ask, connections
 
 # Instruction files any of the CLIs may read; each gets its own code name in scenario 5.
 CANDIDATE_FILES = ["AGENTS.md", "CLAUDE.md", "GEMINI.md", "GROK.md", ".github/copilot-instructions.md"]
-RUNS = 3
+RUNS = 5
+PEER = "iv-peer"
 TASK = ("Create a file named notes.txt in this folder with three lines: alpha, beta and gamma. "
         "Then read the file back and tell me how many lines it has.")
 
@@ -37,10 +40,11 @@ def server_instructions(ctx: Context) -> None:
 
 
 def _snippet(ctx: Context, server, session: str) -> str:
+    # Taken from the text of the result: the structured result of lounge_help carries the guide
+    # only on servers before the guide was taken out of it.
     peer = Client(server.url).connect()
     try:
-        result = peer.call("lounge_help", {})
-        help_text = result.get("guide") or result.get("text", "")
+        help_text = peer.call_text("lounge_help", {})
     finally:
         peer.close()
     m = re.search(r"~~~markdown\n(.*?)\n~~~", help_text, re.S)
@@ -49,8 +53,63 @@ def _snippet(ctx: Context, server, session: str) -> str:
     return m.group(1).replace("<name>", session) + "\n"
 
 
+class MidTaskMessage:
+    """Sends the CLI's session a message once notes.txt appears and the session exists: a message
+    that arrives in the middle of the task, which the agent reads only if it checks its inbox
+    while it works."""
+
+    def __init__(self, url: str, session: str, watch: FileWatch):
+        self.word = screen.token().upper()
+        self.message_id: int | None = None
+        self.delay: float | None = None  # seconds from notes.txt to the message
+        self.error = ""
+        self._session = session
+        self._watch = watch
+        self._stop = threading.Event()
+        # The peer joins before the CLI starts, so that the CLI's own session is the only new one.
+        self._peer = Client(url).connect()
+        self._peer.call("lounge_join", {"name": PEER})
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set() and self._watch.seen is None:
+            time.sleep(0.1)
+        # Some agents write the file before they join: the message is then sent as soon as the
+        # CLI's session exists, until the reply ends.
+        while not self._stop.is_set() and self._watch.seen is not None:
+            try:
+                sent = self._peer.call("chat_send", {"to": self._session, "scope": "user",
+                                                     "body": f"The code word is {self.word}. No reply is needed."})
+                self.message_id = sent["message_id"]
+                self.delay = round(time.monotonic() - self._watch.seen, 1)
+                return
+            except ToolError as e:
+                self.error = str(e)  # no such session yet
+            except (ValueError, OSError) as e:
+                self.error = str(e)
+                return
+            time.sleep(0.2)
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._thread.join()
+
+    def state(self) -> str:
+        """The delivery state of the message now: queued, delivered, acked or expired."""
+        if self.message_id is None:
+            return ""
+        status = self._peer.call("chat_status", {"message_id": self.message_id})
+        states = [r.get("state", "") for r in status.get("recipients", [])]
+        return states[0] if states else ""
+
+    def close(self) -> None:
+        self._peer.close()
+
+
 def instruction_files(ctx: Context) -> None:
-    """Scenario 5: which files the CLI reads, then the snippet in that file, RUNS times."""
+    """Scenario 5: which files the CLI reads, then the snippet in that file, RUNS times, each
+    with a message sent to the agent's session in the middle of the task."""
     v = ctx.result.values
     # Which instruction files the CLI reads.
     server = ctx.server("discovery").start()
@@ -93,14 +152,33 @@ def instruction_files(ctx: Context) -> None:
         path = folder / chosen
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_snippet(ctx, server, session), encoding="utf-8")
-        agent = ctx.agent(folder).start()
         watch = FileWatch(folder / "notes.txt")
-        began = time.monotonic()
         try:
-            reply, _ = ask(agent, TASK, timeout=300)
-        finally:
+            message = MidTaskMessage(server.url, session, watch)
+        except BaseException:
             watch.stop()
-        events = [e for e in server.events(began)]
+            raise
+        try:
+            # The harness's own connections (the snippet's and the peer's) are left out of the
+            # agent's tool calls: they are all the connections before the CLI starts.
+            deadline = time.monotonic() + 10
+            while not server.tool_calls("lounge_join") and time.monotonic() < deadline:
+                time.sleep(0.1)
+            own = {e.connection for e in server.events()}
+            agent = ctx.agent(folder).start()
+            began = time.monotonic()
+            try:
+                reply, added = ask(agent, TASK, timeout=300)
+            finally:
+                message.stop()
+                watch.stop()
+            # The main result: whether the agent read the message by the time its reply ended.
+            state = message.state()
+        finally:
+            message.stop()
+            watch.stop()
+            message.close()
+        events = [e for e in server.events(began) if e.connection not in own]
         tools = [(e.at, e.text[len("request tools/call "):]) for e in events if e.text.startswith("request tools/call ")]
         created = watch.seen
         run = {
@@ -112,7 +190,15 @@ def instruction_files(ctx: Context) -> None:
             "inbox_at_start": None if created is None else any(t == "chat_inbox" and at < created for at, t in tools),
             "inbox_after_work": None if created is None else any(t == "chat_inbox" and at >= created for at, t in tools),
             "memory_search": any(t == "memory_search" for _, t in tools),
+            "message_sent": message.message_id is not None,
+            "message_delay": message.delay,
+            "message_state": state,
+            # None when no message was sent: there was nothing to read.
+            "message_read": None if message.message_id is None else state in ("delivered", "acked"),
+            "code_word_in_reply": None if message.message_id is None else screen.contains(added.upper(), message.word),
         }
+        if message.message_id is None and message.error:
+            run["message_error"] = message.error
         runs.append(run)
         v["runs"] = runs  # kept when a later run fails
         ctx.save(f"run{i}-screen.txt", agent.term.transcript())
@@ -123,3 +209,6 @@ def instruction_files(ctx: Context) -> None:
     v["runs_with_notes"] = sum(1 for r in runs if r["notes_created"])
     for key in ("joined", "inbox_at_start", "inbox_after_work", "memory_search"):
         v[f"{key}_count"] = sum(1 for r in runs if r[key])
+    # The read count covers only the runs whose message was sent.
+    v["runs_with_message"] = sum(1 for r in runs if r["message_sent"])
+    v["message_read_count"] = sum(1 for r in runs if r["message_read"])

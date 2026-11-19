@@ -144,7 +144,7 @@ func TestParseDuration(t *testing.T) {
 
 func TestValidateCleanupAndLimits(t *testing.T) {
 	cfg := Default()
-	if cfg.ExpireAfter != 14*Day || cfg.RetainFor != 30*Day || cfg.SessionIdle != 60*Day || cfg.CleanupInterval != time.Hour ||
+	if cfg.ConnectionIdle != time.Hour || cfg.ExpireAfter != 14*Day || cfg.RetainFor != 30*Day || cfg.SessionIdle != 60*Day || cfg.CleanupInterval != time.Hour ||
 		cfg.MaxBodyBytes != 65536 || cfg.MaxUnread != 1000 || cfg.MaxSessionsPerUser != 500 {
 		t.Errorf("defaults: %+v", cfg)
 	}
@@ -153,7 +153,7 @@ func TestValidateCleanupAndLimits(t *testing.T) {
 		t.Error("SessionIdle is not longer than ExpireAfter + RetainFor")
 	}
 	for _, ok := range []func(*Config){
-		func(c *Config) { c.ExpireAfter, c.RetainFor, c.SessionIdle = 0, 0, 0 },
+		func(c *Config) { c.ConnectionIdle, c.ExpireAfter, c.RetainFor, c.SessionIdle = 0, 0, 0, 0 },
 		func(c *Config) { c.CleanupInterval = time.Second },
 		func(c *Config) { c.MaxBodyBytes = 1 },
 		func(c *Config) { c.MaxBodyBytes = MaxMaxBodyBytes },
@@ -166,6 +166,7 @@ func TestValidateCleanupAndLimits(t *testing.T) {
 		}
 	}
 	for want, bad := range map[string]func(*Config){
+		"--connection-idle":       func(c *Config) { c.ConnectionIdle = -time.Second },
 		"--expire-after":          func(c *Config) { c.ExpireAfter = -time.Second },
 		"--retain-for":            func(c *Config) { c.RetainFor = -time.Second },
 		"--session-idle":          func(c *Config) { c.SessionIdle = -time.Second },

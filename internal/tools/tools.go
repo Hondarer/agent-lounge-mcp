@@ -109,11 +109,19 @@ func (d *Deps) RequestUser(req *mcp.CallToolRequest) store.User {
 }
 
 // Instructions returns the guidance sent to agents when they connect.
+//
+// The server cannot notify an agent of new messages, so every path that tells agents when to
+// check their inbox names the same three moments: when a tool result reports unread messages,
+// after each step of the task that changes files, and before the final reply to the user.
+// Keep them the same here, in the descriptions of lounge_join and chat_inbox, in the guide's
+// Receiving messages section and in its snippet: most CLIs pass the descriptions to their
+// model but not these instructions.
 func Instructions(*Deps) string {
 	return "agent-lounge-mcp lets coding agents exchange messages and share memories across sessions, on one machine or across machines. " +
 		"Call lounge_join first; pass the session name used before to continue that session and its unread messages. " +
 		"Pass your profile to lounge_join (lounge_help explains how to find the values). " +
-		"When a tool result reports unread messages (unread of 1 or more), call chat_inbox. " +
+		"Call chat_inbox when a tool result reports unread messages (unread of 1 or more), after each step of your task that changes files, " +
+		"and before your final reply to the user: nothing notifies you of new messages. " +
 		"To wait for a reply, call chat_inbox with wait_seconds. " +
 		"When you finish handling a message whose sender waits for a result (a request or a question), call chat_ack with its message_id, after your reply if you reply. " +
 		"After losing context or when you resume work, call chat_history (unacked: true lists the messages you fetched but did not finish). " +

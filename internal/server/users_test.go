@@ -239,17 +239,17 @@ func TestUnreadLimit(t *testing.T) {
 // The usage guide describes scopes, users, limits and the 401 case.
 func TestHelpDescribesUsersAndScopes(t *testing.T) {
 	cs := connect(t)
-	out := testutil.Call[help](t, cs, "lounge_help", nil)
+	guide := guideOf(t, cs)
 	for _, want := range []string{
 		"## Scopes and targets", "## Users", "user/name", "reply_to", "scope_id", "never inferred",
 		"65536 bytes", "1000 unread", "500 sessions", "401", "authenticated by their token", "other users",
 	} {
-		if !strings.Contains(out.Guide, want) {
+		if !strings.Contains(guide, want) {
 			t.Errorf("guide does not mention %q", want)
 		}
 	}
 	for _, stale := range []string{"on this machine", "No authentication", "## Repository space", "same_repository"} {
-		if strings.Contains(out.Guide, stale) || strings.Contains(cs.InitializeResult().Instructions, stale) {
+		if strings.Contains(guide, stale) || strings.Contains(cs.InitializeResult().Instructions, stale) {
 			t.Errorf("guide or instructions still say %q", stale)
 		}
 	}

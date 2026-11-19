@@ -37,6 +37,8 @@ func registerChat(r *Registry, d *Deps) {
 		Name:  toolInbox,
 		Title: "Read unread messages",
 		Description: "Get the unread messages addressed to your session or to its rooms, oldest first, and mark them delivered; each message is returned once. " +
+			"Call it when a tool result reports unread messages, after each step of your task that changes files, " +
+			"and before your final reply to the user: nothing notifies you of new messages. " +
 			"To reply, pass the message's scope and reply_to as the scope and 'to' of chat_send. " +
 			"When you finish handling a message whose sender waits for a result (a request or a question), record it with chat_ack (after your reply, if you reply). " +
 			"When nothing is unread, it returns an empty list at once, or with wait_seconds it waits until a message arrives and returns it " +
