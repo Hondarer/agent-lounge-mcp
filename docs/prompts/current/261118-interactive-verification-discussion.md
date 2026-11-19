@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-19 10:50:00 JST
+最終更新日時: 2026-11-19 11:15:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 下流文書: `261118-interactive-verification-design.md` (最終仕様)、`261118-interactive-verification-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -16,7 +16,7 @@
 
 検討 ID: interactive-verification
 
-版: 7
+版: 8
 
 状態: 合意済み (作業を完了。成果物の承認待ち。第 3 ゲート)
 
@@ -166,6 +166,12 @@ Q-022 の回答の前に、対話セッションで行ったやりとりの記�
 指示 (Tetsuo Honda):
 
 > Q-022 を「実装しない」として記録。このチャットのやりとりを残しておき、作業を進めてください。
+
+成果物の提示の後の指示 (Tetsuo Honda。2026-11-19 11:10 JST 頃):
+
+> 企画提案書の要件は、標準MCPでは実現できないことが分かったので今ここで修正して
+
+この指示で、企画提案書 (`docs/agent-lounge-mcp-proposal.md`) の要件を改めました。停止は、ツールの呼び出しのエラーで伝えます。待機中のエージェントへ知らせることは、対象としないことに加えました。
 
 ## 現行の合意内容
 
