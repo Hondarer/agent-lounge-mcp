@@ -458,6 +458,27 @@ else
 	echo "OK: checks across two users skipped (set AGENT_LOUNGE_TOKEN_B to run them)"
 fi
 
+# Leave nothing unfinished: each probe session takes what is still unread and records every
+# message of this run it received as done, so that running the probe again on the same
+# database does not pile up messages.
+for id in "$a" "$b" "$c" "$d" "$e"; do
+	[ "$id" != none ] || continue
+	# chat_inbox returns at most 100 messages: repeat until nothing is unread.
+	n=0
+	while :; do
+		out=$(call "$id" chat_inbox '{"limit":100}')
+		case $(norm "$out") in *'"messages":[]'*) break ;; esac
+		n=$((n + 1))
+		[ "$n" -lt 100 ] || ng "chat_inbox still returns messages after $n calls"
+	done
+	out=$(call "$id" chat_history '{"unacked":true,"limit":100}')
+	ids=$(norm "$out" | grep -o "{[^{}]*-$mark[^{}]*}" | grep -o '"message_id":[0-9]*' | cut -d: -f2 | sort -u | paste -sd, -)
+	[ -z "$ids" ] || call "$id" chat_ack "{\"message_ids\":[$ids]}" >/dev/null
+	out=$(call "$id" chat_history '{"unacked":true,"limit":100}')
+	reject "-$mark\"" "chat_history unacked after the clean-up" "$(norm "$out")"
+done
+echo "OK: no message of this run is left unread or unfinished"
+
 # End the probe's MCP sessions.
 for id in "$a" "$b" "$c" "$d" "$e"; do
 	[ "$id" != none ] || continue

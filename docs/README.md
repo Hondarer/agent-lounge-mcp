@@ -6,6 +6,7 @@
 |---|---|---|
 | 利用ガイド | [ja/user-guide.md](ja/user-guide.md) | ビルド、サーバーの起動、エージェントへの登録、会話の手順、検証済みの範囲 |
 | リファレンス | [ja/reference.md](ja/reference.md) | 起動オプション、HTTP のパス、識別、各ツールの入出力、送達状態、制限事項 |
+| 対話の画面での検証の基盤 | [ja/interactive-verification.md](ja/interactive-verification.md) | 開発とテストのための道具。エージェントの CLI の対話の画面を自動で操作して、動作を確かめる手順 |
 
 Table: 文書の一覧
 

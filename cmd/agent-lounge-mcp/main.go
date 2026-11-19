@@ -122,6 +122,9 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		fmt.Sprintf("largest memory body in bytes of UTF-8 (1 to %d)", config.MaxMaxBodyBytes))
 	fs.IntVar(&cfg.MaxMemoriesPerScope, "max-memories-per-scope", cfg.MaxMemoriesPerScope,
 		"most memories one scope (one user, one repository) can hold, faded and pinned ones included (1 or more)")
+	fs.BoolVar(&cfg.LogConnections, "log-connections", false,
+		"write diagnostics of every MCP connection to standard error: its client and version, the methods and tools it calls "+
+			"(names only), its log level, and whether the shutdown notice was sent to it")
 	if err := fs.Parse(args); err != nil {
 		return cfg, err
 	}
