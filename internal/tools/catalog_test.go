@@ -94,3 +94,17 @@ func TestGuideMemory(t *testing.T) {
 		t.Error("guide does not follow --memory-half-life 0")
 	}
 }
+
+// The guide must fit in what Copilot CLI reads at once (see maxGuideBytes).
+func TestGuideSize(t *testing.T) {
+	g := guide(config.Default())
+	if len(g) > maxGuideBytes {
+		t.Errorf("the guide has %d bytes, more than %d: Copilot CLI saves a tool result of about 20KB or more "+
+			"to a file instead of reading it at once, and a line of unread messages and later additions need room", len(g), maxGuideBytes)
+	}
+	t.Logf("guide: %d bytes", len(g))
+	for _, sec := range strings.Split(g, "\n## ") {
+		title, _, _ := strings.Cut(sec, "\n")
+		t.Logf("%6d %s", len(sec), title)
+	}
+}

@@ -306,19 +306,19 @@ func TestHealthReportsWaiting(t *testing.T) {
 
 func TestHelpDescribesProfileAndRepository(t *testing.T) {
 	cs := connect(t)
-	out := testutil.Call[help](t, cs, "lounge_help", nil)
+	guide := guideOf(t, cs)
 	for _, want := range []string{
 		"## Profile", "## Scopes and targets", "## Users", "os_user", "machine", "origin", "folder", "wsl_distro",
 		"id -un", "uname -n", "you are on WSL", "$env:USERNAME", "echo $USERNAME", `cmd.exe /c "echo %USERNAME%"`, "cmd.exe /c hostname", "git remote get-url origin",
 		"git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
 		"before you call other tools", "not verified", "not carried over", "/mnt/<drive letter>",
 	} {
-		if !strings.Contains(out.Guide, want) {
+		if !strings.Contains(guide, want) {
 			t.Errorf("guide does not mention %q", want)
 		}
 	}
-	_, snippet, _ := strings.Cut(out.Guide, "## Snippet for instruction files")
-	if !strings.Contains(snippet, "changes, call lounge_join again") {
+	_, snippet, _ := strings.Cut(guide, "## Snippet for instruction files")
+	if !strings.Contains(snippet, "Call it again with the same name when the repository or folder you work in changes") {
 		t.Errorf("snippet does not tell to join again when the folder changes:\n%s", snippet)
 	}
 	if !strings.Contains(cs.InitializeResult().Instructions, "profile") {

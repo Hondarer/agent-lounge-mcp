@@ -14,9 +14,8 @@ import (
 const maxClientInfoRunes = 64
 
 // connLog writes the connection diagnostics of --log-connections: which client connected,
-// which methods and tools it called, whether it set a log level, and whether the shutdown
-// notice was sent to it. They let a developer tell, for each agent, whether it can receive
-// log notifications at all, and when it called which tool.
+// and which methods and tools it called. They let a developer tell, for each agent, which
+// protocol it connected with and when it called which tool.
 //
 // The lines name a connection by a number counted from 1 since the server started, never by
 // its MCP session ID, which would let anyone reading the output take over the connection.
@@ -36,7 +35,6 @@ type connLog struct {
 type connState struct {
 	number    int
 	described bool
-	logLevel  string
 }
 
 func newConnLog(s *mcp.Server, logf func(string, ...any)) *connLog {
@@ -72,10 +70,6 @@ func (c *connLog) middleware() mcp.Middleware {
 			switch method {
 			case "initialize", "server/discover":
 				// Written as the line of the client below.
-			case "logging/setLevel":
-				if p, ok := req.GetParams().(*mcp.SetLoggingLevelParams); ok && p != nil {
-					c.setLevel(ss, string(p.Level))
-				}
 			case "tools/call":
 				name := ""
 				switch p := req.GetParams().(type) {
@@ -125,39 +119,6 @@ func (c *connLog) describe(st *connState, req mcp.Request) {
 	c.logf("connection %d: initialized client=%q version=%q protocol=%s",
 		n, clean(info.Name), clean(info.Version), clean(r.ProtocolVersion()))
 }
-
-func (c *connLog) setLevel(ss *mcp.ServerSession, level string) {
-	c.mu.Lock()
-	st := c.stateLocked(ss)
-	st.logLevel = level
-	n := st.number
-	c.mu.Unlock()
-	c.logf("connection %d: log level %s", n, clean(level))
-}
-
-// shutdownNotice writes the outcome of sending the shutdown notice to one connection. The SDK
-// sends a log notification only to a client that set a log level, and reports no error when it
-// drops one, so the outcome follows from the recorded level: the notice has the level warning,
-// and a client that asked for a higher level does not get it.
-func (c *connLog) shutdownNotice(ss *mcp.ServerSession, err error) {
-	c.mu.Lock()
-	st := c.stateLocked(ss)
-	n, level := st.number, st.logLevel
-	c.mu.Unlock()
-	switch {
-	case err != nil:
-		c.logf("connection %d: shutdown notice failed", n)
-	case level == "":
-		c.logf("connection %d: shutdown notice not sent (the client set no log level)", n)
-	case aboveWarning[level]:
-		c.logf("connection %d: shutdown notice not sent (the log level %s is above warning)", n, clean(level))
-	default:
-		c.logf("connection %d: shutdown notice sent", n)
-	}
-}
-
-// aboveWarning holds the log levels at which a client does not receive a warning.
-var aboveWarning = map[string]bool{"error": true, "critical": true, "alert": true, "emergency": true}
 
 func (c *connLog) state(ss *mcp.ServerSession) *connState {
 	c.mu.Lock()

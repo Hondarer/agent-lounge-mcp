@@ -49,9 +49,15 @@ func New(cfg config.Config, sess Session) *Server {
 	d := &tools.Deps{Cfg: cfg, Store: sess.Store, LocalUser: sess.LocalUser}
 	impl := &mcp.Implementation{Name: "agent-lounge-mcp", Title: "agent-lounge-mcp", Version: version.Version}
 	registry := tools.Prepare(d)
-	// With no Capabilities option the SDK declares the logging capability, which clients need
-	// to set a log level and so to receive the shutdown notification.
-	s := mcp.NewServer(impl, &mcp.ServerOptions{Instructions: tools.Instructions(d)})
+	// An empty Capabilities keeps the SDK from declaring the logging capability, which it does
+	// when the option is nil: the server sends no log notifications. The stop reaches agents as
+	// the error of their tool calls (see BeginShutdown), which is all the CLIs pass on; none of
+	// the CLIs checked sets a log level, and MCP deprecates logging from protocol 2026-07-28.
+	// The SDK adds the tools capability from the registered tools.
+	s := mcp.NewServer(impl, &mcp.ServerOptions{
+		Instructions: tools.Instructions(d),
+		Capabilities: &mcp.ServerCapabilities{},
+	})
 	registry.Register(s)
 	srv := &Server{MCP: s, d: d, cfg: cfg}
 	if cfg.LogConnections {
@@ -64,24 +70,13 @@ func New(cfg config.Config, sess Session) *Server {
 // BeginShutdown tells agents that the server is stopping. The HTTP server must keep accepting
 // requests afterwards (see WaitForSessions), so that agents get this message rather than a
 // connection error and /healthz reports "stopping". From now on every tool call fails
-// with tools.ShutdownMessage, chat_inbox calls that wait for messages return it at once, and
-// every connected MCP session is sent the same text as a log notification of level warning.
+// with tools.ShutdownMessage, and chat_inbox calls that wait for messages return it at once.
 //
-// The SDK sends log notifications only to clients that set a log level (logging/setLevel);
-// other clients learn of the stop only from the error of their next or waiting tool call.
-// None of the agent CLIs checked so far (Claude Code, Codex, Copilot CLI, Grok, agy) sets a
-// level, and MCP has no notification that a client must pass on to its model, so an agent that
-// is waiting for an instruction learns of the stop from its next tool call.
-// ctx bounds the sending.
-func (s *Server) BeginShutdown(ctx context.Context) {
+// The error of a tool call is the only notice: MCP has no notification that a client must
+// pass on to its model, so an agent that is waiting for an instruction learns of the stop from
+// its next tool call.
+func (s *Server) BeginShutdown() {
 	s.d.BeginShutdown()
-	for ss := range s.MCP.Sessions() {
-		// An error means the client is already gone; the others are still notified.
-		err := ss.Log(ctx, &mcp.LoggingMessageParams{Level: "warning", Logger: "agent-lounge-mcp", Data: tools.ShutdownMessage})
-		if s.conns != nil {
-			s.conns.shutdownNotice(ss, err)
-		}
-	}
 }
 
 // WaitForSessions is the grace period after BeginShutdown: it returns when no MCP session
@@ -117,8 +112,23 @@ func Handler(s *Server, sess Session) http.Handler {
 	mux := http.NewServeMux()
 	// The SDK's own Host check (DNS rebinding protection) accepts only loopback names on a
 	// loopback connection, which would reject a reverse proxy's Host; checkHost replaces it.
+	//
+	// SessionTimeout closes connections that go without a request for cfg.ConnectionIdle: a
+	// client that stops using a connection without closing it (one left by a CLI that was
+	// killed, or by a CLI that opens a new connection) would otherwise stay, and keep its
+	// session shown as connected in lounge_who. Closing the connection ends the join (see
+	// tools/presence.go): the next tool call on a new connection asks the agent to call
+	// lounge_join again, and unread messages wait in the session. A request to a closed
+	// connection gets HTTP 404, on which clients open a new connection.
+	//
+	// The handler keeps a state for each connection, which the join is bound to. On such a
+	// handler the SDK (v1.8.0) serves the protocol versions up to 2025-11-25: a request of
+	// version 2026-07-28 gets the error -32022 with the supported versions, except
+	// server/discover, which answers with them; clients then connect again with initialize.
+	// Version 2026-07-28 is served only without a state for each connection, which the join
+	// cannot be bound to.
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return s.MCP },
-		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true})
+		&mcp.StreamableHTTPOptions{DisableLocalhostProtection: true, SessionTimeout: s.cfg.ConnectionIdle})
 	mux.Handle(MCPPath, checkHost(s.cfg, authenticate(s.cfg, sess, bindUser(mcpHandler))))
 	mux.HandleFunc("GET "+HealthPath, func(w http.ResponseWriter, r *http.Request) {
 		health(r.Context(), w, sess, s.d.Stopping(), s.d.WaitingCalls())

@@ -34,6 +34,11 @@ type Config struct {
 	// limit of the agents, or their waiting calls fail on the agent's side: Claude Code
 	// 2.1.325 gives up after 60 seconds. Agents keep waiting by calling chat_inbox again.
 	InboxWaitMax time.Duration
+	// ConnectionIdle is how long an MCP connection may go without a request before the server
+	// closes it (0: never). A request in progress, such as a waiting chat_inbox, keeps it open;
+	// an open event stream does not. It is not SessionIdle: closing a connection deletes
+	// nothing, and the agent joins the same session again on a new connection.
+	ConnectionIdle time.Duration
 
 	// The periodic cleanup (see store.Cleanup) runs at start-up and every CleanupInterval.
 	// A zero period disables its step.
@@ -67,8 +72,7 @@ type Config struct {
 	MemoryGrace         time.Duration
 
 	// LogConnections writes diagnostics of every MCP connection to standard error: its
-	// client, the methods and tools it calls, its log level, and whether the shutdown notice
-	// was sent to it. They hold no tool arguments or results.
+	// client and the methods and tools it calls. They hold no tool arguments or results.
 	LogConnections bool
 }
 
@@ -108,6 +112,7 @@ func Default() Config {
 		DBPath:          "lounge.db",
 		ShutdownTimeout: 5 * time.Second,
 		InboxWaitMax:    45 * time.Second,
+		ConnectionIdle:  time.Hour,
 
 		ExpireAfter:     14 * Day,
 		RetainFor:       30 * Day,
@@ -140,7 +145,7 @@ func (c Config) Validate() error {
 	for _, p := range []struct {
 		name string
 		d    time.Duration
-	}{{"--expire-after", c.ExpireAfter}, {"--retain-for", c.RetainFor}, {"--session-idle", c.SessionIdle},
+	}{{"--connection-idle", c.ConnectionIdle}, {"--expire-after", c.ExpireAfter}, {"--retain-for", c.RetainFor}, {"--session-idle", c.SessionIdle},
 		{"--memory-half-life", c.MemoryHalfLife}, {"--memory-grace", c.MemoryGrace}} {
 		if p.d < 0 {
 			return fmt.Errorf("%s %s: must not be negative (0 disables it)", p.name, p.d)
