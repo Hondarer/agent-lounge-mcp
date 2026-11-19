@@ -72,8 +72,10 @@ func TestConnectionLogOff(t *testing.T) {
 // the tool arguments.
 func TestConnectionLog(t *testing.T) {
 	s, l := logServer(t)
-	connectAs(t, s, "agent-a", "1.2.3")
+	a := connectAs(t, s, "agent-a", "1.2.3")
 	b := connectAs(t, s, "agent-b", "4.5")
+	// A client may still try to set a log level; it is written as any other request.
+	a.SetLoggingLevel(context.Background(), &mcp.SetLoggingLevelParams{Level: "info"})
 	testutil.Call[joined](t, b, "lounge_join", map[string]any{"name": "secret-session-name"})
 	testutil.CallErr(t, b, "chat_send", map[string]any{"to": "nobody", "body": "secret body"})
 	if _, err := b.ListTools(context.Background(), nil); err != nil {
@@ -88,6 +90,7 @@ func TestConnectionLog(t *testing.T) {
 		"connection 2: request tools/call lounge_join",
 		"connection 2: request tools/call chat_send",
 		"connection 2: request tools/list",
+		"connection 1: request logging/setLevel",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("missing %q in:\n%s", want, got)

@@ -12,7 +12,7 @@ import (
 )
 
 // idleTime is the --connection-idle of the tests: short, yet long enough for a few requests.
-const idleTime = 200 * time.Millisecond
+const idleTime = 500 * time.Millisecond
 
 func idleServer(t *testing.T, idle time.Duration) string {
 	t.Helper()
@@ -91,7 +91,7 @@ func TestWaitingInboxKeepsConnection(t *testing.T) {
 	base := idleServer(t, idleTime)
 	cs := testutil.ConnectHTTP(t, base+MCPPath)
 	testutil.Call[joined](t, cs, "lounge_join", map[string]any{"name": "waiter"})
-	in := testutil.Call[inbox](t, cs, "chat_inbox", map[string]any{"wait_seconds": 1})
+	in := testutil.Call[inbox](t, cs, "chat_inbox", map[string]any{"wait_seconds": 2})
 	if len(in.Messages) != 0 {
 		t.Fatalf("inbox = %+v", in)
 	}

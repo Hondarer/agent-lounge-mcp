@@ -153,24 +153,30 @@ def instruction_files(ctx: Context) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_snippet(ctx, server, session), encoding="utf-8")
         watch = FileWatch(folder / "notes.txt")
-        message = MidTaskMessage(server.url, session, watch)
-        # The harness's own connections (the snippet's and the peer's) are left out of the
-        # agent's tool calls: they are all the connections before the CLI starts.
-        deadline = time.monotonic() + 10
-        while not server.tool_calls("lounge_join") and time.monotonic() < deadline:
-            time.sleep(0.1)
-        own = {e.connection for e in server.events()}
-        agent = ctx.agent(folder).start()
-        began = time.monotonic()
         try:
-            reply, added = ask(agent, TASK, timeout=300)
+            message = MidTaskMessage(server.url, session, watch)
+        except BaseException:
+            watch.stop()
+            raise
+        try:
+            # The harness's own connections (the snippet's and the peer's) are left out of the
+            # agent's tool calls: they are all the connections before the CLI starts.
+            deadline = time.monotonic() + 10
+            while not server.tool_calls("lounge_join") and time.monotonic() < deadline:
+                time.sleep(0.1)
+            own = {e.connection for e in server.events()}
+            agent = ctx.agent(folder).start()
+            began = time.monotonic()
+            try:
+                reply, added = ask(agent, TASK, timeout=300)
+            finally:
+                message.stop()
+                watch.stop()
+            # The main result: whether the agent read the message by the time its reply ended.
+            state = message.state()
         finally:
             message.stop()
             watch.stop()
-        # The main result: whether the agent read the message by the time its reply ended.
-        try:
-            state = message.state()
-        finally:
             message.close()
         events = [e for e in server.events(began) if e.connection not in own]
         tools = [(e.at, e.text[len("request tools/call "):]) for e in events if e.text.startswith("request tools/call ")]
@@ -189,7 +195,7 @@ def instruction_files(ctx: Context) -> None:
             "message_state": state,
             # None when no message was sent: there was nothing to read.
             "message_read": None if message.message_id is None else state in ("delivered", "acked"),
-            "code_word_in_reply": screen.contains(added.upper(), message.word),
+            "code_word_in_reply": None if message.message_id is None else screen.contains(added.upper(), message.word),
         }
         if message.message_id is None and message.error:
             run["message_error"] = message.error
