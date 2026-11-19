@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 最終仕様 (design)
-最終更新日時: 2026-11-19 23:00:00 JST
+最終更新日時: 2026-11-20 03:38:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `261119-connection-guidance-overview.md` (全体管理文書)、`261119-connection-guidance-discussion.md` (検討用 Markdown)、`261119-connection-guidance-lightadr.md` (簡易 ADR)。いずれも削除されている場合があります。
@@ -162,9 +162,9 @@ Go SDK は v1.8.0 のままとし、HTTP の受け口は状態を持つ形のま
 | 項目 | 仕様 |
 | --- | --- |
 | 実行の回数 | CLI ごとに 5 回 (`RUNS = 5`) |
-| 作業の途中のメッセージ | 各回で、基盤のセッション (`iv-peer`) が、CLI より前に参加しておきます。`notes.txt` が作られた時点で、CLI のセッション (`iv-<CLI>-<回>`) 宛てに、ユーザーのスコープで、合言葉を含む知らせ (`No reply is needed.` を含む) を送ります。CLI のセッションがまだない場合は送れないため、その回は送れなかったと記録します |
+| 作業の途中のメッセージ | 各回で、基盤のセッション (`iv-peer`) が、CLI より前に参加しておきます。`notes.txt` が作られた後、CLI のセッション (`iv-<CLI>-<回>`) ができ次第、そのセッション宛てに、ユーザーのスコープで、合言葉を含む知らせ (`No reply is needed.` を含む) を送ります。応答が終わるまでにセッションができなかった回は、送れなかったと記録します。`notes.txt` からメッセージまでの秒数も記録します |
 | 主な結果 | CLI の応答が終わった時点の、そのメッセージの送達の状態。`delivered` または `acked` を「読んだ」とします |
-| 記録する値 (回ごと) | 既存の値 (参加、作業の前と後の `chat_inbox`、メモリの検索、呼んだツール) に加え、`message_sent`、`message_read`、`code_word_in_reply` (応答に合言葉が現れたか) |
+| 記録する値 (回ごと) | 既存の値 (参加、作業の前と後の `chat_inbox`、メモリの検索、呼んだツール) に加え、`message_sent`、`message_delay` (`notes.txt` からメッセージまでの秒数)、`message_state`、`message_read`、`code_word_in_reply` (応答に合言葉が現れたか) |
 | 記録する値 (集計) | 既存の回数に加え、`runs_with_message` (送れた回数)、`message_read_count` (読んだ回数) |
 | 貼る文面の取得 | `lounge_help` の結果のテキストから取り出します (構造化の出力に本文がない新しいサーバーと、本文がある前のサーバーの両方で動くように) |
 

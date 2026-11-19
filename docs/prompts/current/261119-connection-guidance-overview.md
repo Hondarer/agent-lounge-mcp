@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-20 03:09:00 JST
+最終更新日時: 2026-11-20 03:21:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `../past/261118-interactive-verification-backlog.md` (対策元の残課題一覧)。移動または削除されている場合があります。
@@ -19,7 +19,7 @@
 
 検討 ID: connection-guidance
 
-検討用 Markdown の版: 2
+検討用 Markdown の版: 3
 
 状態: 作業の実施中
 
@@ -48,17 +48,17 @@
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート: 作業着手の合意)
 - 🔄 4. 承認された最終仕様に従った作業の実施
-    - 🔄 4.1. 作業ブランチ `feature/connection-guidance` の作成と、作業前の記録の最初のコミット ([LADR-010](261119-connection-guidance-lightadr.md#ladr-010-作業ブランチと実装の担当)) ← **CURRENT**
-    - ⏸️ 4.2. 検証の基盤のシナリオ 5 の変更 (`scripts/interactive/harness/scenarios/guidance.py`: 作業の途中のメッセージと、その受信の判定) と、基盤の自己試験 ([LADR-006](261119-connection-guidance-lightadr.md#ladr-006-受信の改善の評価))
-    - ⏸️ 4.3. 改善の前の確認: コミット `a24aee1` のサーバーで、5 つの CLI のシナリオ 5 を 5 回ずつ実行し、モデルの名前を記録 ([LADR-009](261119-connection-guidance-lightadr.md#ladr-009-確認の回数とモデル))
-    - ⏸️ 4.4. 停止のログ通知の除去 (`internal/server/server.go`、`internal/server/connlog.go`、`logging` の capability、テスト、検証の基盤のシナリオ 1 と `connections()`) ([LADR-004](261119-connection-guidance-lightadr.md#ladr-004-停止の通知の手段))
-    - ⏸️ 4.5. プロトコルの版の扱いのテスト (`server/discover` への応答と、2026-07-28 の他の要求への `-32022`) ([LADR-003](261119-connection-guidance-lightadr.md#ladr-003-プロトコルの版-2026-07-28-への対応))
-    - ⏸️ 4.6. 使われない接続の扱い (`internal/server/server.go`、`cmd/agent-lounge-mcp/main.go`、`internal/config/`、テスト。`--connection-idle`、既定 1 時間) ([LADR-005](261119-connection-guidance-lightadr.md#ladr-005-使われなくなった接続の扱い))
-    - ⏸️ 4.7. `lounge_help` の出力 (`internal/tools/help.go`: 構造化の出力からの本文の除去と、本文を 18,000 バイト以下にすることと、大きさのテスト) ([LADR-008](261119-connection-guidance-lightadr.md#ladr-008-lounge_help-の出力))
-    - ⏸️ 4.8. ツールの説明文と貼る文面 (`internal/tools/lounge.go`、`internal/tools/chat.go`、`internal/tools/help.go`) ([LADR-007](261119-connection-guidance-lightadr.md#ladr-007-受信の案内の改善))
+    - ✅ 4.1. 作業ブランチ `feature/connection-guidance` の作成と、作業前の記録の最初のコミット ([LADR-010](261119-connection-guidance-lightadr.md#ladr-010-作業ブランチと実装の担当))
+    - ✅ 4.2. 検証の基盤のシナリオ 5 の変更 (`scripts/interactive/harness/scenarios/guidance.py`: 作業の途中のメッセージと、その受信の判定) と、基盤の自己試験 ([LADR-006](261119-connection-guidance-lightadr.md#ladr-006-受信の改善の評価))
+    - 🔄 4.3. 改善の前の確認: コミット `a24aee1` のサーバーで、5 つの CLI のシナリオ 5 を 5 回ずつ実行し、モデルの名前を記録 ([LADR-009](261119-connection-guidance-lightadr.md#ladr-009-確認の回数とモデル)) ← **CURRENT**
+    - ✅ 4.4. 停止のログ通知の除去 (`internal/server/server.go`、`internal/server/connlog.go`、`logging` の capability、テスト、検証の基盤のシナリオ 1 と `connections()`) ([LADR-004](261119-connection-guidance-lightadr.md#ladr-004-停止の通知の手段))
+    - ✅ 4.5. プロトコルの版の扱いのテスト (`server/discover` への応答と、2026-07-28 の他の要求への `-32022`) ([LADR-003](261119-connection-guidance-lightadr.md#ladr-003-プロトコルの版-2026-07-28-への対応))
+    - ✅ 4.6. 使われない接続の扱い (`internal/server/server.go`、`cmd/agent-lounge-mcp/main.go`、`internal/config/`、テスト。`--connection-idle`、既定 1 時間) ([LADR-005](261119-connection-guidance-lightadr.md#ladr-005-使われなくなった接続の扱い))
+    - ✅ 4.7. `lounge_help` の出力 (`internal/tools/help.go`: 構造化の出力からの本文の除去と、本文を 18,000 バイト以下にすることと、大きさのテスト) ([LADR-008](261119-connection-guidance-lightadr.md#ladr-008-lounge_help-の出力))
+    - ✅ 4.8. ツールの説明文と貼る文面 (`internal/tools/lounge.go`、`internal/tools/chat.go`、`internal/tools/help.go`) ([LADR-007](261119-connection-guidance-lightadr.md#ladr-007-受信の案内の改善))
     - ⏸️ 4.9. 改善の後の確認: 5 つの CLI のシナリオ 5 を 5 回ずつ実行。Copilot CLI の `lounge_help` の読み方。5 つの CLI の閉じられた接続の後の動作 (`--connection-idle 30s`)
-    - ⏸️ 4.10. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`) と `AGENTS.md` の更新 (Windows の側の `-` の表し方を含む。[LADR-011](261119-connection-guidance-lightadr.md#ladr-011-確認する-os-と-windows-の側の表し方))
-    - ⏸️ 4.11. 正本ドキュメントおよびコード コメントへの永続的知見の反映
+    - 🔄 4.10. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`) と `AGENTS.md` の更新 (Windows の側の `-` の表し方を含む。[LADR-011](261119-connection-guidance-lightadr.md#ladr-011-確認する-os-と-windows-の側の表し方))
+    - 🔄 4.11. 正本ドキュメントおよびコード コメントへの永続的知見の反映
     - ⏸️ 4.12. 機械的検証 (`go vet ./...`、`go test ./...`、`python3 -m unittest discover -s scripts/interactive/tests`)
     - ⏸️ 4.13. 実装のレビュー (サブエージェント)
     - ⏸️ 4.14. 確認の記録 (`261119-connection-guidance-validation.md`) の作成
@@ -122,6 +122,7 @@
 | [Q-017](261119-connection-guidance-discussion.md#q-017-使われない接続を閉じるまでの時間) | 使われない接続を閉じるまでの時間 | 解決済み | Q-016、Q-018 | LADR-005 |
 | [Q-018](261119-connection-guidance-discussion.md#q-018-閉じるまでの時間の起動オプション) | 閉じるまでの時間の起動オプション | 解決済み | Q-016、Q-017 | LADR-005 |
 | [Q-019](261119-connection-guidance-discussion.md#q-019-lounge_help-の本文の大きさ) | lounge_help の本文の大きさ | 解決済み | Q-004、Q-008、Q-009 | LADR-008 |
+| [Q-020](261119-connection-guidance-discussion.md#q-020-作業の途中のメッセージを送る時点) | 作業の途中のメッセージを送る時点 | 解決済み | Q-006、Q-011 | LADR-006 |
 
 ## 対象成果物と合意版
 
@@ -129,7 +130,7 @@
 
 検討用 Markdown の合意版 (第 1 ゲート): 2
 
-最終仕様 (design.md) の合意版 (第 2 ゲート): 承認済み (2026-11-19 23:00 の版)
+最終仕様 (design.md) の合意版 (第 2 ゲート): 承認済み (2026-11-19 23:00 の版。第 7.1 節は 2026-11-20 03:38 に Q-020 で改めた)
 
 更新予定の成果物: `internal/server/`、`internal/tools/`、`internal/config/`、`cmd/agent-lounge-mcp/`、`scripts/interactive/`、`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`、`AGENTS.md` (最終仕様の各章)
 
@@ -147,6 +148,11 @@
 | 2026-11-19 22:54 | 第 2 ターンの回答の受領 | Q-014 から Q-019 に回答 (すべて A、補足なし)。Q-010 と Q-014 から Q-019 を解決済みにし、LADR-005 と LADR-008 を更新、LADR-011 を追加 |
 | 2026-11-19 23:00 | 第 1 ゲートの通過と最終仕様の作成 | 未解決の Q と観点の未確認がないことを確認 (合意版 2)。`261119-connection-guidance-design.md` を作成し、第 2 ゲートの承認を依頼 |
 | 2026-11-20 03:09 | 第 2 ゲートの通過 | 利用者が最終仕様を承認 (「承認します」)。作業の実施に着手 |
+| 2026-11-20 03:11 | 作業ブランチの作成 | `feature/connection-guidance` を作成し、作業前の記録を最初のコミットにした |
+| 2026-11-20 03:12 | 改善の前の確認の開始 | コミット `a24aee1` から一時フォルダーにビルドしたサーバーで、シナリオ 5 を実行。Codex の週の利用量の残りは 18% (前の実行の記録から確認。1 回の実行で 1% 未満) で、足りると判断。Claude Code は、確認用のフォルダーが Claude Code の作業用の一時フォルダーの下にあり `CLAUDE.md` を読まなかったため、`/tmp` の直下でやり直す (前の案件の既知の制限) |
+| 2026-11-20 03:20 より前 | 利用者の指示 | 「codexが10%を切ったら、OpusやSonnetを活用してください。」Codex の週の利用量の残りが 10% を切ったら、残りの確認を Opus または Sonnet (Claude Code) で行う |
+| 2026-11-20 03:34 | 改善の前の確認の中断 | 改善の前の実行で、Claude Code と agy が参加の前に `notes.txt` を作り、作業の途中のメッセージを送れなかった。Codex の週の利用量の残りは 18% |
+| 2026-11-20 03:38 | 追加の確認と最終仕様の改訂 | [Q-020](261119-connection-guidance-discussion.md#q-020-作業の途中のメッセージを送る時点) を対話セッションで確認 (A)。最終仕様の第 7.1 節と LADR-006 を改め、検証の基盤を直して、改善の前の実行を 5 つの CLI ともやり直す |
 
 ## 反映と検証の記録
 

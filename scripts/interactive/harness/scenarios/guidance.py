@@ -54,12 +54,14 @@ def _snippet(ctx: Context, server, session: str) -> str:
 
 
 class MidTaskMessage:
-    """Sends the CLI's session a message the moment notes.txt appears: a message that arrives
-    in the middle of the task, which the agent reads only if it checks its inbox while it works."""
+    """Sends the CLI's session a message once notes.txt appears and the session exists: a message
+    that arrives in the middle of the task, which the agent reads only if it checks its inbox
+    while it works."""
 
     def __init__(self, url: str, session: str, watch: FileWatch):
         self.word = screen.token().upper()
         self.message_id: int | None = None
+        self.delay: float | None = None  # seconds from notes.txt to the message
         self.error = ""
         self._session = session
         self._watch = watch
@@ -73,15 +75,21 @@ class MidTaskMessage:
     def _run(self) -> None:
         while not self._stop.is_set() and self._watch.seen is None:
             time.sleep(0.1)
-        if self._watch.seen is None:
-            return
-        try:
-            sent = self._peer.call("chat_send", {"to": self._session, "scope": "user",
-                                                 "body": f"The code word is {self.word}. No reply is needed."})
-            self.message_id = sent["message_id"]
-        except (ToolError, ValueError, OSError) as e:
-            # The CLI's session does not exist yet when it has not joined before writing the file.
-            self.error = str(e)
+        # Some agents write the file before they join: the message is then sent as soon as the
+        # CLI's session exists, until the reply ends.
+        while not self._stop.is_set() and self._watch.seen is not None:
+            try:
+                sent = self._peer.call("chat_send", {"to": self._session, "scope": "user",
+                                                     "body": f"The code word is {self.word}. No reply is needed."})
+                self.message_id = sent["message_id"]
+                self.delay = round(time.monotonic() - self._watch.seen, 1)
+                return
+            except ToolError as e:
+                self.error = str(e)  # no such session yet
+            except (ValueError, OSError) as e:
+                self.error = str(e)
+                return
+            time.sleep(0.2)
 
     def stop(self) -> None:
         self._stop.set()
@@ -177,12 +185,13 @@ def instruction_files(ctx: Context) -> None:
             "inbox_after_work": None if created is None else any(t == "chat_inbox" and at >= created for at, t in tools),
             "memory_search": any(t == "memory_search" for _, t in tools),
             "message_sent": message.message_id is not None,
+            "message_delay": message.delay,
             "message_state": state,
             # None when no message was sent: there was nothing to read.
             "message_read": None if message.message_id is None else state in ("delivered", "acked"),
             "code_word_in_reply": screen.contains(added.upper(), message.word),
         }
-        if message.error:
+        if message.message_id is None and message.error:
             run["message_error"] = message.error
         runs.append(run)
         v["runs"] = runs  # kept when a later run fails
