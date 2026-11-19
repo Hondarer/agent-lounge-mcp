@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-20 03:21:00 JST
+最終更新日時: 2026-11-20 04:50:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `../past/261118-interactive-verification-backlog.md` (対策元の残課題一覧)。移動または削除されている場合があります。
@@ -21,7 +21,7 @@
 
 検討用 Markdown の版: 3
 
-状態: 作業の実施中
+状態: 成果物の承認待ち
 
 ## 作業 WBS と進捗管理
 
@@ -47,27 +47,27 @@
     - ✅ 3.1. `261119-connection-guidance-design.md` の作成 (残課題一覧の対象課題の状態と経緯を更新)
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート: 作業着手の合意)
-- 🔄 4. 承認された最終仕様に従った作業の実施
+- ✅ 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. 作業ブランチ `feature/connection-guidance` の作成と、作業前の記録の最初のコミット ([LADR-010](261119-connection-guidance-lightadr.md#ladr-010-作業ブランチと実装の担当))
     - ✅ 4.2. 検証の基盤のシナリオ 5 の変更 (`scripts/interactive/harness/scenarios/guidance.py`: 作業の途中のメッセージと、その受信の判定) と、基盤の自己試験 ([LADR-006](261119-connection-guidance-lightadr.md#ladr-006-受信の改善の評価))
-    - 🔄 4.3. 改善の前の確認: コミット `a24aee1` のサーバーで、5 つの CLI のシナリオ 5 を 5 回ずつ実行し、モデルの名前を記録 ([LADR-009](261119-connection-guidance-lightadr.md#ladr-009-確認の回数とモデル)) ← **CURRENT**
+    - ✅ 4.3. 改善の前の確認: コミット `a24aee1` のサーバーで、5 つの CLI のシナリオ 5 を 5 回ずつ実行し、モデルの名前を記録 ([LADR-009](261119-connection-guidance-lightadr.md#ladr-009-確認の回数とモデル))
     - ✅ 4.4. 停止のログ通知の除去 (`internal/server/server.go`、`internal/server/connlog.go`、`logging` の capability、テスト、検証の基盤のシナリオ 1 と `connections()`) ([LADR-004](261119-connection-guidance-lightadr.md#ladr-004-停止の通知の手段))
     - ✅ 4.5. プロトコルの版の扱いのテスト (`server/discover` への応答と、2026-07-28 の他の要求への `-32022`) ([LADR-003](261119-connection-guidance-lightadr.md#ladr-003-プロトコルの版-2026-07-28-への対応))
     - ✅ 4.6. 使われない接続の扱い (`internal/server/server.go`、`cmd/agent-lounge-mcp/main.go`、`internal/config/`、テスト。`--connection-idle`、既定 1 時間) ([LADR-005](261119-connection-guidance-lightadr.md#ladr-005-使われなくなった接続の扱い))
     - ✅ 4.7. `lounge_help` の出力 (`internal/tools/help.go`: 構造化の出力からの本文の除去と、本文を 18,000 バイト以下にすることと、大きさのテスト) ([LADR-008](261119-connection-guidance-lightadr.md#ladr-008-lounge_help-の出力))
     - ✅ 4.8. ツールの説明文と貼る文面 (`internal/tools/lounge.go`、`internal/tools/chat.go`、`internal/tools/help.go`) ([LADR-007](261119-connection-guidance-lightadr.md#ladr-007-受信の案内の改善))
-    - ⏸️ 4.9. 改善の後の確認: 5 つの CLI のシナリオ 5 を 5 回ずつ実行。Copilot CLI の `lounge_help` の読み方。5 つの CLI の閉じられた接続の後の動作 (`--connection-idle 30s`)
-    - 🔄 4.10. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`) と `AGENTS.md` の更新 (Windows の側の `-` の表し方を含む。[LADR-011](261119-connection-guidance-lightadr.md#ladr-011-確認する-os-と-windows-の側の表し方))
-    - 🔄 4.11. 正本ドキュメントおよびコード コメントへの永続的知見の反映
-    - ⏸️ 4.12. 機械的検証 (`go vet ./...`、`go test ./...`、`python3 -m unittest discover -s scripts/interactive/tests`)
-    - ⏸️ 4.13. 実装のレビュー (サブエージェント)
-    - ⏸️ 4.14. 確認の記録 (`261119-connection-guidance-validation.md`) の作成
-    - ⏸️ 4.15. 受入条件への適合確認 (全作業の完了確認)
-    - ⏸️ 4.16. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
-    - ⏸️ 4.17. 残課題一覧の再構築と整理 (当該作業中に解消・容認した項目の除外、起票できる詳細度への書き直し)
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)
+    - ✅ 4.9. 改善の後の確認: 5 つの CLI のシナリオ 5 を 5 回ずつ実行。Copilot CLI の `lounge_help` の読み方。5 つの CLI の閉じられた接続の後の動作 (`--connection-idle 30s`)
+    - ✅ 4.10. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`) と `AGENTS.md` の更新 (Windows の側の `-` の表し方を含む。[LADR-011](261119-connection-guidance-lightadr.md#ladr-011-確認する-os-と-windows-の側の表し方))
+    - ✅ 4.11. 正本ドキュメントおよびコード コメントへの永続的知見の反映
+    - ✅ 4.12. 機械的検証 (`go vet ./...`、`go test ./...`、`python3 -m unittest discover -s scripts/interactive/tests`)
+    - ✅ 4.13. 実装のレビュー (サブエージェント)
+    - ✅ 4.14. 確認の記録 (`261119-connection-guidance-validation.md`) の作成
+    - ✅ 4.15. 受入条件への適合確認 (全作業の完了確認)
+    - ✅ 4.16. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
+    - ✅ 4.17. 残課題一覧の再構築と整理 (当該作業中に解消・容認した項目の除外、起票できる詳細度への書き直し)
+- 🔄 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - 🔄 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了) ← **CURRENT**
 
 ## 対象と参照資料
 
@@ -153,7 +153,16 @@
 | 2026-11-20 03:20 より前 | 利用者の指示 | 「codexが10%を切ったら、OpusやSonnetを活用してください。」Codex の週の利用量の残りが 10% を切ったら、残りの確認を Opus または Sonnet (Claude Code) で行う |
 | 2026-11-20 03:34 | 改善の前の確認の中断 | 改善の前の実行で、Claude Code と agy が参加の前に `notes.txt` を作り、作業の途中のメッセージを送れなかった。Codex の週の利用量の残りは 18% |
 | 2026-11-20 03:38 | 追加の確認と最終仕様の改訂 | [Q-020](261119-connection-guidance-discussion.md#q-020-作業の途中のメッセージを送る時点) を対話セッションで確認 (A)。最終仕様の第 7.1 節と LADR-006 を改め、検証の基盤を直して、改善の前の実行を 5 つの CLI ともやり直す |
+| 2026-11-20 04:20 | 改善の後の確認 | シナリオ 5 (5 つの CLI × 5 回)、Copilot CLI の `lounge_help` の読み方、閉じられた接続の後の動作 (5 つの CLI) を確認。実装のレビュー (サブエージェント) の指摘に対応 |
+| 2026-11-20 04:50 | 第 3 ゲートの承認の依頼 | 文書の更新、確認の記録の作成、簡易 ADR の最終確認 (LADR-005 を更新)、残課題一覧の整理 (BL-037 と BL-039 を除き、BL-036、BL-028、BL-040 を更新) を終え、成果物の承認を依頼 |
 
 ## 反映と検証の記録
 
-未着手。作業後の対応箇所、検証結果、未完了項目を記録します。
+| 項目 | 内容 |
+| --- | --- |
+| コミット (作業ブランチ `feature/connection-guidance`) | `fe83cca` (作業前の記録)、`833040b` (検証の基盤のシナリオ 5)、`0b8a73d` (サーバー)、`120fa1f` (Q-020 の基盤の修正と記録)、`ef1f072` (レビューの指摘への対応)、`403dfe8` (文書)。確認の記録と、この文書の整理は、未コミット |
+| 対象成果物 | `internal/server/` (`server.go`、`connlog.go`、テスト)、`internal/tools/` (`help.go`、`tools.go`、`lounge.go`、`chat.go`、`notify.go`、テスト)、`internal/config/`、`cmd/agent-lounge-mcp/`、`scripts/interactive/`、`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`、`AGENTS.md`、`.agents/skills/agent-lounge-connect/SKILL.md` |
+| 機械的検証 | `go vet ./...`、`go test -race ./...`、基盤の自己試験 (18 件)。すべて成功 |
+| 確認の結果 | `261119-connection-guidance-validation.md`。作業の途中の知らせを読んだ回数は、改善の前の 25 回中 16 回から、改善の後の 25 回中 25 回になった。agy は、閉じられた接続の後にツールを呼べない (BL-040) |
+| 受入条件 (最終仕様の第 10 章) | 1 から 12 を満たすことを確認した。第 9 章の文書に加え、SKILL.md を更新した (確認の記録の「最終仕様との相違」) |
+| 未完了 | なし。`main` へのマージは、成果物の承認の後に、利用者の指示で行う |
