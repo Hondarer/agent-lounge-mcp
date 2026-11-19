@@ -102,6 +102,8 @@ func TestOriginRelativePath(t *testing.T) {
 		{"gitserver/team/repo", ""},
 		{"foo", ""},
 		{"repo", ""},
+		{"repo.git", ""},
+		{"my.app", ""},
 		{"https://gitserver/team/repo", "gitserver/team/repo"},
 		{"git@gitserver:team/repo", "gitserver/team/repo"},
 		{"gitserver:team/repo", "gitserver/team/repo"},

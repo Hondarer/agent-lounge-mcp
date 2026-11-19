@@ -68,6 +68,6 @@ def interrupt_process(proc: subprocess.Popen) -> None:
 
 
 def kill_tree(proc: subprocess.Popen) -> None:
-    """End proc and its descendants. taskkill follows the parent IDs, so it also reaches the
-    children of a launcher that has already ended its own work."""
+    """End proc and its descendants: taskkill /T follows the parent IDs from proc down. It
+    finds nothing when proc itself has already ended (run then gives the output up)."""
     subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=30)

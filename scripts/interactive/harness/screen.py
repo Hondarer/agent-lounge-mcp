@@ -59,8 +59,9 @@ class PlainStream:
     every piece: the cost of a wait would otherwise grow with the square of the output.
 
     The end of a piece can fall inside an escape sequence or between a carriage return and its
-    line feed. Such an end is held back and converted with the next piece, so that the text
-    is the same as plain of the whole output.
+    line feed (also with escape sequences between the two, since plain removes those first).
+    Such an end is held back and converted with the next piece, so that the text is the same
+    as plain of the whole output.
     """
 
     def __init__(self) -> None:
@@ -72,9 +73,17 @@ class PlainStream:
     def feed(self, data: str) -> None:
         buf = self._held + data
         m = _INCOMPLETE.search(buf)
-        cut = m.start() if m and len(buf) - m.start() <= _MAX_HELD else len(buf)
-        if cut and buf[cut - 1] == "\r":
-            cut -= 1
+        if not m:
+            cut = len(buf)
+        elif len(buf) - m.start() <= _MAX_HELD:
+            cut = m.start()
+        else:
+            # Too long to wait for its end; a final ESC can still begin the next sequence.
+            cut = len(buf) - 1 if buf.endswith("\x1b") else len(buf)
+        # A carriage return followed only by what plain removes may get its line feed next.
+        r = buf.rfind("\r", 0, cut)
+        if r != -1 and cut - r <= _MAX_HELD and not plain(buf[r + 1:cut]):
+            cut = r
         self._held = buf[cut:]
         if cut:
             part = plain(buf[:cut])

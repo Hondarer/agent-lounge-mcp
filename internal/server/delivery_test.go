@@ -218,7 +218,7 @@ func TestFailedCallKeepsSessionInUse(t *testing.T) {
 		return list[0].LastSeenAt
 	}
 	before := lastSeen()
-	time.Sleep(20 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond) // well above the clock's resolution on every system
 	testutil.CallErr(t, cs, "chat_history", map[string]any{"limit": -1})
 	if after := lastSeen(); !after.After(before) {
 		t.Errorf("last use: %s, then %s", before, after)

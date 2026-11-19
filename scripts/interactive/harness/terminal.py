@@ -141,11 +141,12 @@ class Terminal:
             return self._closed
 
     def wait_for(self, needles: Sequence[str], timeout: float, start: int = 0,
-                 on_screen: Sequence[str] = ()) -> str | None:
+                 on_screen: Sequence[str] = (), on_screen_start: int = 0) -> str | None:
         """Wait until one of needles shows (see screen.contains), on the screen or its history,
         or in the plain output after start; or until one of on_screen shows on the screen as it
-        looks now (text that asks for an answer, such as a permission prompt: its old copies
-        in the history must not count).
+        looks now and was written after on_screen_start (text that asks for an answer, such as
+        a permission prompt: neither its old copies in the history nor a prompt that was
+        answered and is still on the screen must count).
 
         Returns the text found, or None when the timeout passed or the program ended first.
 
@@ -156,6 +157,7 @@ class Terminal:
         deadline = time.monotonic() + timeout
         with self._lock:
             begin = self._plain_offset(start)
+            asked = self._plain_offset(on_screen_start)
             searched, history = begin, None
             while True:
                 plain = self._plain.text(max(begin, searched - _OVERLAP))
@@ -167,12 +169,12 @@ class Terminal:
                 for needle in needles:
                     if screen.contains(shown, needle) or screen.contains(plain, needle):
                         return needle
-                if on_screen:
-                    now = self._screen.display()
-                    for needle in on_screen:
-                        if screen.contains(now, needle, 0):
-                            return needle
                 remaining = deadline - time.monotonic()
+                if on_screen and remaining > 0 and not self._closed:
+                    now, written = self._screen.display(), self._plain.text(asked)
+                    for needle in on_screen:
+                        if screen.contains(now, needle, 0) and screen.contains(written, needle):
+                            return needle
                 if remaining <= 0 or self._closed:
                     return None
                 self._lock.wait(min(remaining, 0.5))
@@ -304,12 +306,22 @@ def run(argv: Sequence[str], timeout: float, **kwargs) -> subprocess.CompletedPr
     try:
         out, err = proc.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
-        _platform().kill_tree(proc)
+        try:
+            _platform().kill_tree(proc)
+        except (OSError, subprocess.SubprocessError):
+            pass  # the process itself is ended below
         try:
             out, err = proc.communicate(timeout=15)
         except subprocess.TimeoutExpired:
             # A process that left the tree still holds the pipes: give the output up.
             proc.kill()
             out, err = None, None
+            for pipe in (proc.stdout, proc.stderr):
+                if pipe:
+                    pipe.close()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
         raise subprocess.TimeoutExpired(argv, timeout, output=out, stderr=err) from None
     return subprocess.CompletedProcess(argv, proc.returncode, out, err)

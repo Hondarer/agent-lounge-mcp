@@ -121,10 +121,15 @@ func TestTokenChecksKeepValidWait(t *testing.T) {
 		t.Errorf("valid token: %s", testutil.Text(res))
 	}
 
-	local := testutil.Connect(t, s.MCP, nil)
-	testutil.Call[joined](t, local, "lounge_join", map[string]any{"name": "l"})
-	ch = callAsync(context.Background(), local, "chat_inbox", map[string]any{"wait_seconds": 1})
-	if res := receive(t, ch); res.IsError {
-		t.Errorf("local user: %s", testutil.Text(res))
+	// The user local: over HTTP without a token, and over an in-memory transport.
+	for name, local := range map[string]*mcp.ClientSession{
+		"http":      testutil.ConnectHTTP(t, base+MCPPath),
+		"in-memory": testutil.Connect(t, s.MCP, nil),
+	} {
+		testutil.Call[joined](t, local, "lounge_join", map[string]any{"name": "l-" + name})
+		ch = callAsync(context.Background(), local, "chat_inbox", map[string]any{"wait_seconds": 1})
+		if res := receive(t, ch); res.IsError {
+			t.Errorf("local user (%s): %s", name, testutil.Text(res))
+		}
 	}
 }

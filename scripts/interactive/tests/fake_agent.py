@@ -9,7 +9,8 @@ answers "ivdone" followed by "<token>" with IVDONE<TOKEN>. An instruction contai
 "permission" asks for permission before the reply (a prompt that leaves the screen once it is
 answered with Enter, as many times as the word occurs). "pause" shows the completion word,
 then works on without output for longer than a short settle time under the status "esc to
-interrupt", and writes LATEWORK when it is done.
+interrupt", and writes LATEWORK when it is done. "stuck" shows a permission prompt that no
+key answers.
 """
 
 import os
@@ -39,6 +40,11 @@ def main() -> None:
             continue
         if "slow" in line:
             time.sleep(3)
+        if "stuck" in line:
+            out("Do you want to run this command?\r\n> 1. Yes\r\n")
+            while sys.stdin.readline().strip() != "quit":
+                pass
+            return
         for _ in range(line.count("permission")):
             out("\x1b[2J\x1b[H\x1b[1mRun a command\x1b[0m\r\nDo you want to run this command?\r\n> 1. Yes\r\n  2. No\r\n")
             if not sys.stdin.readline():

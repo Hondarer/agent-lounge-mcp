@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Callable, Sequence
 
 from . import screen
-from .terminal import Terminal, open_terminal
+from .terminal import Terminal, TerminalClosed, open_terminal
 
 SERVER = "agent-lounge"  # the name the CLIs register the server under
 
@@ -262,46 +262,51 @@ class Agent:
         deadline = began + timeout
         prompts = [text for text, _ in self.d.approvals]
         approvals = 0
-        # The lower-case token of the completion word shows that the instruction was typed.
-        self.term.type_line(f"{instruction} {ask}", shown=word[len("IVDONE"):].lower(), clear=self.d.clear_keys)
-        found = False
-        while not found:
-            hit = self.term.wait_for([word], max(0.0, deadline - time.monotonic()), start=start, on_screen=prompts)
-            if hit in prompts:
-                approvals += self._approve(hit)
-            elif hit:
-                found = True
-            else:
-                break
-        complete = False
-        if found:
-            # At least one look after the word, also when it arrived just before the timeout.
-            deadline = max(deadline, time.monotonic() + settle + 1)
-            while not complete and time.monotonic() < deadline and not self.term.closed():
+        answered = start  # output before this was looked at for prompts
+        found = complete = False
+        try:
+            # The lower-case token of the completion word shows that the instruction was typed.
+            self.term.type_line(f"{instruction} {ask}", shown=word[len("IVDONE"):].lower(), clear=self.d.clear_keys)
+            while not found and time.monotonic() < deadline:
+                hit = self.term.wait_for([word], deadline - time.monotonic(), start=start,
+                                         on_screen=prompts, on_screen_start=answered)
+                if hit in prompts:
+                    answered = self._approve(hit)
+                    approvals += 1
+                elif hit:
+                    found = True
+                else:
+                    break
+            if found:
+                # At least one look after the word, also when it arrived just before the timeout.
+                deadline = max(deadline, time.monotonic() + settle + 1)
+            while found and not complete and time.monotonic() < deadline and not self.term.closed():
                 quiet = self.term.wait_quiet(settle, max(settle + 1, deadline - time.monotonic()))
-                now = self.term.display()
-                prompt = next((p for p in prompts if screen.contains(now, p, 0)), None)
-                if prompt:
-                    approvals += self._approve(prompt)
-                elif quiet and not any(screen.contains(now, b, 0) for b in self.d.busy):
+                hit = self.term.wait_for([], 0.1, on_screen=prompts, on_screen_start=answered) if prompts else None
+                if hit:
+                    answered = self._approve(hit)
+                    approvals += 1
+                elif quiet and not any(screen.contains(self.term.display(), b, 0) for b in self.d.busy):
                     complete = True
                 elif quiet:
                     time.sleep(1)  # still working without output: look again
+        except TerminalClosed:
+            complete = False  # the CLI ended while it was asked
         self.approvals += approvals
         return Reply(complete, self.term.transcript() + "\n" + self.term.text(start), time.monotonic() - began, approvals)
 
     def _approve(self, prompt: str) -> int:
-        """Answer a permission prompt that is on the screen, and wait until it left the screen,
-        so that one prompt is not answered twice. Returns the number of prompts answered (1)."""
+        """Answer a permission prompt that is on the screen. Returns the end of the output
+        before the answer: a prompt counts as new only when it is written after that, so that
+        a prompt that stays on the screen is not answered again and again, while the next
+        prompt counts even when the CLI writes it at once."""
         assert self.term
         keys = next(keys for text, keys in self.d.approvals if text == prompt)
+        before = self.term.mark()
         for key in keys:
             self.term.write(key)
             time.sleep(0.5)
-        gone = time.monotonic() + 10
-        while time.monotonic() < gone and screen.contains(self.term.display(), prompt, 0):
-            time.sleep(0.2)
-        return 1
+        return before
 
     def quit(self) -> None:
         if self.term:

@@ -59,15 +59,29 @@ class PlainStreamTest(unittest.TestCase):
             self.assertEqual(s.text(), whole)
             self.assertEqual(s.text(5), whole[5:])
 
+    def test_carriage_return_before_an_escape_and_a_split(self):
+        for pieces in (["a\r\x1b[K", "\nb"], ["a\r", "\x1b[K", "\nb"], ["a\r\x1b", "[K\n", "b"]):
+            s = screen.PlainStream()
+            for piece in pieces:
+                s.feed(piece)
+            self.assertEqual(s.text(), screen.plain("".join(pieces)), pieces)
+
+    def test_escape_at_the_end_of_a_string_that_never_ends(self):
+        pieces = ["x\x1b]" + "y" * 5000 + "\x1b", "[31mred"]
+        s = screen.PlainStream()
+        for piece in pieces:
+            s.feed(piece)
+        self.assertTrue(s.text().endswith("yred"), s.text()[-20:])
+
     def test_unfinished_end_is_held(self):
         s = screen.PlainStream()
         s.feed("one\x1b[3")
         self.assertEqual(s.text(), "one3")  # read as it stands, like plain of the output so far
         s.feed("1mtwo\r")
-        self.assertEqual(s.text(), "onetwo\n")
+        self.assertEqual(s.text(), screen.plain("one\x1b[31mtwo\r"))
         s.feed("\nthree")
         self.assertEqual(s.text(), "onetwo\nthree")
-        self.assertEqual(s.text(len("onetwo")), "\nthree")
+        self.assertEqual(s.text(len("one")), "two\nthree")
 
     def test_a_string_that_never_ends_is_not_held_for_ever(self):
         s = screen.PlainStream()
@@ -252,6 +266,15 @@ class AgentTest(unittest.TestCase):
         self.assertEqual((reply.approvals, a.approvals), (2, 2))
         reply = a.ask("Say hello.", timeout=20, settle=1)
         self.assertEqual((reply.approvals, a.approvals), (0, 2))
+        a.quit()
+
+    def test_a_prompt_that_stays_is_answered_once_and_the_timeout_holds(self):
+        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        began = time.monotonic()
+        reply = a.ask("This one is stuck.", timeout=5, settle=1)
+        self.assertFalse(reply.complete)
+        self.assertEqual(reply.approvals, 1)
+        self.assertLess(time.monotonic() - began, 15)
         a.quit()
 
     def test_reply_is_not_complete_while_busy(self):
