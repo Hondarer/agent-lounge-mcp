@@ -160,7 +160,7 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| コミット (作業ブランチ `feature/connection-guidance`) | `fe83cca` (作業前の記録)、`833040b` (検証の基盤のシナリオ 5)、`0b8a73d` (サーバー)、`120fa1f` (Q-020 の基盤の修正と記録)、`ef1f072` (レビューの指摘への対応)、`403dfe8` (文書)。確認の記録と、この文書の整理は、未コミット |
+| コミット (作業ブランチ `feature/connection-guidance`) | `fe83cca` (作業前の記録)、`833040b` (検証の基盤のシナリオ 5)、`0b8a73d` (サーバー)、`120fa1f` (Q-020 の基盤の修正と記録)、`ef1f072` (レビューの指摘への対応)、`403dfe8` (文書)。その後に、確認の記録と記録の整理をコミットした |
 | 対象成果物 | `internal/server/` (`server.go`、`connlog.go`、テスト)、`internal/tools/` (`help.go`、`tools.go`、`lounge.go`、`chat.go`、`notify.go`、テスト)、`internal/config/`、`cmd/agent-lounge-mcp/`、`scripts/interactive/`、`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md`、`AGENTS.md`、`.agents/skills/agent-lounge-connect/SKILL.md` |
 | 機械的検証 | `go vet ./...`、`go test -race ./...`、基盤の自己試験 (18 件)。すべて成功 |
 | 確認の結果 | `261119-connection-guidance-validation.md`。作業の途中の知らせを読んだ回数は、改善の前の 25 回中 16 回から、改善の後の 25 回中 25 回になった。agy は、閉じられた接続の後にツールを呼べない (BL-040) |
