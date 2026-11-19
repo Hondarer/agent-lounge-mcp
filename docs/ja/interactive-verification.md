@@ -126,11 +126,11 @@ python3 scripts/interactive/verify.py summary <確認用のフォルダー>
 
 | 番号 | 名前 | 内容 | 対象 |
 |---|---|---|---|
-| 1 | `shutdown-notice` | 参加した後、指示を待っている間にサーバーを止めます。20[秒] の間の画面と、次の指示 (ツールを呼ばずに、サーバーから知らせを受けたかを答える) への応答から、停止の知らせが画面とモデルに届いたかを記録します。接続の診断から、ログのレベルの設定と、停止の通知を送ったかを記録します | 5 つの CLI |
+| 1 | `shutdown-notice` | 参加した後、指示を待っている間にサーバーを止めます。20[秒] の間の画面と、次の指示 (ツールを呼ばずに、サーバーから知らせを受けたかを答える) への応答から、停止の知らせ (ツールの呼び出しのエラー) が画面とモデルに届いたかを記録します | 5 つの CLI |
 | 2 | `several-instructions` | 参加した後、相手役がメッセージを送り、次の指示で受信箱を読ませます。応答にメッセージの合言葉があり、送達状態が受け取り済みであれば合格です | 5 つの CLI |
 | 3 | `join-again` | 参加した後、CLI を終了し、相手役がメッセージを送ります。CLI を起動し直して、同じ名前で参加し直させます。応答に合言葉があり、セッションが増えていなければ合格です | 5 つの CLI |
 | 4 | `server-instructions` | 合言葉を案内文に足したサーバーで、ツールを呼ばずに合言葉を答えさせます。CLI が接続時の案内文をモデルに渡しているかを記録します | 5 つの CLI |
-| 5 | `instruction-files` | 候補の指示ファイル (`AGENTS.md`、`CLAUDE.md`、`GEMINI.md`、`GROK.md`、`.github/copilot-instructions.md`) に別々の合言葉を書き、CLI がどのファイルを読むかを記録します。答えがない場合は、新しいセッションで 1 回やり直します。次に、読むファイルに `lounge_help` の「指示ファイルに貼る文面」を置き、チャットと関係のない作業 (`notes.txt` を作って読み返す) を 3 回指示して、参加、作業の前後の受信箱の確認、メモリの検索を行った回数を記録します | 5 つの CLI |
+| 5 | `instruction-files` | 候補の指示ファイル (`AGENTS.md`、`CLAUDE.md`、`GEMINI.md`、`GROK.md`、`.github/copilot-instructions.md`) に別々の合言葉を書き、CLI がどのファイルを読むかを記録します。答えがない場合は、新しいセッションで 1 回やり直します。次に、読むファイルに `lounge_help` の「指示ファイルに貼る文面」を置き、チャットと関係のない作業 (`notes.txt` を作って読み返す) を 5 回指示して、参加、作業の前後の受信箱の確認、メモリの検索を行った回数を記録します。各回で、相手役 (`iv-peer`) が CLI より前に参加しておき、`notes.txt` ができた後、CLI のセッション (`iv-<CLI>-<回>`) ができ次第、そのセッション宛てに、合言葉を含む知らせ (返信は不要) を送ります。CLI の応答が終わった時点で、その知らせを読んだか (送達状態が `delivered` または `acked`) を記録します。これが主な結果です | 5 つの CLI |
 | 6 | `token-stopped` | トークンを必須にしたサーバーに、トークンを付けて登録し、参加できることを確かめた後、トークンを再発行します。非対話の実行で、CLI が利用者に何を伝えるか (認証の失敗か、OAuth の認証の流れを始めたか、時間の上限までに終わったか) を記録します。登録を解除した後、CLI の設定と履歴のフォルダーに、トークンが残っていないかを調べます | Codex、Copilot CLI、agy |
 
 Table: シナリオ
@@ -154,12 +154,12 @@ Table: 結果のファイル
 
 | 項目 | シナリオ | 内容 |
 |---|---|---|
-| `connections` | 1 から 4 | 接続ごとの、クライアント (名前、版、プロトコルの版)、ログのレベル、呼んだツール、停止の通知の結果 |
+| `connections` | 1 から 4 | 接続ごとの、クライアント (名前、版、プロトコルの版) と、呼んだツール |
 | `shown_on_screen`、`conveyed_to_model` | 1 | 停止の知らせが、画面に表示されたか、モデルに伝わったか (`yes`、`no`、`undetermined`) |
 | `lines_mentioning_the_server` | 1 | 停止の後に、画面に現れた、サーバーに触れる行 (CLI 自身の、接続が切れた旨の表示など) |
 | `passed` | 2、3 | 合格したか |
 | `passes_instructions` | 4 | 案内文をモデルに渡しているか |
-| `discovery_attempts`、`files_read`、`file_used`、`runs`、`*_count` | 5 | 指示ファイルを確かめる問いの回数、読んだ指示ファイル、文面を置いたファイル、3 回の実行ごとの記録と回数。`inbox_at_start_count` は、`notes.txt` を作る前に受信箱を確かめた回数です。`notes.txt` が作られなかった実行では、作業の前後を区別できないため、`inbox_at_start` と `inbox_after_work` は `null` で、回数に数えません (`runs_with_notes` が、区別できた実行の数です) |
+| `discovery_attempts`、`files_read`、`file_used`、`runs`、`*_count` | 5 | 指示ファイルを確かめる問いの回数、読んだ指示ファイル、文面を置いたファイル、5 回の実行ごとの記録と回数。`inbox_at_start_count` は、`notes.txt` を作る前に受信箱を確かめた回数です。`notes.txt` が作られなかった実行では、作業の前後を区別できないため、`inbox_at_start` と `inbox_after_work` は `null` で、回数に数えません (`runs_with_notes` が、区別できた実行の数です)。作業の途中の知らせは、実行ごとに `message_sent` (送れたか。`notes.txt` が作られなかった場合と、応答が終わるまでに CLI が参加しなかった場合は送れません)、`message_delay` (`notes.txt` から知らせまでの秒数)、`message_state` (応答が終わった時点の送達状態)、`message_read` (読んだか)、`code_word_in_reply` (応答に合言葉が現れたか)。送れなかった実行では、`message_read` と `code_word_in_reply` は `null` です で記録し、`runs_with_message` (送れた実行の数) と `message_read_count` (読んだ実行の数) で数えます。`tools` は、CLI の接続が呼んだツールだけで、相手役の呼び出しは含みません |
 | `reports_authentication`、`mentions_oauth`、`timed_out`、`token_left_in` | 6 | 認証の失敗を伝えたか、OAuth に触れたか、時間の上限で打ち切ったか、トークンが残っていたファイル。判定は、CLI の標準出力と標準エラーを合わせた文字列で行います。トークンは、ホームフォルダーの下の、CLI の設定のフォルダー (`.claude`、`.codex`、`.copilot`、`.grok`、`.gemini`、`.agy`、`.antigravity` など) の、20[MB] 未満のファイルで探します |
 
 Table: 結果の主な項目
@@ -190,6 +190,8 @@ Table: CLI の定義の項目
 | 自己試験 (出力の加工、画面の再現、判定、CLI の代わりのプログラムの操作) | 検証済 | 自動テスト。CI (Linux x86_64)、Linux x86_64 (WSL 2、Python 3.12.15)、Windows 10.0.26300 (`pywinpty`) |
 | 5 つの CLI での、シナリオ 1 から 5 の実行 (すべて `done`) | 検証済 | 実機。Linux x86_64 (WSL 2)。Claude Code 2.1.327、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.12 |
 | Codex、Copilot CLI、agy での、シナリオ 6 の実行 | 検証済 | 同上 |
+| 5 つの CLI での、作業の途中の知らせを加えたシナリオ 5 (5 回) の実行 (すべて `done`) | 検証済 | 実機。Linux x86_64 (WSL 2)。Claude Code 2.1.328、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.12 |
+| Windows での、作業の途中の知らせを加えたシナリオ 5 の実行 | - | 基盤の変更は、OS によって変わる部分 (端末の操作、CLI の定義) に触れていないため、確認は不要です。 |
 | Windows での、5 つの CLI のシナリオ 1 から 5 と、Codex、Copilot CLI、agy のシナリオ 6 の実行 (すべて `done`) | 検証済 | 実機。Windows 10.0.26300。Claude Code 2.1.325、Codex 0.169.0 と 0.170.0、Copilot CLI 1.0.112 から 1.0.114、Grok 1.0.77 と 1.0.88、agy 1.5.10 と 1.5.11。Python 3.14.3 |
 | macOS、WSL ではない Linux | 未検証 | |
 

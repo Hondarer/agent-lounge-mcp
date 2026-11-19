@@ -27,7 +27,7 @@ This applies to `docs/ja/`, `README.md`, `docs/README.md`, and every `SKILL.md`.
 
 - **Use cases**: what the feature is for and when to use it.
 - **Procedures**: the steps, options, and commands to use it now.
-- **Verified scope**: what has been verified, with the method (automated test, CI, real machine) and the environment (OS, CPU, product versions). List unverified items explicitly. Write the status as 検証済 / 未検証, not 成功.
+- **Verified scope**: what has been verified, with the method (automated test, CI, real machine) and the environment (OS, CPU, product versions). List unverified items explicitly. Write the status as 検証済 / 未検証, not 成功. Write - when verification is not needed (for example, on an OS whose code paths the change does not touch), and give the reason.
 - **Limitations**: what is out of scope and known constraints.
 
 ### What documents do not contain
