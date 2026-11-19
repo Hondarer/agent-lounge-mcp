@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 確認の記録 (validation)
-最終更新日時: 2026-11-19 10:20:00 JST
+最終更新日時: 2026-11-19 10:50:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53Qv4yzq5xHqqMwe5fY
 稼働 OS: Linux (WSL)
 上流文書: `261118-interactive-verification-design.md` (最終仕様)、`261118-interactive-verification-discussion.md` (検討用 Markdown)。削除されている場合があります。
@@ -28,7 +28,7 @@
 | 他の通知の手段の調査 | 実施済み (WSL の側。使える手段は Claude Code のチャンネルだけ。実装しない) |
 | `chat-probe.sh` の修正 | 検証済 (同じデータベースで 2 回実行) |
 | 実装のレビュー | 実施済み (同じモデルのサブエージェント。指摘は、修正したか、残課題一覧に記録した) |
-| 登録の解除と後片付け | (後片付けの結果を反映します) |
+| 登録の解除と後片付け | 実施済み (2 つの OS) |
 
 ## 環境
 
@@ -238,4 +238,19 @@ Table: 最終仕様との相違
 
 ## 登録の解除と後片付け
 
-(後片付けの結果を反映します)
+- WSL の側: 5 つの CLI に、`agent-lounge` の登録は残っていません (各 CLI の `mcp list`)。検証で起動したサーバーのプロセスは、残っていません。確認用のフォルダー (スクラッチパッドの下の実行の記録、試作のサーバー、確認用の実行ファイル) を削除しました。`/tmp` の直下に置いた Claude Code のシナリオ 5 の確認用のフォルダーは、スクラッチパッドへ移してから削除しました。
+- リポジトリ: 無視の対象のフォルダーは、`dist/` と `.agents/skills/agent-lounge-connect/bin/` (どちらも `make dist` の出力) だけです。`dist/` に、データベースはありません。基盤の実行でできた `__pycache__` は、削除しました。
+- Windows の側 (Windows の側のセッションの報告): 5 つの CLI に登録は残っていません。`%TEMP%\agent-lounge-iv` を削除しました。検証で起動したプロセスは残っていません。リポジトリに変更はなく、`__pycache__` を削除しました。`pywinpty` は、残しています。
+- `/tmp/agent-lounge-serve-grok-a.log` (2026-11-17 の日時) は、以前の案件の確認のログで、この案件のものではないため、触れていません。
+
+## 機械的検証
+
+| 項目 | 結果 |
+| --- | --- |
+| `gofmt -l .` | 出力なし |
+| `go vet ./...` | 問題なし |
+| `go test -race ./...` | すべて成功 |
+| `python3 -m unittest discover -s scripts/interactive/tests` | 17 件、成功 |
+| `make dist` | 6 つの実行ファイルを作成 |
+
+Table: 機械的検証の結果 (Linux x86_64、WSL 2)

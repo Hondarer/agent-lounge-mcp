@@ -69,6 +69,9 @@ func New(cfg config.Config, sess Session) *Server {
 //
 // The SDK sends log notifications only to clients that set a log level (logging/setLevel);
 // other clients learn of the stop only from the error of their next or waiting tool call.
+// None of the agent CLIs checked so far (Claude Code, Codex, Copilot CLI, Grok, agy) sets a
+// level, and MCP has no notification that a client must pass on to its model, so an agent that
+// is waiting for an instruction learns of the stop from its next tool call.
 // ctx bounds the sending.
 func (s *Server) BeginShutdown(ctx context.Context) {
 	s.d.BeginShutdown()
