@@ -261,11 +261,14 @@ class AgentTest(unittest.TestCase):
 
     def test_permission_prompts_are_answered_and_counted(self):
         a = Agent(fake(), self.tmp.name).start(timeout=30)
-        reply = a.ask("Say hello after permission and permission.", timeout=30, settle=1)
+        # Three prompts in a row, of which only the command line is redrawn.
+        began = time.monotonic()
+        reply = a.ask("Say hello after permission and permission and permission.", timeout=40, settle=1)
         self.assertTrue(reply.complete, reply.text)
-        self.assertEqual((reply.approvals, a.approvals), (2, 2))
+        self.assertEqual((reply.approvals, a.approvals), (3, 3))
+        self.assertLess(time.monotonic() - began, 14)  # no prompt waited for the retry time
         reply = a.ask("Say hello.", timeout=20, settle=1)
-        self.assertEqual((reply.approvals, a.approvals), (0, 2))
+        self.assertEqual((reply.approvals, a.approvals), (0, 3))
         a.quit()
 
     def test_a_prompt_that_stays_is_answered_once_and_the_timeout_holds(self):

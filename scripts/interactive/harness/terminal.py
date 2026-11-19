@@ -13,7 +13,7 @@ import os
 import subprocess
 import threading
 import time
-from typing import Mapping, Sequence
+from typing import Callable, Mapping, Sequence
 
 from . import screen
 
@@ -141,12 +141,11 @@ class Terminal:
             return self._closed
 
     def wait_for(self, needles: Sequence[str], timeout: float, start: int = 0,
-                 on_screen: Sequence[str] = (), on_screen_start: int = 0) -> str | None:
+                 watch: Callable[[str], str | None] | None = None) -> str | None:
         """Wait until one of needles shows (see screen.contains), on the screen or its history,
-        or in the plain output after start; or until one of on_screen shows on the screen as it
-        looks now and was written after on_screen_start (text that asks for an answer, such as
-        a permission prompt: neither its old copies in the history nor a prompt that was
-        answered and is still on the screen must count).
+        or in the plain output after start; or until watch, called with the screen as it looks
+        now, returns a text (for what asks for an answer, such as a permission prompt: its
+        old copies in the history must not count, so it is judged on the screen alone).
 
         Returns the text found, or None when the timeout passed or the program ended first.
 
@@ -157,7 +156,6 @@ class Terminal:
         deadline = time.monotonic() + timeout
         with self._lock:
             begin = self._plain_offset(start)
-            asked = self._plain_offset(on_screen_start)
             searched, history = begin, None
             while True:
                 plain = self._plain.text(max(begin, searched - _OVERLAP))
@@ -170,11 +168,10 @@ class Terminal:
                     if screen.contains(shown, needle) or screen.contains(plain, needle):
                         return needle
                 remaining = deadline - time.monotonic()
-                if on_screen and remaining > 0 and not self._closed:
-                    now, written = self._screen.display(), self._plain.text(asked)
-                    for needle in on_screen:
-                        if screen.contains(now, needle, 0) and screen.contains(written, needle):
-                            return needle
+                if watch and remaining > 0 and not self._closed:
+                    seen = watch(self._screen.display())
+                    if seen:
+                        return seen
                 if remaining <= 0 or self._closed:
                     return None
                 self._lock.wait(min(remaining, 0.5))

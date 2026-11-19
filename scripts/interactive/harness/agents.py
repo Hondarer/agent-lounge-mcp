@@ -186,6 +186,48 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
 ]}
 
 
+class _Prompts:
+    """Tells a new permission prompt from one that was answered and is still on the screen.
+
+    A CLI that redraws only the lines that changed does not write the question of the next
+    prompt again when it stands on the same line as the question before, so "written after
+    the answer" cannot be the test, and "left the screen in between" is never true for two
+    prompts in a row. The lines above the question (what is asked for: the command) tell the
+    prompts apart. A prompt with the same lines as the answered one counts again only after
+    RETRY seconds: either the key was not taken, or the same command is asked for twice.
+    """
+
+    RETRY = 15.0
+    CONTEXT = 8  # lines above the question that belong to the prompt
+
+    def __init__(self, texts: Sequence[str]):
+        self._texts = list(texts)
+        self._last: tuple[str, str] | None = None  # the prompt answered last, and its lines
+        self._at = 0.0
+
+    def _find(self, display: str) -> tuple[str, str] | None:
+        lines = display.split("\n")
+        for text in self._texts:
+            for i, line in enumerate(lines):
+                if text in line:
+                    return text, "\n".join(lines[max(0, i - self.CONTEXT):i])
+        return None
+
+    def new(self, display: str) -> str | None:
+        """The text of a prompt on the screen that still needs an answer, or None."""
+        seen = self._find(display)
+        if seen is None:
+            self._last = None  # the answered prompt left the screen: the next one is new
+            return None
+        if seen == self._last and time.monotonic() - self._at < self.RETRY:
+            return None
+        return seen[0]
+
+    def answered(self, display: str, text: str) -> None:
+        seen = self._find(display)
+        self._last, self._at = seen if seen and seen[0] == text else (text, ""), time.monotonic()
+
+
 class AgentNotReady(Exception):
     """The CLI did not become ready for an instruction."""
 
@@ -260,21 +302,18 @@ class Agent:
         start = self.term.mark()
         began = time.monotonic()
         deadline = began + timeout
-        prompts = [text for text, _ in self.d.approvals]
+        prompts = _Prompts([text for text, _ in self.d.approvals])
         approvals = 0
-        answered = start  # output before this was looked at for prompts
         found = complete = False
         try:
             # The lower-case token of the completion word shows that the instruction was typed.
             self.term.type_line(f"{instruction} {ask}", shown=word[len("IVDONE"):].lower(), clear=self.d.clear_keys)
             while not found and time.monotonic() < deadline:
-                hit = self.term.wait_for([word], deadline - time.monotonic(), start=start,
-                                         on_screen=prompts, on_screen_start=answered)
-                if hit in prompts:
-                    answered = self._approve(hit)
-                    approvals += 1
-                elif hit:
+                hit = self.term.wait_for([word], deadline - time.monotonic(), start=start, watch=prompts.new)
+                if hit == word:
                     found = True
+                elif hit:
+                    approvals += self._approve(prompts, hit)
                 else:
                     break
             if found:
@@ -282,11 +321,11 @@ class Agent:
                 deadline = max(deadline, time.monotonic() + settle + 1)
             while found and not complete and time.monotonic() < deadline and not self.term.closed():
                 quiet = self.term.wait_quiet(settle, max(settle + 1, deadline - time.monotonic()))
-                hit = self.term.wait_for([], 0.1, on_screen=prompts, on_screen_start=answered) if prompts else None
+                now = self.term.display()
+                hit = prompts.new(now)
                 if hit:
-                    answered = self._approve(hit)
-                    approvals += 1
-                elif quiet and not any(screen.contains(self.term.display(), b, 0) for b in self.d.busy):
+                    approvals += self._approve(prompts, hit)
+                elif quiet and not any(screen.contains(now, b, 0) for b in self.d.busy):
                     complete = True
                 elif quiet:
                     time.sleep(1)  # still working without output: look again
@@ -295,18 +334,15 @@ class Agent:
         self.approvals += approvals
         return Reply(complete, self.term.transcript() + "\n" + self.term.text(start), time.monotonic() - began, approvals)
 
-    def _approve(self, prompt: str) -> int:
-        """Answer a permission prompt that is on the screen. Returns the end of the output
-        before the answer: a prompt counts as new only when it is written after that, so that
-        a prompt that stays on the screen is not answered again and again, while the next
-        prompt counts even when the CLI writes it at once."""
+    def _approve(self, prompts: "_Prompts", prompt: str) -> int:
+        """Answer a permission prompt that is on the screen. Returns the number answered (1)."""
         assert self.term
+        prompts.answered(self.term.display(), prompt)
         keys = next(keys for text, keys in self.d.approvals if text == prompt)
-        before = self.term.mark()
         for key in keys:
             self.term.write(key)
             time.sleep(0.5)
-        return before
+        return 1
 
     def quit(self) -> None:
         if self.term:

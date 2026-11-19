@@ -45,10 +45,16 @@ def main() -> None:
             while sys.stdin.readline().strip() != "quit":
                 pass
             return
-        for _ in range(line.count("permission")):
-            out("\x1b[2J\x1b[H\x1b[1mRun a command\x1b[0m\r\nDo you want to run this command?\r\n> 1. Yes\r\n  2. No\r\n")
+        # Like a CLI that redraws only what changed: the question is written once, and each
+        # further prompt rewrites only the line above it (the command).
+        for n in range(line.count("permission")):
+            if n == 0:
+                out("\x1b[2J\x1b[H\x1b[1mRun a command\x1b[0m\r\ncommand 0\r\nDo you want to run this command?\r\n> 1. Yes\r\n  2. No\r\n")
+            else:
+                out(f"\x1b[2;1H\x1b[2Kcommand {n}\x1b[6;1H")
             if not sys.stdin.readline():
                 return
+        if "permission" in line:
             out("\x1b[2J\x1b[H")
         m = re.search(r'followed by "([0-9a-f]+)"', line)
         word = "IVDONE" + m.group(1).upper() if m else "no word asked"
