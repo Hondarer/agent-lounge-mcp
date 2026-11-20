@@ -45,7 +45,7 @@ func Machine(raw string) (string, error) {
 	// /etc/hostname is the Windows computer name by default, so it is a safe fallback.
 	switch s {
 	case "sandbox", "localhost", "localhost.localdomain":
-		return "", fmt.Errorf("machine %q does not identify a machine: pass the output of cat /etc/hostname, or omit machine", s)
+		return "", fmt.Errorf("machine %q does not identify a machine: pass the output of cat /etc/hostname (on WSL), or omit machine, and also folder when it has no origin", s)
 	}
 	return name("machine", s)
 }

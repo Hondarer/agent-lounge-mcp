@@ -29,11 +29,11 @@ func userUsage(w io.Writer) {
 	fmt.Fprintln(w, "       agent-lounge-mcp user expiry <name> (--in DURATION | --never) [--db FILE] change only the expiry of the token")
 	fmt.Fprintln(w, "       agent-lounge-mcp user remove <name> --yes [--db FILE]                     delete the user, its sessions, messages and memories")
 	fmt.Fprintf(w, "A user name is %s. The commands open the database file directly and work while a server uses it.\n", store.UserNameRule)
-	fmt.Fprintln(w, "A DURATION is counted from now and is more than 0, such as 90d, 1d12h or 36h (d is 24 hours). "+
+	fmt.Fprintln(w, "A DURATION is counted from now and is at least 1s, such as 90d, 1d12h or 36h (d is 24 hours). "+
 		"Without --expires-in, the token does not expire; user rotate does not keep the expiry of the previous token.")
 }
 
-// expiryFlag is a duration flag that must be more than 0 (see config.ParseDuration), and
+// expiryFlag is a duration flag of at least a second (see config.ParseDuration), and
 // records whether it was given.
 type expiryFlag struct {
 	d   time.Duration
@@ -52,8 +52,10 @@ func (f *expiryFlag) Set(s string) error {
 	if err != nil {
 		return err
 	}
-	if d <= 0 {
-		return fmt.Errorf("invalid duration %q: must be more than 0", s)
+	// The expiry is stored in milliseconds: a shorter duration would make a token that is
+	// expired when it is issued.
+	if d < time.Second {
+		return fmt.Errorf("invalid duration %q: must be at least 1s", s)
 	}
 	f.d, f.set = d, true
 	return nil

@@ -91,6 +91,7 @@ func TestUserExpiryCommands(t *testing.T) {
 	for _, args := range [][]string{
 		{"add", "carol", "--expires-in", "0"},
 		{"add", "carol", "--expires-in", "0s"},
+		{"add", "carol", "--expires-in", "500ms"},
 		{"add", "carol", "--expires-in", "-1h"},
 		{"add", "carol", "--expires-in", "soon"},
 		{"rotate", "alice", "--expires-in", "0"},

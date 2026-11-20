@@ -162,8 +162,7 @@ func TestJoinProfileErrors(t *testing.T) {
 	}
 }
 
-// Sessions of one repository, declared in different forms, share the repository room; sessions
-// of another repository and sessions without one do not receive its messages.
+// A machine name that does not tell machines apart is rejected, and the recorded profile stays.
 func TestJoinRejectsGenericMachine(t *testing.T) {
 	cs := connect(t)
 	for _, m := range []string{"sandbox", "Sandbox", "LOCALHOST", "localhost.localdomain"} {
@@ -186,6 +185,8 @@ func TestJoinRejectsGenericMachine(t *testing.T) {
 	}
 }
 
+// Sessions of one repository, declared in different forms, share the repository room; sessions
+// of another repository and sessions without one do not receive its messages.
 func TestRepositoryRoom(t *testing.T) {
 	s, _ := waitServer(t, 10*time.Second)
 	join := func(args map[string]any) *mcp.ClientSession {
