@@ -198,14 +198,17 @@ Table: CLI の定義の項目
 | 5 つの CLI での、作業の途中の知らせを加えたシナリオ 5 (5 回) の実行 (すべて `done`) | 検証済 | 実機。Linux x86_64 (WSL 2)。Claude Code 2.1.328、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.12 |
 | Windows での、作業の途中の知らせを加えたシナリオ 5 の実行 | - | 基盤の変更は、OS によって変わる部分 (端末の操作、CLI の定義) に触れていないため、確認は不要です。 |
 | Windows での、5 つの CLI のシナリオ 1 から 5 と、Codex、Copilot CLI、agy のシナリオ 6 の実行 (すべて `done`) | 検証済 | 実機。Windows 10.0.26300。Claude Code 2.1.325、Codex 0.169.0 と 0.170.0、Copilot CLI 1.0.112 から 1.0.114、Grok 1.0.77 と 1.0.88、agy 1.5.10 と 1.5.11。Python 3.14.3 |
+| 自己試験のうち、`wait_for` の差分の検索 (前の検索の続きから探すこと、区切りをまたぐ文字列を見つけること、`start` の指定) と、`tools_called` | 検証済 | 自動テスト。Linux x86_64 (WSL 2、Python 3.12.15)、Windows 10.0.26300 (Python 3.14.3) |
+| 自己試験での、閉じていないソケットの警告 (`ResourceWarning`) が出ないこと | 検証済 | 自動テスト (`python -W error::ResourceWarning -m unittest discover`、41 件が通り、1 件は省略、警告の行は 0 件)。Windows 10.0.26300 (Python 3.14.3) |
 | 自己試験のうち、許可の画面への応答 (続けて出る画面、残り続ける画面)、作業中の表示による完了の判定、打ち直しの前の入力欄の消去、時間切れでのプロセスのツリーの終了、分けて届いた出力の変換 | 検証済 | 自動テスト。Linux x86_64 (WSL 2、Python 3.12.15)、Windows 10.0.26300 (Python 3.14.3) |
 | 許可の画面への応答、作業中の表示による完了の判定を加えた基盤での、5 つの CLI のシナリオ 2 と 3 の実行 (すべて `done`) | 検証済 | 実機。Linux x86_64 (WSL 2): Claude Code 2.1.329、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.13。Windows 10.0.26300: Claude Code 2.1.325、Codex 0.170.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.11 |
 | Copilot CLI の、シェルのコマンドの許可の画面への応答 (シナリオ 5。5 回とも参加し、応答が完了する) | 検証済 | 実機。Linux x86_64 (WSL 2) と Windows 10.0.26300。Copilot CLI 1.0.114。応答した画面の数は、WSL で 4、Windows で 24 |
 | Copilot CLI 以外の 4 つの CLI の、許可の画面への応答 | 未検証 | 確認した環境の設定では、許可の画面が出ないため、定義していません |
-| 作業中の表示 (`busy`) の文字列が、作業中の画面に出て、終了後の画面に出ないこと | 検証済 (WSL の 5 つの CLI、Windows の Claude Code、Grok、agy)、未検証 (Windows の Codex、Copilot CLI) | 実機。作業中と終了後の画面を記録しました。Linux x86_64 (WSL 2) と Windows 10.0.26300。Windows の Codex と Copilot CLI は、画面を記録できていません (シナリオの応答は、すべて完了と判定されています) |
-| 入力欄を消すキー (Ctrl+U) が、5 つの CLI の入力欄を消すこと | 検証済 (WSL)、未検証 (Windows) | 実機。Linux x86_64 (WSL 2)。Windows では、打ち直しが起きる場面を確かめていません |
+| 作業中の表示 (`busy`) の文字列が、作業中の画面に出て、終了後の画面に出ないこと | 検証済 (WSL の 5 つの CLI、Windows の Claude Code、Copilot CLI、Grok、agy)、制限あり (Windows の Codex) | 実機。作業中と終了後の画面を記録しました。Linux x86_64 (WSL 2) と Windows 10.0.26300。Windows の Codex 0.170.0 は、`esc to interrupt` を、作業の始めの数秒だけ表示します。長く出力する作業の間 (7 秒から 63 秒) は、作業中でも表示しません。Windows の Copilot CLI 1.0.114 は、作業中だけ `ctrl+c interrupt` を表示します |
+| 入力欄を消すキー (Ctrl+U) が、5 つの CLI の入力欄を消すこと | 検証済 | 実機。Linux x86_64 (WSL 2)。Windows 10.0.26300 (Claude Code 2.1.325、Codex 0.170.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.11) |
 | 時間切れでのプロセスのツリーの終了 (実機の CLI での、シナリオ 6 の時間切れ) | 未検証 | 自己試験 (子のプロセスを残すプログラム) で確かめています。実機の CLI では、時間切れが起きていません |
-| macOS、WSL ではない Linux | 未検証 | |
+| macOS | - | ビルドのみで、動作は保証しません。 |
+| WSL ではない Linux | 未検証 | |
 
 Table: 検証済みの範囲
 
@@ -224,4 +227,4 @@ Table: 検証済みの範囲
 - 入力した指示が画面に出ない場合は、入力欄を消すキー (`clear_keys`) を送ってから、指示を打ち直します。
 - シナリオ 2 と 3 で、応答が時間の上限までに終わらず、合格の条件も満たさない場合は、不合格ではなく `unverified` にします。
 - CI では、自己試験だけを実行します。シナリオの実行には、各 CLI のログインと利用量が要ります。
-- macOS では、確かめていません。
+- macOS は、動作を保証しません。
