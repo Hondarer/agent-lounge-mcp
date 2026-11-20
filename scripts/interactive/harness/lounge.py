@@ -88,7 +88,10 @@ class Client:
         if self.token:
             headers["Authorization"] = "Bearer " + self.token
         try:
-            urllib.request.urlopen(urllib.request.Request(self.url, headers=headers, method="DELETE"), timeout=10)
+            # The response holds a connection; leaving it unclosed is a ResourceWarning.
+            with urllib.request.urlopen(urllib.request.Request(self.url, headers=headers, method="DELETE"),
+                                        timeout=10):
+                pass
         except (urllib.error.URLError, OSError):
             pass
         self.session = ""
