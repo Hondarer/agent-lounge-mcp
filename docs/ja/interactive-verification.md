@@ -202,7 +202,7 @@ Table: CLI の定義の項目
 | 許可の画面への応答、作業中の表示による完了の判定を加えた基盤での、5 つの CLI のシナリオ 2 と 3 の実行 (すべて `done`) | 検証済 | 実機。Linux x86_64 (WSL 2): Claude Code 2.1.329、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.13。Windows 10.0.26300: Claude Code 2.1.325、Codex 0.170.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.11 |
 | Copilot CLI の、シェルのコマンドの許可の画面への応答 (シナリオ 5。5 回とも参加し、応答が完了する) | 検証済 | 実機。Linux x86_64 (WSL 2) と Windows 10.0.26300。Copilot CLI 1.0.114。応答した画面の数は、WSL で 4、Windows で 24 |
 | Copilot CLI 以外の 4 つの CLI の、許可の画面への応答 | 未検証 | 確認した環境の設定では、許可の画面が出ないため、定義していません |
-| 作業中の表示 (`busy`) の文字列が、作業中の画面に出ること | 検証済 (WSL)、未検証 (Windows) | 実機。Linux x86_64 (WSL 2) で、5 つの CLI の作業中と終了後の画面を記録しました。Windows では、画面を直接は記録していません (シナリオの応答は、すべて完了と判定されています) |
+| 作業中の表示 (`busy`) の文字列が、作業中の画面に出て、終了後の画面に出ないこと | 検証済 (WSL の 5 つの CLI、Windows の Claude Code、Grok、agy)、未検証 (Windows の Codex、Copilot CLI) | 実機。作業中と終了後の画面を記録しました。Linux x86_64 (WSL 2) と Windows 10.0.26300。Windows の Codex と Copilot CLI は、画面を記録できていません (シナリオの応答は、すべて完了と判定されています) |
 | 入力欄を消すキー (Ctrl+U) が、5 つの CLI の入力欄を消すこと | 検証済 (WSL)、未検証 (Windows) | 実機。Linux x86_64 (WSL 2)。Windows では、打ち直しが起きる場面を確かめていません |
 | 時間切れでのプロセスのツリーの終了 (実機の CLI での、シナリオ 6 の時間切れ) | 未検証 | 自己試験 (子のプロセスを残すプログラム) で確かめています。実機の CLI では、時間切れが起きていません |
 | macOS、WSL ではない Linux | 未検証 | |
