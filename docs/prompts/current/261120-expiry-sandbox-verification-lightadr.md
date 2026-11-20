@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 簡易 ADR (lightadr)
-最終更新日時: 2026-11-20 16:44:44 JST
+最終更新日時: 2026-11-21 00:26:19 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `261120-expiry-sandbox-verification-overview.md` (全体管理文書)、`261120-expiry-sandbox-verification-discussion.md` (検討用 Markdown)。いずれも削除されている場合があります。
@@ -21,7 +21,7 @@
 | --- | --- | --- | --- |
 | [LADR-001](#ladr-001-今回の実施範囲) | 今回の実施範囲 | 2026-11-20 | [Q-001](261120-expiry-sandbox-verification-discussion.md#q-001-今回の実施範囲) |
 | [LADR-002](#ladr-002-作業を担当するモデル) | 作業を担当するモデル | 2026-11-20 | 利用者の指示 (対話セッション)、[Q-018](261120-expiry-sandbox-verification-discussion.md#q-018-モデルごとの作業の割り当て) |
-| [LADR-003](#ladr-003-確かめる未検証の項目と方法) | 確かめる未検証の項目と方法 | 2026-11-20 | [Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目) から [Q-007](261120-expiry-sandbox-verification-discussion.md#q-007-nginx-を置いた構成の確かめ方) |
+| [LADR-003](#ladr-003-確かめる未検証の項目と方法) | 確かめる未検証の項目と方法 | 2026-11-21 | [Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目) から [Q-007](261120-expiry-sandbox-verification-discussion.md#q-007-nginx-を置いた構成の確かめ方) |
 | [LADR-004](#ladr-004-トークンの有効期限) | トークンの有効期限 | 2026-11-20 | [Q-008](261120-expiry-sandbox-verification-discussion.md#q-008-有効期限の指定の形) から [Q-012](261120-expiry-sandbox-verification-discussion.md#q-012-期限の知らせ方) |
 | [LADR-005](#ladr-005-最後の利用日時) | 最後の利用日時 | 2026-11-20 | [Q-013](261120-expiry-sandbox-verification-discussion.md#q-013-参加していない利用の最後の利用日時) |
 | [LADR-006](#ladr-006-サンドボックスの中でのマシンの名前) | サンドボックスの中でのマシンの名前 | 2026-11-20 | [Q-014](261120-expiry-sandbox-verification-discussion.md#q-014-サンドボックスの中でのマシンの名前の決め方)、[Q-015](261120-expiry-sandbox-verification-discussion.md#q-015-マシンの名前として受け付けない値)、[Q-017](261120-expiry-sandbox-verification-discussion.md#q-017-サンドボックスの中での実機の確認) |
@@ -110,16 +110,18 @@ Windows の側の確認は、Windows の側のセッションが行い、その�
 
 - a: Windows の、origin のあるリポジトリのフォルダーでの、Claude Code 以外の 4 つの CLI の申告。
 - b: Windows の側で起動したサーバーでの、期限切れと削除、管理コマンド (`session`、`export`、`memory`)。
-- c: Windows の側で起動したサーバーへの、WSL の側のエージェントからの接続。受信の許可を求める画面が出たら、利用者が「プライベート」で許可します。確認の後、規則を消すかどうかは、利用者が決めます。
+- c: Windows の側で起動したサーバーへの、WSL の側のエージェントからの接続。この案件では確かめず、残課題に残します。
 - d: 5 つの CLI が使うシェルを確かめます。Git Bash は、Claude Code に使わせて申告を確かめます。`cmd` は、使う CLI があれば確かめ、なければ文書の状況を `-` にします。
 - e: Windows での Ctrl+C と 2 回目の Ctrl+C。検証の基盤の疑似端末でサーバーを起動し、キーを送って確かめます。文書には、方法を「疑似端末へのキー入力」と書きます。
 - f: nginx 経由の HTTPS。podman で nginx の公式のイメージを取得し、`probe.sh`、`chat-probe.sh`、Claude Code 1 つで確かめます。確認の後、コンテナーは消し、イメージは残します。
 - g: Windows の Codex と Copilot CLI の作業中の表示、Windows での Ctrl+U。
-- h: 検証の基盤の直し (BL-035 の (14)、(15)、(16))。
+- h: 検証の基盤の直し (BL-035 の (14)、(15)、(16))。(16) の直しは、Copilot CLI のシナリオ 5 の 5 回の完了を条件にせずに取り込みます。シナリオ 5 を妨げていた Copilot CLI の別の許可の画面 (「Allow path access」) にも応答する定義を足し、5 回を流し直します。
 - i: agy 1.5.13 での、閉じられた接続の後の動作の確かめ直し。
 - j: フォルダーを移ったときの、Claude Code によるプロフィールの更新。
 
 Windows の側の確認は、Windows の側のセッションに委譲します。
+
+確認の中で見つかった、Git Bash の `pwd` が Windows のパスを返さない点 (BL-041) は、この案件で直します。`lounge_help` の Windows の行に、Git Bash では `pwd -W` を使うことを書き、Windows の側の Claude Code (Git Bash) で 1 回確かめます。
 
 機材のない項目は、次のように扱います。`windows-arm64` と macOS は、ビルドはするが動作を保証しないこととして文書に書き、残課題から除きます。物理的に別のマシンと、WSL ではない Linux は、確かめず、残課題に残します。
 
@@ -133,6 +135,9 @@ Windows の側の確認は、Windows の側のセッションに委譲します�
 | 2026-11-20 16:41 | [Q-005](261120-expiry-sandbox-verification-discussion.md#q-005-cmd-と-git-bash-での申告) | A (シェルを確かめ、Git Bash は Claude Code、`cmd` はなければ `-`) | なし | d の進め方を決めた |
 | 2026-11-20 16:41 | [Q-006](261120-expiry-sandbox-verification-discussion.md#q-006-キーボードからの-ctrlc-の確かめ方) | A (疑似端末へのキー入力) | なし | e の方法を決めた |
 | 2026-11-20 16:41 | [Q-007](261120-expiry-sandbox-verification-discussion.md#q-007-nginx-を置いた構成の確かめ方) | A (podman の nginx、スクリプトと Claude Code 1 つ) | なし | f の方法を決めた |
+| 2026-11-21 00:26 | 対話セッションの選択式の質問 (c) | 未検証のまま残す | 「今ユーザーがデスクトップを監視していないのでバックログに回して」 | c を、確かめずに残課題に回した |
+| 2026-11-21 00:26 | 対話セッションの選択式の質問 ((16) の扱い) | 取り込み、画面も対応 (直しを取り込み、「Allow path access」の画面に応答する定義を足して 5 回を流し直す) | なし | (16) の取り込みの条件を変えた |
+| 2026-11-21 00:26 | 対話セッションの選択式の質問 (BL-041) | この案件で直す | なし | BL-041 を対象に加えた |
 
 ## LADR-004 トークンの有効期限
 

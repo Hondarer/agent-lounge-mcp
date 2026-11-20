@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 残課題一覧 (backlog)
-最終更新日時: 2026-11-20 16:44:44 JST
+最終更新日時: 2026-11-21 00:26:19 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `261120-expiry-sandbox-verification-overview.md` (全体管理文書)、`261120-expiry-sandbox-verification-discussion.md` (検討用 Markdown)、`261120-expiry-sandbox-verification-lightadr.md` (簡易 ADR)、`261120-expiry-sandbox-verification-design.md` (最終仕様)。転記元: `../past/261120-small-fixes-backlog.md` (前の案件の残課題一覧)。いずれも未作成の場合や、削除されている場合があります。
@@ -46,6 +46,8 @@
 | BL-035 | 検証の基盤の残り (他の CLI の許可の画面、画面の再現の細部、Windows での未検証の点、macOS) | 実装中に判明 | 低 | 一部検討中 (案件 `expiry-sandbox-verification` で、(12)、(14)、(15)、(16) を対応中) |
 | BL-036 | MCP のプロトコルの版 2026-07-28 への対応 | 実装中に判明 | 中 (CLI が古い版での接続し直しをやめると、接続できなくなる) | 一部対応 (停止の通知を対応。版への対応が残る) |
 | BL-040 | agy が、閉じられた MCP の接続の後に、ツールを呼べなくなる | 前提検討時に判明 | 中 (1 時間使わなかった agy は、起動し直すまでツールを呼べない場合がある) | 検討中 (案件 `expiry-sandbox-verification` で、agy 1.5.13 での確かめ直しを対応中) |
+| BL-041 | Git Bash の `pwd` が、Windows のパスを返さない | 実装中に判明 | 低 (Git Bash を使うエージェントが、案内どおりに申告すると、フォルダーの値が合わない) | 対応中 (この案件で直す。利用者の判断) |
+| BL-042 | Windows の Codex で、出力の途中に作業中の表示が画面にない | 実装中に判明 | 低 (検証の基盤が、Codex の作業中を見落とす) | 未着手 |
 
 ## BL-004 `shared` の空間と `scope` 引数
 
@@ -394,3 +396,19 @@
 
 - **恒久対応案**: agy の新しい版で、同じ確認を繰り返します (確認の記録の「閉じられた接続の後の動作」の手順)。直らない場合は、agy の開発元に報告することを検討します。サーバーを起動し直した場合と、起動し直した agy が使えることも確かめます。agy の利用者が多い場合は、`--connection-idle` の既定値を長くすることも検討します。
 - **参考情報**: 確認の記録 `261119-connection-guidance-validation.md` の「閉じられた接続の後の動作」。Go SDK の `StreamableHTTPOptions.SessionTimeout`。
+
+## BL-041 Git Bash の `pwd` が、Windows のパスを返さない
+
+- **現状の事象**: `lounge_help` は、Git の外のフォルダーの値に `pwd` (Windows の `cmd` では `cd`) を案内しています。Windows の Git Bash の `pwd` は、MSYS の形のパスを返します。`%TEMP%` の下では `/tmp/...` になり、Windows のパスに戻せません。Windows の Claude Code に Git Bash を使わせた確認では、モデルが `pwd` の値を使わず、環境の情報の Windows のパスを渡したため、値は PowerShell の場合と同じでした。
+- **摘出契機**: 案件 `expiry-sandbox-verification` の確認 d (Windows の側のセッション。2026-11-20)。
+- **本来あるべき姿**: Git Bash でも、案内どおりに申告すれば、PowerShell と同じフォルダーの値になります。
+- **推奨される対応策**: `lounge_help` の Windows の行に、Git Bash では `pwd -W` を使うことを書きます。必要であれば、サーバーで `/c/...` の形を `c:\...` に直します。
+- **継続作業での経緯と対処**: 案件 `expiry-sandbox-verification` で追加しました (2026-11-20)。
+
+## BL-042 Windows の Codex で、出力の途中に作業中の表示が画面にない
+
+- **現状の事象**: Windows の Codex (0.170.0) に長い文章を出力させると、`esc to interrupt` は最初の数秒だけ画面にあり、その後、作業を続けている間 (7 秒から 63 秒) は画面にありませんでした。検証の基盤は、この文字列で作業中を判定するため、Codex の作業の途中で完了と判定するおそれがあります。WSL の Codex では、作業中に表示が出ることを確かめています。
+- **摘出契機**: 案件 `expiry-sandbox-verification` の確認 g (Windows の側のセッション。2026-11-20)。
+- **本来あるべき姿**: 検証の基盤が、Windows の Codex の作業中を見分けられます。
+- **推奨される対応策**: 作業の途中の画面を保存して、作業中に必ず出る別の文字列を探します。見つからない場合は、Codex の完了の判定に、画面の変化が止まったことを加えます。
+- **継続作業での経緯と対処**: 案件 `expiry-sandbox-verification` で追加しました (2026-11-20)。

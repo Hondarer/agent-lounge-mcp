@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-20 16:58:11 JST
+最終更新日時: 2026-11-21 00:26:19 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
 上流文書: `../past/261120-small-fixes-backlog.md` (対策元の残課題一覧)。移動または削除されている場合があります。
@@ -48,14 +48,14 @@
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート: 作業着手の合意)
 - 🔄 4. 承認された最終仕様に従った作業の実施
-    - 🔄 4.1. 作業ブランチの作成と、作業前の記録の最初のコミット ([Q-016](261120-expiry-sandbox-verification-discussion.md#q-016-作業ブランチとマージ)) ← **CURRENT**
-    - ⏸️ 4.2. トークンの有効期限 (`internal/store/schema/` の新しい版、`internal/store/users.go`、`internal/server/auth.go`、`internal/tools/`、`cmd/agent-lounge-mcp/user.go`: BL-031 の (1)) とテスト ([Q-008](261120-expiry-sandbox-verification-discussion.md#q-008-有効期限の指定の形) から [Q-012](261120-expiry-sandbox-verification-discussion.md#q-012-期限の知らせ方))
-    - ⏸️ 4.3. 最後の利用日時 (BL-032 の 4 番) とテスト ([Q-013](261120-expiry-sandbox-verification-discussion.md#q-013-参加していない利用の最後の利用日時))
-    - ⏸️ 4.4. サンドボックスの中でのマシンの名前 (`internal/tools/help.go`、`internal/tools/lounge.go`、`internal/profile/`: BL-027) とテスト ([Q-014](261120-expiry-sandbox-verification-discussion.md#q-014-サンドボックスの中でのマシンの名前の決め方)、[Q-015](261120-expiry-sandbox-verification-discussion.md#q-015-マシンの名前として受け付けない値))
-    - ⏸️ 4.5. 検証の基盤の直し (`scripts/interactive/`: BL-035 の (14)、(15)、(16)) と自己試験 ([Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目))
-    - ⏸️ 4.6. 作業ブランチの GitHub への push
-    - ⏸️ 4.7. WSL の側の確認 (nginx を置いた構成、agy の確かめ直し、Claude Code のフォルダーの移動、サンドボックスの中での申告。最終仕様の第 6 章の f、i、j、k。[Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目)、[Q-007](261120-expiry-sandbox-verification-discussion.md#q-007-nginx-を置いた構成の確かめ方)、[Q-017](261120-expiry-sandbox-verification-discussion.md#q-017-サンドボックスの中での実機の確認))
-    - ⏸️ 4.8. Windows の側の確認 ([Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目) から [Q-006](261120-expiry-sandbox-verification-discussion.md#q-006-キーボードからの-ctrlc-の確かめ方))
+    - ✅ 4.1. 作業ブランチの作成と、作業前の記録の最初のコミット ([Q-016](261120-expiry-sandbox-verification-discussion.md#q-016-作業ブランチとマージ))
+    - ✅ 4.2. トークンの有効期限 (`internal/store/schema/` の新しい版、`internal/store/users.go`、`internal/server/auth.go`、`internal/tools/`、`cmd/agent-lounge-mcp/user.go`: BL-031 の (1)) とテスト ([Q-008](261120-expiry-sandbox-verification-discussion.md#q-008-有効期限の指定の形) から [Q-012](261120-expiry-sandbox-verification-discussion.md#q-012-期限の知らせ方))
+    - ✅ 4.3. 最後の利用日時 (BL-032 の 4 番) とテスト ([Q-013](261120-expiry-sandbox-verification-discussion.md#q-013-参加していない利用の最後の利用日時))
+    - ✅ 4.4. サンドボックスの中でのマシンの名前 (`internal/tools/help.go`、`internal/tools/lounge.go`、`internal/profile/`: BL-027) とテスト ([Q-014](261120-expiry-sandbox-verification-discussion.md#q-014-サンドボックスの中でのマシンの名前の決め方)、[Q-015](261120-expiry-sandbox-verification-discussion.md#q-015-マシンの名前として受け付けない値))
+    - 🔄 4.5. 検証の基盤の直し (`scripts/interactive/`: BL-035 の (14)、(15)、(16)) と自己試験 ([Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目)) ← **CURRENT**
+    - ✅ 4.6. 作業ブランチの GitHub への push (記録のコミットを push。以後の変更も、まとまりごとに push)
+    - 🔄 4.7. WSL の側の確認 (nginx を置いた構成、agy の確かめ直し、Claude Code のフォルダーの移動、サンドボックスの中での申告。最終仕様の第 6 章の f、i、j、k。[Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目)、[Q-007](261120-expiry-sandbox-verification-discussion.md#q-007-nginx-を置いた構成の確かめ方)、[Q-017](261120-expiry-sandbox-verification-discussion.md#q-017-サンドボックスの中での実機の確認))
+    - 🔄 4.8. Windows の側の確認 ([Q-002](261120-expiry-sandbox-verification-discussion.md#q-002-確かめる未検証の項目) から [Q-006](261120-expiry-sandbox-verification-discussion.md#q-006-キーボードからの-ctrlc-の確かめ方))
     - ⏸️ 4.9. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md` ほか) の更新
     - ⏸️ 4.10. 正本ドキュメントおよびコード コメントへの永続的知見の反映
     - ⏸️ 4.11. 機械的検証 (`go vet ./...`、`go test ./...`、基盤の自己試験)
@@ -146,6 +146,11 @@
 | 2026-11-20 16:44 | 第 1 ゲートの通過 | 未解決の Q と観点の未確認がないことを確認 (合意版 3)。簡易 ADR に LADR-003 から LADR-007 を追加し、LADR-002 を更新。最終仕様の作成に着手 |
 | 2026-11-20 16:46 | 最終仕様の作成 | `261120-expiry-sandbox-verification-design.md` を作成し、第 2 ゲートの承認を依頼 |
 | 2026-11-20 16:58 | 第 2 ゲートの通過 | 利用者の承認 (「推進」)。作業に着手 |
+| 2026-11-20 17:00 ごろ | 作業の開始 | 作業ブランチ `feature/expiry-sandbox-verification` を作成し、記録をコミット (`2c87369`) して push。Opus と Sonnet のサブエージェントに、第 2 章から第 5 章と、WSL の側の確認 (f、i、j) を依頼。Windows の側のセッションに、a、b、c、d、e、g を依頼。対話セッションのモデルは、利用者の切り替えで Opus 5.5 になった |
+| 2026-11-20 17:10 ごろ から 18:00 | 作業の中断 | 利用量の上限 (5 時間の枠) で、4 つのサブエージェントが止まった。18:00 の枠の更新の後、止まった所から再開 |
+| 2026-11-20 18:14 | 実装の取り込み | マシンの名前 (`966573f`、Sonnet)、基盤の (14) と (15) (`349f471`、Sonnet)、有効期限と最後の利用日時 (`b5951e8`、Opus) を、差分を確かめて作業ブランチに取り込み、push。`go vet`、`go test -race`、基盤の自己試験 (41 件) が通った。基盤の (16) を Opus に、確認の k を Sonnet に依頼。Windows の側のサーバー (項目 c) には、WSL から接続できていない (ファイアウォールの許可を利用者に依頼中) |
+| 2026-11-20 夜 | 確認の結果の受領 | Windows の側から a、b、d、e、g、h の結果、WSL の側から f、i、j、k の結果を受領 (確認の記録に記載)。d と g の発見を、残課題 BL-041、BL-042 として追記 |
+| 2026-11-21 00:26 | 作業中の判断の受領 | 基盤の (16) が、仕様の条件 (Copilot CLI のシナリオ 5 の 5 回の完了) を満たさなかった (別の許可の画面と、原因不明の時間切れ) ため、扱いを利用者に確認。(16) は取り込み、別の画面にも応答させる。c は残課題に回す。BL-041 はこの案件で直す (LADR-003)。(16) の直しを `d29ef20`、BL-041 の直しを `0d6b8a7` として取り込み |
 
 ## 反映と検証の記録
 
