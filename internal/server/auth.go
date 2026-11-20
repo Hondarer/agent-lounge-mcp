@@ -8,6 +8,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
+	"time"
 
 	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
 
@@ -24,7 +26,48 @@ const (
 		"Authorization: Bearer <token>, using a token issued by agent-lounge-mcp user add."
 	msgTokenInvalid = "agent-lounge-mcp rejected the token because it is not valid (it is mistyped, " +
 		"or its user was removed or given a new token): ask the user to check the token registered for this server."
+	msgTokenExpired = "agent-lounge-mcp rejected the token because it has expired: ask the server administrator " +
+		"to extend it (agent-lounge-mcp user expiry) or to issue a new one (agent-lounge-mcp user rotate)."
 )
+
+// tokenUseInterval is the shortest time between two writes of the last use of one user's token
+// (see tokenUses).
+const tokenUseInterval = time.Minute
+
+// tokenUses records the last use of each user's token (store.RecordTokenUse) for the requests
+// authenticated with a token. Every request is a candidate, and an agent sends several in a
+// second while it works, so writing the database each time would add a write transaction to
+// most requests for a value shown in minutes at best (user list). Instead each user's write is
+// skipped until tokenUseInterval has passed since the previous one, remembered here in the
+// server process. The memory is lost when the server stops; the first request after a start
+// writes again. A failed write is logged, and the request goes on.
+type tokenUses struct {
+	st *store.Store
+	mu sync.Mutex
+	// last is the time of the last write for each user ID, by the store's clock.
+	last map[int64]time.Time
+}
+
+func newTokenUses(st *store.Store) *tokenUses {
+	return &tokenUses{st: st, last: map[int64]time.Time{}}
+}
+
+// record writes the last use of the user's token, unless it was written for the user less than
+// tokenUseInterval ago.
+func (t *tokenUses) record(ctx context.Context, userID int64) {
+	now := t.st.Now()
+	t.mu.Lock()
+	if prev, ok := t.last[userID]; ok && now.Sub(prev) < tokenUseInterval {
+		t.mu.Unlock()
+		return
+	}
+	// Taken before the write, so that concurrent requests of the user do not all write.
+	t.last[userID] = now
+	t.mu.Unlock()
+	if err := t.st.RecordTokenUse(ctx, userID); err != nil {
+		log.Printf("record the last use of a token: %v", err)
+	}
+}
 
 // checkHost limits the Host header of MCP requests. The check stops web pages that make a
 // browser send requests to a loopback server under another name (DNS rebinding); cross-origin
@@ -74,11 +117,19 @@ type tokenHashKey struct{}
 //   - no token, on a server that requires one: 401 with WWW-Authenticate: Bearer;
 //   - a token that matches no user, or a header of another form: 401, whether or not a token
 //     is required. A wrong token never falls back to local.
+//   - a token whose expiry has passed: 401 with its own body, which tells the user how to get
+//     it extended or replaced. It never falls back to local either. The expiry is compared
+//     with the server's clock on every request, so it takes effect from the first request at
+//     or after the expiry, and an extension (user expiry) from the next request. A chat_inbox
+//     already waiting inside one request notices it at its check interval (see tools).
+//
+// A request with a valid token also records the last use of the token (see tokenUses).
 //
 // The token itself does not travel further: the request goes on with a placeholder in its
 // Authorization header (see bindUser).
 func authenticate(cfg config.Config, sess Session, next http.Handler) http.Handler {
 	required := cfg.TokenRequired()
+	uses := newTokenUses(sess.Store)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, present, err := auth.BearerToken(r.Header)
 		var user store.User
@@ -102,11 +153,15 @@ func authenticate(cfg config.Config, sess Session, next http.Handler) http.Handl
 			case errors.Is(err, store.ErrNoSuchUser):
 				unauthorized(w, `Bearer error="invalid_token"`, msgTokenInvalid)
 				return
+			case errors.Is(err, store.ErrTokenExpired):
+				unauthorized(w, `Bearer error="invalid_token"`, msgTokenExpired)
+				return
 			case err != nil:
 				log.Printf("authenticate a request: %v", err)
 				http.Error(w, "agent-lounge-mcp could not check the token: internal error.", http.StatusInternalServerError)
 				return
 			}
+			uses.record(r.Context(), user.ID)
 		}
 		r = r.Clone(context.WithValue(context.WithValue(r.Context(), userKey{}, user), tokenHashKey{}, hash))
 		r.Header.Set("Authorization", "Bearer "+placeholderToken)
@@ -141,6 +196,7 @@ func bindUser(next http.Handler) http.Handler {
 		hash, _ := ctx.Value(tokenHashKey{}).(string)
 		return tools.TokenInfo(user, hash), nil
 	}
-	// Tokens do not expire (a user's token is replaced with user rotate instead).
+	// The SDK is given no expiry: authenticate checks the expiry of the token on every request,
+	// against the database, so that user expiry takes effect without a restart.
 	return sdkauth.RequireBearerToken(verify, &sdkauth.RequireBearerTokenOptions{AllowMissingExpiration: true})(next)
 }

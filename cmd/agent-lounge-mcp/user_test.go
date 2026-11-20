@@ -81,8 +81,8 @@ func TestUserCommands(t *testing.T) {
 	// list: tab-separated, without tokens or hashes.
 	code, stdout, _ = user("list", "--db", db)
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	if code != 0 || len(lines) != 3 || lines[0] != "NAME\tCREATED\tSESSIONS\tLAST_USED" ||
-		!strings.HasPrefix(lines[1], "alice\t") || !strings.HasSuffix(lines[1], "\t0\t-") || !strings.HasPrefix(lines[2], "bob\t") {
+	if code != 0 || len(lines) != 3 || lines[0] != "NAME\tCREATED\tSESSIONS\tLAST_USED\tEXPIRES" ||
+		!strings.HasPrefix(lines[1], "alice\t") || !strings.HasSuffix(lines[1], "\t0\t-\t-") || !strings.HasPrefix(lines[2], "bob\t") {
 		t.Errorf("list: %d %q", code, stdout)
 	}
 	if strings.Contains(stdout, "alm_") {

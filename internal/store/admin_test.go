@@ -163,7 +163,7 @@ func TestMigrateVersion3KeepsData(t *testing.T) {
 	dump := func() string {
 		t.Helper()
 		return dumpRows(t, s, []string{
-			"SELECT * FROM users ORDER BY id",
+			"SELECT id, name, token_hash, created_at FROM users ORDER BY id",
 			"SELECT * FROM sessions ORDER BY id",
 			"SELECT * FROM rooms ORDER BY id",
 			"SELECT id, scope, scope_id, sender_session_id, coalesce(to_session_id, 0), coalesce(room_id, 0), body, sent_at FROM messages ORDER BY id",

@@ -97,7 +97,7 @@ const userInfoKey = "agent-lounge-mcp/user"
 //
 // tokenHash is the hash of the token the request was authenticated with, or "" for a request
 // without a token (the user local). A waiting chat_inbox uses it to notice that the token
-// stopped being valid (see tokenValid). The token itself never reaches the tools.
+// stopped being valid (see checkToken). The token itself never reaches the tools.
 func TokenInfo(u store.User, tokenHash string) *sdkauth.TokenInfo {
 	return &sdkauth.TokenInfo{
 		UserID: fmt.Sprintf("%d.%d", u.ID, u.CreatedAt.UnixMilli()),
@@ -112,25 +112,42 @@ const tokenHashKey = "agent-lounge-mcp/token-hash"
 // valid.
 const DefaultTokenCheckInterval = 5 * time.Second
 
-// errTokenRevoked is the error of a waiting chat_inbox whose token stopped being valid.
+// errTokenRevoked is the error of a waiting chat_inbox whose token was replaced or whose user
+// was removed.
 var errTokenRevoked = errors.New("your token is no longer valid: it was replaced or its user was removed. " +
 	"Tell the user to update the token in this agent's MCP settings.")
 
-// tokenValid reports whether the token a request was authenticated with is still the token of
-// its user. Every HTTP request is authenticated when it arrives, but a waiting chat_inbox
-// stays inside one request for up to the wait limit, and user rotate and user remove run in
-// another process that cannot tell the server: the call has to look itself. A request without
-// a token (the user local) has nothing that can be revoked.
-func (d *Deps) tokenValid(ctx context.Context, req *mcp.CallToolRequest) (bool, error) {
+// errTokenExpired is the error of a waiting chat_inbox whose token expired while it waited.
+var errTokenExpired = errors.New("your token has expired. " +
+	"Tell the user to ask the server administrator to extend it (agent-lounge-mcp user expiry) " +
+	"or to issue a new one (agent-lounge-mcp user rotate).")
+
+// checkToken returns nil while the token a request was authenticated with is still a valid
+// token of its user, and errTokenRevoked or errTokenExpired once it is not. Every HTTP request
+// is authenticated when it arrives (an expired token is rejected there, from the request after
+// the expiry), but a waiting chat_inbox stays inside one request for up to the wait limit, and
+// user rotate, user remove and the passing of the expiry happen without the server being told:
+// the call has to look itself, at its check interval. A request without a token (the user
+// local) has nothing that can be revoked or expire.
+func (d *Deps) checkToken(ctx context.Context, req *mcp.CallToolRequest) error {
 	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
-		return true, nil
+		return nil
 	}
 	hash, _ := req.Extra.TokenInfo.Extra[tokenHashKey].(string)
 	u, ok := req.Extra.TokenInfo.Extra[userInfoKey].(store.User)
 	if hash == "" || !ok {
-		return true, nil
+		return nil
 	}
-	return d.Store.TokenValid(ctx, u.ID, hash)
+	state, err := d.Store.TokenStatus(ctx, u.ID, hash)
+	switch {
+	case err != nil:
+		return err
+	case state == store.TokenExpired:
+		return errTokenExpired
+	case state != store.TokenOK:
+		return errTokenRevoked
+	}
+	return nil
 }
 
 // RequestUser returns the user a tool request acts as: the user attached by TokenInfo, or

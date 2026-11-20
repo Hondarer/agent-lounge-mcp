@@ -41,7 +41,7 @@ func rotate(t *testing.T, sess Session, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := sess.Store.RotateToken(context.Background(), name, auth.Hash(fresh)); err != nil {
+	if err := sess.Store.RotateToken(context.Background(), name, auth.Hash(fresh), time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	return fresh
