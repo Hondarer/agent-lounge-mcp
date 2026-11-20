@@ -35,6 +35,7 @@ class Server:
     extra: Sequence[str] = ()
     log_path: str = ""
     _proc: subprocess.Popen | None = None
+    _collector: threading.Thread | None = None
     _lines: list[tuple[float, str]] = field(default_factory=list)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
@@ -57,7 +58,8 @@ class Server:
         argv = [self.binary, "serve", "--listen", self.listen, "--db", self.db, "--log-connections", *self.extra]
         self._proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
                                       encoding="utf-8", errors="replace", **terminal.new_process_group())
-        threading.Thread(target=self._collect, daemon=True).start()
+        self._collector = threading.Thread(target=self._collect, daemon=True)
+        self._collector.start()
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if self._proc.poll() is not None:
@@ -118,15 +120,21 @@ class Server:
             return None
 
     def stop(self) -> None:
-        if not self._proc or self._proc.poll() is not None:
+        if not self._proc:
             return
-        try:
-            self.interrupt()
-        except OSError:
-            pass  # go on to end the process
-        if self.wait(15) is None:
-            self._proc.kill()
-            self._proc.wait()
+        if self._proc.poll() is None:
+            try:
+                self.interrupt()
+            except OSError:
+                pass  # go on to end the process
+            if self.wait(15) is None:
+                self._proc.kill()
+                self._proc.wait()
+        # Release the pipe of the diagnostics once its reader has read to the end.
+        if self._collector:
+            self._collector.join(timeout=5)
+        if self._proc.stderr and not self._proc.stderr.closed and not (self._collector and self._collector.is_alive()):
+            self._proc.stderr.close()
 
 
 def data_dir(base: str | Path, name: str) -> Path:

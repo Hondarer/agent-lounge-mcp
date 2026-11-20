@@ -220,17 +220,16 @@ func (d *Deps) chatInbox(ctx context.Context, req *mcp.CallToolRequest, in Inbox
 		return &n
 	}
 	// The token is checked at an interval and before the messages are read after a wake-up, so
-	// that a revoked token neither keeps waiting nor receives a message (see tokenValid).
+	// that a revoked or expired token neither keeps waiting nor receives a message (see
+	// checkToken).
 	tokenCheck := time.NewTicker(cmp.Or(d.TokenCheckInterval, DefaultTokenCheckInterval))
 	defer tokenCheck.Stop()
 	// fetch is false after a tick of tokenCheck: the tick only checks the token, so that a
 	// waiting call does not read the inbox (a write transaction) at an interval.
 	for checked, fetch := false, true; ; checked = true {
 		if checked {
-			if valid, err := d.tokenValid(ctx, req); err != nil {
+			if err := d.checkToken(ctx, req); err != nil {
 				return nil, InboxOutput{}, err
-			} else if !valid {
-				return nil, InboxOutput{}, errTokenRevoked
 			}
 		}
 		if fetch {

@@ -23,11 +23,69 @@ const (
 )
 
 func userUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp user add <name> [--db FILE]          create a user and print its token")
-	fmt.Fprintln(w, "       agent-lounge-mcp user list [--db FILE]                list the users")
-	fmt.Fprintln(w, "       agent-lounge-mcp user rotate <name> [--db FILE]       print a new token; the old one stops working")
-	fmt.Fprintln(w, "       agent-lounge-mcp user remove <name> --yes [--db FILE] delete the user, its sessions, messages and memories")
+	fmt.Fprintln(w, "usage: agent-lounge-mcp user add <name> [--expires-in DURATION] [--db FILE]      create a user and print its token")
+	fmt.Fprintln(w, "       agent-lounge-mcp user list [--db FILE]                                    list the users")
+	fmt.Fprintln(w, "       agent-lounge-mcp user rotate <name> [--expires-in DURATION] [--db FILE]   print a new token; the old one stops working")
+	fmt.Fprintln(w, "       agent-lounge-mcp user expiry <name> (--in DURATION | --never) [--db FILE] change only the expiry of the token")
+	fmt.Fprintln(w, "       agent-lounge-mcp user remove <name> --yes [--db FILE]                     delete the user, its sessions, messages and memories")
 	fmt.Fprintf(w, "A user name is %s. The commands open the database file directly and work while a server uses it.\n", store.UserNameRule)
+	fmt.Fprintln(w, "A DURATION is counted from now and is at least 1s, such as 90d, 1d12h or 36h (d is 24 hours). "+
+		"Without --expires-in, the token does not expire; user rotate does not keep the expiry of the previous token.")
+}
+
+// expiryFlag is a duration flag of at least a second (see config.ParseDuration), and
+// records whether it was given.
+type expiryFlag struct {
+	d   time.Duration
+	set bool
+}
+
+func (f *expiryFlag) String() string {
+	if f == nil || !f.set {
+		return ""
+	}
+	return config.FormatDuration(f.d)
+}
+
+func (f *expiryFlag) Set(s string) error {
+	d, err := config.ParseDuration(s)
+	if err != nil {
+		return err
+	}
+	// The expiry is stored in milliseconds: a shorter duration would make a token that is
+	// expired when it is issued.
+	if d < time.Second {
+		return fmt.Errorf("invalid duration %q: must be at least 1s", s)
+	}
+	f.d, f.set = d, true
+	return nil
+}
+
+// expiresAt returns the time the duration ends, counted from now, or the zero time (no
+// expiry) when the flag was not given.
+func (f *expiryFlag) expiresAt(now time.Time) time.Time {
+	if !f.set {
+		return time.Time{}
+	}
+	return now.Add(f.d)
+}
+
+// formatExpiry renders an expiry for the output of the commands: RFC 3339 in UTC, or "-" for
+// none.
+func formatExpiry(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+// expiryGuidance is the line of the token guidance that states the expiry.
+func expiryGuidance(stderr io.Writer, name string, expiresAt time.Time) {
+	if expiresAt.IsZero() {
+		fmt.Fprintf(stderr, "The token of user %s does not expire.\n", name)
+		return
+	}
+	fmt.Fprintf(stderr, "The token of user %s expires at %s.\n", name, formatExpiry(expiresAt))
 }
 
 // runUser runs the user subcommand with its arguments (after "user") and returns the exit code.
@@ -42,7 +100,7 @@ func runUser(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	case "help", "-h", "-help", "--help":
 		userUsage(stdout)
 		return exitOK
-	case "add", "list", "rotate", "remove":
+	case "add", "list", "rotate", "expiry", "remove":
 	default:
 		fmt.Fprintf(stderr, "agent-lounge-mcp: unknown user command %q\n", cmd)
 		userUsage(stderr)
@@ -56,12 +114,26 @@ func runUser(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	if cmd == "remove" {
 		yes = flags.Bool("yes", false, "remove without asking: required")
 	}
+	var expiresIn, in expiryFlag
+	var never *bool
+	switch cmd {
+	case "add", "rotate":
+		flags.Var(&expiresIn, "expires-in", "the token expires after this `DURATION` from now (90d, 1d12h, 36h); none when omitted")
+	case "expiry":
+		flags.Var(&in, "in", "the token expires after this `DURATION` from now (90d, 1d12h, 36h)")
+		never = flags.Bool("never", false, "the token does not expire")
+	}
 	pos, err := parseInterleaved(flags, args)
 	switch {
 	case errors.Is(err, flag.ErrHelp):
 		return exitOK
 	case err != nil:
 		return exitUsage // the flag package printed the error and the usage
+	}
+	if cmd == "expiry" && in.set == *never {
+		fmt.Fprintln(stderr, "agent-lounge-mcp: user expiry takes one of --in DURATION and --never")
+		userUsage(stderr)
+		return exitUsage
 	}
 	wantArgs := 1
 	if cmd == "list" {
@@ -96,11 +168,13 @@ func runUser(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 
 	switch cmd {
 	case "add":
-		err = userAdd(ctx, st, pos[0], *db, stdout, stderr)
+		err = userAdd(ctx, st, pos[0], *db, expiresIn.expiresAt(time.Now()), stdout, stderr)
 	case "list":
 		err = userList(ctx, st, stdout)
 	case "rotate":
-		err = userRotate(ctx, st, pos[0], *db, stdout, stderr)
+		err = userRotate(ctx, st, pos[0], *db, expiresIn.expiresAt(time.Now()), stdout, stderr)
+	case "expiry":
+		err = userExpiry(ctx, st, pos[0], in.expiresAt(time.Now()), stdout)
 	case "remove":
 		err = userRemove(ctx, st, pos[0], *yes, stdout, stderr)
 	}
@@ -135,7 +209,7 @@ func tokenGuidance(stderr io.Writer, name, db string) {
 	fmt.Fprintf(stderr, "If the token leaks, issue a new one with: agent-lounge-mcp user rotate %s --db %s\n", name, db)
 }
 
-func userAdd(ctx context.Context, st *store.Store, name, db string, stdout, stderr io.Writer) error {
+func userAdd(ctx context.Context, st *store.Store, name, db string, expiresAt time.Time, stdout, stderr io.Writer) error {
 	if err := store.ValidateUserName(name); err != nil {
 		return err
 	}
@@ -143,42 +217,61 @@ func userAdd(ctx context.Context, st *store.Store, name, db string, stdout, stde
 	if err != nil {
 		return err
 	}
-	if _, err := st.AddUser(ctx, name, auth.Hash(token)); err != nil {
+	if _, err := st.AddUser(ctx, name, auth.Hash(token), expiresAt); err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, token)
 	tokenGuidance(stderr, name, db)
+	expiryGuidance(stderr, name, expiresAt)
 	return nil
 }
 
-func userRotate(ctx context.Context, st *store.Store, name, db string, stdout, stderr io.Writer) error {
+func userRotate(ctx context.Context, st *store.Store, name, db string, expiresAt time.Time, stdout, stderr io.Writer) error {
 	token, err := auth.NewToken()
 	if err != nil {
 		return err
 	}
-	if err := st.RotateToken(ctx, name, auth.Hash(token)); err != nil {
+	if err := st.RotateToken(ctx, name, auth.Hash(token), expiresAt); err != nil {
 		return err
 	}
 	fmt.Fprintln(stdout, token)
 	fmt.Fprintf(stderr, "The previous token of user %s no longer works; its sessions and messages are kept.\n", name)
 	tokenGuidance(stderr, name, db)
+	expiryGuidance(stderr, name, expiresAt)
+	return nil
+}
+
+// userExpiry changes the expiry of the user's token (the zero time for none) and prints the
+// result in one line. The token stays the same; an expired token works again when the new
+// expiry is later than now.
+func userExpiry(ctx context.Context, st *store.Store, name string, expiresAt time.Time, stdout io.Writer) error {
+	if err := st.SetTokenExpiry(ctx, name, expiresAt); err != nil {
+		return err
+	}
+	if expiresAt.IsZero() {
+		fmt.Fprintf(stdout, "the token of user %s does not expire\n", name)
+	} else {
+		fmt.Fprintf(stdout, "the token of user %s expires at %s\n", name, formatExpiry(expiresAt))
+	}
 	return nil
 }
 
 // userList prints one line per user, separated by tabs: name, creation time, number of
-// sessions, and the last activity of its sessions ("-" for none). Times are RFC 3339 in UTC.
+// sessions, last use, and the expiry of its token ("-" for none, and for local). The last use
+// is the later of the last request with the user's token and the last activity of its sessions
+// ("-" for neither). Times are RFC 3339 in UTC.
 func userList(ctx context.Context, st *store.Store, stdout io.Writer) error {
 	users, err := st.ListUsers(ctx)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(stdout, "NAME\tCREATED\tSESSIONS\tLAST_USED")
+	fmt.Fprintln(stdout, "NAME\tCREATED\tSESSIONS\tLAST_USED\tEXPIRES")
 	for _, u := range users {
 		last := "-"
 		if !u.LastUsedAt.IsZero() {
 			last = u.LastUsedAt.Format(time.RFC3339)
 		}
-		fmt.Fprintf(stdout, "%s\t%s\t%d\t%s\n", u.Name, u.CreatedAt.Format(time.RFC3339), u.Sessions, last)
+		fmt.Fprintf(stdout, "%s\t%s\t%d\t%s\t%s\n", u.Name, u.CreatedAt.Format(time.RFC3339), u.Sessions, last, formatExpiry(u.TokenExpiresAt))
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/auth"
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
@@ -29,7 +30,7 @@ func newUser(t *testing.T, sess Session, name string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := sess.Store.AddUser(context.Background(), name, auth.Hash(token)); err != nil {
+	if _, err := sess.Store.AddUser(context.Background(), name, auth.Hash(token), time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	return token
@@ -195,7 +196,7 @@ func TestRotateAndRemoveTakeEffect(t *testing.T) {
 	testutil.Call[joined](t, cs, "lounge_join", map[string]any{"name": "a"})
 
 	fresh, _ := auth.NewToken()
-	if err := sess.Store.RotateToken(ctx, "alice", auth.Hash(fresh)); err != nil {
+	if err := sess.Store.RotateToken(ctx, "alice", auth.Hash(fresh), time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := cs.ListTools(ctx, nil); err == nil || !strings.Contains(err.Error(), "Unauthorized") {

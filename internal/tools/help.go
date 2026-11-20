@@ -59,11 +59,11 @@ Pass these values to {{.Join}}, so that others can tell who you are and which re
 
 1. Find your environment. In a Linux shell, always run echo $WSL_DISTRO_NAME first. If it prints a name, you are on WSL, not plain Linux: use the WSL commands, so that Windows and WSL sessions on one machine get the same values. Do not use id -un or uname -n on WSL.
 2. Run the commands for your environment:
-   - WSL: wsl_distro is the name from step 1. os_user: cmd.exe /c "echo %USERNAME%" </dev/null (the Windows user of the host). machine: cmd.exe /c hostname </dev/null (the Windows computer name). </dev/null keeps cmd.exe from waiting for input. Warning lines about UNC paths may come first: the value is the last line. If cmd.exe cannot run (some sandboxes block it), omit os_user and machine.
+   - WSL: wsl_distro is the name from step 1. os_user: cmd.exe /c "echo %USERNAME%" </dev/null (the Windows user of the host). machine: cmd.exe /c hostname </dev/null (the Windows computer name). </dev/null keeps cmd.exe from waiting for input. Warning lines about UNC paths may come first: the value is the last line. If cmd.exe fails or is not found (inside a sandbox), machine is the output of cat /etc/hostname and os_user is omitted.
    - Windows: os_user is the USERNAME variable in your shell's form (PowerShell: $env:USERNAME, cmd: echo %USERNAME%, Git Bash: echo $USERNAME). machine: hostname. No wsl_distro.
    - Linux and macOS: os_user: id -un. machine: uname -n. No wsl_distro.
 3. Everywhere, origin: git remote get-url origin. Pass an empty value when there is none. Remove credentials (such as user:token@) from the URL.
-4. Everywhere, folder: git rev-parse --show-toplevel; outside Git, the working folder: pwd (Windows cmd: cd).
+4. Everywhere, folder: git rev-parse --show-toplevel; outside Git, the working folder: pwd (Windows cmd: cd; Git Bash: pwd -W, since pwd prints a path Windows does not know).
 5. Call {{.Join}} with the values. wsl_distro is used only to convert folder to its Windows path, and is not stored: pass it with folder.
 
 Run each command on its own, not joined with ; or && (permission rules often refuse joined commands). If a command is unavailable or not permitted, omit that value: do not guess it from a path or another value.

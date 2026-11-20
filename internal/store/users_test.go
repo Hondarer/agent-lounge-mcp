@@ -7,12 +7,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // addUser adds a user with a fake token hash and returns it.
 func addUser(t *testing.T, s *Store, name string) User {
 	t.Helper()
-	u, err := s.AddUser(context.Background(), name, "hash-"+name)
+	u, err := s.AddUser(context.Background(), name, "hash-"+name, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +24,7 @@ func TestUserLifecycle(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openLocal(t)
 
-	alice, err := s.AddUser(ctx, "alice", "hash-1")
+	alice, err := s.AddUser(ctx, "alice", "hash-1", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,14 +48,14 @@ func TestUserLifecycle(t *testing.T) {
 	}
 
 	// Names: taken, reserved, invalid.
-	if _, err := s.AddUser(ctx, "alice", "hash-2"); !errors.Is(err, ErrUserExists) {
+	if _, err := s.AddUser(ctx, "alice", "hash-2", time.Time{}); !errors.Is(err, ErrUserExists) {
 		t.Errorf("duplicate name: %v", err)
 	}
-	if _, err := s.AddUser(ctx, LocalUser, "hash-3"); !errors.Is(err, ErrReservedUser) {
+	if _, err := s.AddUser(ctx, LocalUser, "hash-3", time.Time{}); !errors.Is(err, ErrReservedUser) {
 		t.Errorf("local: %v", err)
 	}
 	for _, name := range []string{"", "Alice", "-a", ".a", "a/b", "a b", strings.Repeat("a", 33), "日本"} {
-		if _, err := s.AddUser(ctx, name, "h"); err == nil || !strings.Contains(err.Error(), "invalid user name") {
+		if _, err := s.AddUser(ctx, name, "h", time.Time{}); err == nil || !strings.Contains(err.Error(), "invalid user name") {
 			t.Errorf("name %q: %v", name, err)
 		}
 	}
@@ -69,7 +70,7 @@ func TestUserLifecycle(t *testing.T) {
 
 	// Rotate: the old hash no longer finds the user; the data stays.
 	work := join(t, s, alice.ID, "work")
-	if err := s.RotateToken(ctx, "alice", "hash-new"); err != nil {
+	if err := s.RotateToken(ctx, "alice", "hash-new", time.Time{}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.UserByTokenHash(ctx, "hash-1"); !errors.Is(err, ErrNoSuchUser) {
@@ -82,7 +83,7 @@ func TestUserLifecycle(t *testing.T) {
 		t.Errorf("sessions after rotate: %+v, %v", sessions, err)
 	}
 	for _, name := range []string{"nobody", LocalUser} {
-		if err := s.RotateToken(ctx, name, "x"); err == nil {
+		if err := s.RotateToken(ctx, name, "x", time.Time{}); err == nil {
 			t.Errorf("rotate %s was accepted", name)
 		}
 	}
@@ -382,7 +383,7 @@ func TestMigrateVersion2KeepsData(t *testing.T) {
 		t.Helper()
 		var b strings.Builder
 		for _, q := range []string{
-			"SELECT * FROM users ORDER BY id",
+			"SELECT id, name, token_hash, created_at FROM users ORDER BY id",
 			"SELECT * FROM sessions ORDER BY id",
 			"SELECT * FROM rooms ORDER BY id",
 			"SELECT id, scope, sender_session_id, coalesce(to_session_id, 0), coalesce(room_id, 0), body, sent_at FROM messages ORDER BY id",

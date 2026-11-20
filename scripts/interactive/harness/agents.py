@@ -70,6 +70,9 @@ class Definition:
     ready: Sequence[str]  # any of these on the screen: ready for an instruction
     dialogs: Sequence[tuple[str, Sequence[str]]] = ()  # (text on the screen, keys that answer it)
     # Permission prompts answered while a reply is awaited: (text on the screen, keys that allow).
+    # The text is the question line; lines before it, separated by line feeds, must stand on
+    # the screen above the question (see _Prompts.ABOVE), for a question that other prompts
+    # also ask.
     approvals: Sequence[tuple[str, Sequence[str]]] = ()
     # Texts the screen shows only while the CLI works on an instruction.
     busy: Sequence[str] = ()
@@ -152,9 +155,12 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         # allowed commands does not cover, and allowing the whole shell would also allow what
         # the model never asked for. Each command's prompt is answered instead (approvals), and
         # the answers are counted. A command the model asks for still runs as the user who
-        # runs the harness, in or outside the check folder.
+        # runs the harness, in or outside the check folder. A command that reads or writes a
+        # path outside the paths allowed for the session (such as cat /etc/hostname) asks
+        # again for that path; it is allowed once (1. Yes is selected), not for the session.
         interactive=["--allow-tool", SERVER, "--allow-tool", "write"],
-        approvals=[("Do you want to run this command?", [ENTER])],
+        approvals=[("Do you want to run this command?", [ENTER]),
+                   ("Allow path access\nDo you want to allow this?", [ENTER])],
         busy=["ctrl+c interrupt"],
         one_shot=lambda prompt: ["-p", prompt, "--allow-tool", SERVER],
         register=_copilot_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
@@ -193,23 +199,37 @@ class _Prompts:
     prompt again when it stands on the same line as the question before, so "written after
     the answer" cannot be the test, and "left the screen in between" is never true for two
     prompts in a row. The lines above the question (what is asked for: the command) tell the
-    prompts apart. A prompt with the same lines as the answered one counts again only after
-    RETRY seconds: either the key was not taken, or the same command is asked for twice.
+    prompts apart.
+
+    When the same command is asked for twice in a row (two calls made at once), the second
+    prompt has the same lines as the first, and the CLI does not redraw the prompt at all: it
+    writes only elsewhere (Copilot CLI writes a line about the remaining requests and the
+    state of the first call). A prompt with the same lines counts again once the CLI wrote
+    letters or digits after the answer and then none for SETTLE seconds: a CLI that took the
+    key and has an answered prompt to remove removes it in the output it writes for the key,
+    not seconds later. A CLI that writes nothing after the answer (the key was not taken, or
+    it has not yet redrawn) gets the same answer again only after RETRY seconds.
     """
 
     RETRY = 15.0
+    SETTLE = 2.0
     CONTEXT = 8  # lines above the question that belong to the prompt
+    ABOVE = 16  # lines above the question in which the other lines of a text must stand
 
-    def __init__(self, texts: Sequence[str]):
+    def __init__(self, texts: Sequence[str], letters: Callable[[], int]):
         self._texts = list(texts)
+        self._letters = letters  # the number of letters and digits the CLI has written so far
         self._last: tuple[str, str] | None = None  # the prompt answered last, and its lines
-        self._at = 0.0
+        self._at = 0.0  # when it was answered
+        self._count = 0  # letters and digits written when last looked
+        self._wrote: float | None = None  # when letters or digits were last seen after the answer
 
     def _find(self, display: str) -> tuple[str, str] | None:
         lines = display.split("\n")
         for text in self._texts:
+            *above, question = text.split("\n")
             for i, line in enumerate(lines):
-                if text in line:
+                if question in line and all(any(a in l for l in lines[max(0, i - self.ABOVE):i]) for a in above):
                     return text, "\n".join(lines[max(0, i - self.CONTEXT):i])
         return None
 
@@ -219,13 +239,23 @@ class _Prompts:
         if seen is None:
             self._last = None  # the answered prompt left the screen: the next one is new
             return None
-        if seen == self._last and time.monotonic() - self._at < self.RETRY:
-            return None
-        return seen[0]
+        if seen != self._last:
+            return seen[0]
+        now = time.monotonic()
+        count = self._letters()
+        if count != self._count:
+            self._count, self._wrote = count, now
+        if self._wrote is not None and now - self._wrote >= self.SETTLE:
+            return seen[0]  # the CLI took the key and drew elsewhere: the same command again
+        if now - self._at >= self.RETRY:
+            return seen[0]  # the key was not taken
+        return None
 
     def answered(self, display: str, text: str) -> None:
+        """Call before the keys of the answer are sent."""
         seen = self._find(display)
-        self._last, self._at = seen if seen and seen[0] == text else (text, ""), time.monotonic()
+        self._last = seen if seen and seen[0] == text else (text, "")
+        self._at, self._count, self._wrote = time.monotonic(), self._letters(), None
 
 
 class AgentNotReady(Exception):
@@ -302,7 +332,7 @@ class Agent:
         start = self.term.mark()
         began = time.monotonic()
         deadline = began + timeout
-        prompts = _Prompts([text for text, _ in self.d.approvals])
+        prompts = _Prompts([text for text, _ in self.d.approvals], self.term.letters)
         approvals = 0
         found = complete = False
         try:

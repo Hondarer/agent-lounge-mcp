@@ -29,6 +29,9 @@ type Store struct {
 // before the store is used concurrently.
 func (s *Store) SetClock(now func() time.Time) { s.now = now }
 
+// Now returns the current time of the store's clock (see SetClock).
+func (s *Store) Now() time.Time { return s.now() }
+
 // pragmas are applied to every connection of the pool.
 //   - busy_timeout: wait for a competing writer instead of failing with SQLITE_BUSY.
 //   - journal_mode(WAL): readers do not block the writer and the writer does not block readers.

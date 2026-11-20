@@ -183,10 +183,10 @@ Table: リポジトリの単位
 
 ### 手順
 
-1. 利用者ごとに、ユーザーを作ります。トークンが 1 回だけ表示されるので、その利用者に安全な方法で渡します。
+1. 利用者ごとに、ユーザーを作ります。トークンが 1 回だけ表示されるので、その利用者に安全な方法で渡します。トークンに有効期限を付ける場合は、`--expires-in` に、現在から数えた期間 (`90d`、`1d12h`、`36h`) を指定します。指定しなければ、有効期限はありません。
 
     ```bash
-    dist/agent-lounge-mcp user add alice --db ~/.local/share/agent-lounge-mcp/lounge.db
+    dist/agent-lounge-mcp user add alice --expires-in 90d --db ~/.local/share/agent-lounge-mcp/lounge.db
     ```
 
 2. サーバーを、他のマシンから届くアドレスで起動します。`--allow-remote` が必要です。
@@ -214,14 +214,17 @@ Table: トークンを付けた登録のコマンド
 | 目的 | コマンド |
 |---|---|
 | ユーザーを一覧する | `agent-lounge-mcp user list --db FILE` |
-| トークンを発行し直す (漏れたとき、忘れたとき) | `agent-lounge-mcp user rotate <名前> --db FILE` |
+| トークンを発行し直す (漏れたとき、忘れたとき)。有効期限は、`--expires-in` で指定し直す (前のトークンの有効期限は、引き継がない) | `agent-lounge-mcp user rotate <名前> [--expires-in <期間>] --db FILE` |
+| トークンを変えずに、有効期限を延ばす、または有効期限をなくす。有効期限が切れた後のトークンも、延ばせば、また使える | `agent-lounge-mcp user expiry <名前> (--in <期間> | --never) --db FILE` |
 | ユーザーと、そのセッションとメッセージを削除する | `agent-lounge-mcp user remove <名前> --yes --db FILE` |
 
 Table: ユーザーの管理
 
 セッションの一覧と削除は、[セッションの整理](#セッションの整理) を参照してください。
 
-どのコマンドも、サーバーの起動中に実行できます。発行し直しと削除は、そのユーザーの次の要求から効きます。
+どのコマンドも、サーバーの起動中に実行できます。発行し直し、削除、有効期限の変更は、そのユーザーの次の要求から効きます。
+
+`user list` の `EXPIRES` に、トークンの有効期限が出ます (有効期限がなければ `-`)。`LAST_USED` は、そのユーザーのトークンで接続した最後の日時です (`lounge_join` を呼ばない接続を含みます)。有効期限が切れたトークンで接続すると、サーバーは 401 を返します。有効期限が切れても、ユーザーとそのセッション、メッセージ、メモリは残ります。
 
 ### 注意
 
@@ -247,7 +250,7 @@ Table: ユーザーの管理
 dist/agent-lounge-mcp serve --allowed-host lounge.example.com --db ~/.local/share/agent-lounge-mcp/lounge.db
 ```
 
-nginx の設定の例を示します。この例の動作は、未検証です。
+nginx の設定の例を示します。
 
 ```nginx
 server {
@@ -511,7 +514,8 @@ Claude Code は、`AGENTS.md` を読みません。複数のエージェント�
 | origin の正規化 (正規化済みの形の条件、相対パス)、WSL の共有の形のドライブのパス、`chat_history` の存在しないルーム名のエラー、待ち受け中のトークンの確認 (発行し直しとユーザーの削除で待ち受けをやめること、無効になった後のメッセージを渡さないこと)、失敗した呼び出しでの最終利用時刻の更新 | 検証済 | 自動テスト (`go test -race ./...`)。Linux x86_64 (WSL 2)。Windows では、`go test ./...` (Windows 10.0.26300、Go 1.27.4) |
 | 実行ファイルの起動、`probe.sh`、`chat-probe.sh` (待ち受け中の受信を含む) | 検証済 | 実機。Linux x86_64 (WSL 2)、`linux-amd64` の実行ファイル |
 | 実行ファイルで、待ち受け中の `chat_inbox` が停止のエラーを返すこと。停止の処理中に、ツールの呼び出しが停止のエラーを返し、`/healthz` が `stopping` を返すこと。接続がなければすぐに終了すること | 検証済 | 実機 (`curl` で接続し、`SIGINT`)。Linux x86_64 (WSL 2)、`linux-amd64` の実行ファイル |
-| Windows arm64、macOS、Linux arm64 の実行ファイル | 未検証 | クロスビルドのみ |
+| Linux arm64 の実行ファイル | 未検証 | クロスビルドのみ |
+| Windows arm64 と macOS (`darwin-amd64`、`darwin-arm64`) の実行ファイル、macOS でのプロフィールの申告 | - | ビルドのみで、動作は保証しません。 |
 | Claude Code (2.1.325) での登録と会話 (参加、セッション宛ての送受信、`lounge` ルームの送受信、未読の件数) | 検証済 | 実機。Linux x86_64 (WSL 2) |
 | Codex (0.169.0) での登録と会話 (参加、セッション宛ての送受信、`lounge` ルームの送受信、未読の件数) | 検証済 | 実機。Linux x86_64 (WSL 2) |
 | Copilot CLI (1.0.112) での登録と会話 (参加、セッション宛ての送受信、`lounge` ルームの送受信、未読の件数) | 検証済 | 実機。Linux x86_64 (WSL 2) |
@@ -525,12 +529,16 @@ Claude Code は、`AGENTS.md` を読みません。複数のエージェント�
 | 5 つのエージェントでのプロフィールの申告 (スキルと指示ファイルのないフォルダーで、使い方を確認し、WSL であることを確かめて、ホストの Windows のユーザー名とコンピューター名、origin、フォルダーを申告する) | 検証済 | 実機 (各 CLI の非対話の実行)。Linux x86_64 (WSL 2)。Claude Code 2.1.326、Codex 0.169.0、Copilot CLI 1.0.112、Grok 1.0.77、agy 1.5.10。Codex と agy は、サンドボックスを外した実行 |
 | 5 つのエージェントでのリポジトリのルーム (同じ origin の 5 つの間の送信と受信。別の origin のセッションに届かないこと) | 検証済 | 同上 |
 | 5 つのエージェントでの、origin のないフォルダーのリポジトリのルーム (WSL の中のフォルダーとそのサブフォルダー、Windows のドライブの中のフォルダー) | 検証済 | 同上 |
-| フォルダーを移ったときの、エージェントによるプロフィールの更新 | 検証済 (Codex、Copilot CLI、Grok、agy)、未検証 (Claude Code) | 同上。Claude Code は、別のフォルダーへ移る操作が許可されない条件だったため、更新の動作を確認していません。 |
-| サンドボックスの中で実行する Codex (`-s read-only`、`-s workspace-write`) と agy (許可の規則を指定した実行) でのプロフィールの申告 | 制限あり | 実機。WSL からホストの Windows の値を取得できず、`os_user` と `machine` を申告できません。origin のあるリポジトリのルームは使えます (検証済)。origin のないフォルダーでは、リポジトリの空間を使えません。 |
+| フォルダーを移ったときの、エージェントによるプロフィールの更新 | 検証済 | 同上 (Codex、Copilot CLI、Grok、agy)。Claude Code 2.1.329 は、実機 (非対話の実行)。Linux x86_64 (WSL 2)。別のフォルダーへ移る操作を許可した実行で、移った後に `lounge_join` を呼び直し、リポジトリの単位が移ったフォルダーのものに変わりました。作業フォルダーの外へ移る操作には、`--add-dir` による許可が要ります。 |
+| サンドボックスの中で実行する Codex (`-s read-only`) と agy (許可の規則を指定した実行) での、origin のないフォルダーのプロフィールの申告 (`machine` を `cat /etc/hostname` で調べ、`os_user` は省く) と、サンドボックスなしの Claude Code とのリポジトリのルームでの往復 | 検証済 | 実機 (各 CLI の非対話の実行)。Linux x86_64 (WSL 2)。Codex 0.169.0、agy 1.5.13、Claude Code 2.1.329。サンドボックスなしの 5 つ (Claude Code 2.1.329、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.13) の申告は、変わりませんでした。`/etc/wsl.conf` でホスト名を変えた環境は未検証です。 |
 | Windows で動く 5 つのエージェントでのプロフィールの申告と、WSL の側のセッションとの間のリポジトリのルームの往復 (origin のない同じフォルダーを、Windows の側と WSL の側から開く) | 検証済 | 実機 (各 CLI の非対話の実行。許可は、agent-lounge のツールと読み取りのコマンドだけ。Codex は `-s read-only`)。Windows 10.0.26300、PowerShell 7.7.0 と、同じマシンの WSL 2。サーバーは WSL の側で起動。Claude Code 2.1.325、Codex 0.169.0、Copilot CLI 1.0.112、Grok 1.0.77、agy 1.5.9 |
 | Windows で動く Claude Code での、origin のあるリポジトリのフォルダーでの申告 | 検証済 | 実機。Windows 10.0.26300。Claude Code 2.1.325 |
+| Windows で動く Codex、Copilot CLI、Grok、agy での、origin のあるリポジトリのフォルダーでの申告 (リポジトリの単位が、origin の正規化の値になる) | 検証済 | 実機 (各 CLI の非対話の実行)。Windows 10.0.26300。Codex 0.170.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.11。Codex (`-s read-only`) は、サンドボックスの中で PowerShell を起動できず、`cmd.exe` で調べました。Copilot CLI は、シェルの許可の規則がなければシェルを拒否し、許可の規則を指定した実行でも、`$env:USERNAME` が規則に合わないため `os_user` を申告できませんでした。 |
+| Windows で動くエージェントでの、シェルごとの申告 (PowerShell、Git Bash、`cmd`) | 検証済 (値) | 実機。Windows 10.0.26300。PowerShell 7 (Claude Code 2.1.325、Copilot CLI 1.0.114、Grok 1.0.89。Codex 0.170.0 は PowerShell 7 を起動できない場合に `cmd.exe`)、Windows PowerShell 5.1 (agy 1.5.11)、Git Bash (`CLAUDE_CODE_GIT_BASH_PATH` を指定した Claude Code 2.1.325)。`os_user`、`machine`、`origin` は、どのシェルでも同じ値でした。 |
+| Git Bash での、作業フォルダー (`folder`) を `pwd -W` で調べる案内 (origin のないフォルダーで、記録されたフォルダーとリポジトリの単位が、PowerShell と `cmd` の値と同じになる) | 検証済 | 実機 (非対話の実行)。Windows 10.0.26300。Git Bash を使う Claude Code 2.1.325。Git Bash の `pwd` は `/tmp/...` の形を表示し、`pwd -W` は Windows のパスを表示しました。 |
 | Windows 向けの実行ファイル (`windows-amd64`) の起動、`/healthz`、`lounge_join` の正規化、Ctrl+C の信号での停止の表示と終了コード | 検証済 | 実機。Windows 10.0.26300 |
-| Windows での、キーボードからの Ctrl+C と、2 回目の Ctrl+C | 未検証 | |
+| Windows での Ctrl+C と、2 回目の Ctrl+C (1 回目は、停止の表示と終了コード 0。続けて 2 回目は、接続を待たない終了) | 検証済 | 実機 (疑似端末へのキー入力。ConPTY)。Windows 10.0.26300、`windows-amd64` の実行ファイル |
+| 物理的なキーボードでの Ctrl+C | 未検証 | |
 | トークンの発行、照合、発行し直し、削除。要求ごとの認証の判定と、トークンが必須になる 3 つの条件。接続とユーザーの結び付け。`Host` の検査の 3 つの構成。スコープと対象の 4 つの組み合わせ、2 人のユーザーでの `lounge_who`、宛先の形、返信。上限の 3 つ。版 2 のデータベースの移行 | 検証済 | 自動テスト (`go test -race ./...`)。Linux x86_64 |
 | 実行ファイルで、`--allow-remote` なしのループバック以外の指定が起動を中止すること。`--allow-remote` での起動と警告。トークンなしと誤ったトークンの 401。`user rotate` と `user remove` が、次の要求から効くこと。トークンを指定した `probe.sh` と、2 人のユーザーでの `chat-probe.sh` | 検証済 | 実機。Linux x86_64 (WSL 2)、`linux-amd64` の実行ファイル |
 | WSL の側の 5 つのエージェントでの、トークンを付けた登録と参加 (ユーザーが、トークンのユーザーになる) | 検証済 | 実機 (各 CLI の非対話の実行)。Linux x86_64 (WSL 2)。Claude Code 2.1.326、Codex 0.169.0、Copilot CLI 1.0.112、Grok 1.0.77、agy 1.5.10。Codex と agy は、サンドボックスを外した実行 |
@@ -547,7 +555,10 @@ Claude Code は、`AGENTS.md` を読みません。複数のエージェント�
 | 実行ファイルで、`probe.sh` と `chat-probe.sh` (メモリの確認を含む)。短い半減期を指定した、薄れる動作、取得での復帰、固定、猶予期間の後の削除 (参照されたメモリは、より後に削除されること)。サーバーの起動中の `memory list`、`memory remove`、メモリの書き出し | 検証済 | 実機。Linux x86_64 (WSL 2)、`linux-amd64` の実行ファイル |
 | 5 つのエージェントでの、案内だけでのメモリの保存 (指示にツール名を含めない。5 つとも、保存の前に検索した)、別の CLI が保存したメモリを検索して答えること、別のユーザーがリポジトリのスコープに保存したメモリを読み、保存した人を示すこと | 検証済 | 実機 (各 CLI の非対話の実行。許可は、agent-lounge のツールだけ。Codex は `-s read-only` に、agent-lounge のツールの承認の設定を加えた)。Linux x86_64 (WSL 2)。Claude Code 2.1.326、Codex 0.169.0、Copilot CLI 1.0.113、Grok 1.0.77、agy 1.5.10 |
 | Windows で動くエージェントでの、メモリのツール | - | OS によって変わる部分 (接続、申告、パスの形) を変更していないため、確認は不要です。 |
-| リバース プロキシ (`--allowed-host`) 経由の接続と、nginx の設定の例 | 未検証 | `Host` の検査は、自動テストで検証済 |
+| リバース プロキシ (`--allowed-host`) 経由の接続と、nginx の設定の例 (HTTPS の終端、`/mcp` のトークンあり 200 とトークンなし 401、許可していない `Host` の 403、待ち受け中の `chat_inbox` の受信、Claude Code の参加) | 検証済 | 実機。Linux x86_64 (WSL 2)。nginx 1.31.9 (podman 4.9.4 のコンテナー、自己署名の証明書)。設定の例は、待ち受けのアドレス、サーバー名、証明書、転送先のポートだけを変えて使いました。`--allowed-host` を指定した名前での経路は `curl`、待ち受け中の受信を含む `probe.sh` と `chat-probe.sh` と Claude Code は `localhost` で確かめました。Claude Code 2.1.329 |
+| トークンの有効期限 (有効期限切れの 401 と本文、`user expiry` による延長の後の再利用、待ち受け中の `chat_inbox` の打ち切り、有効期限のないトークンの動作、版 5 のデータベースの移行)、参加していない要求での最後の利用日時 (1 分に 1 回までの書き込み、`local` の表示)、`machine` の拒否 (`sandbox`、`localhost`、`localhost.localdomain`。大文字と小文字を含む)、`lounge_help` の案内文 (`cat /etc/hostname`、`pwd -W`) | 検証済 | 自動テスト。Linux x86_64 (WSL 2) は `go test -race ./...`、Windows 10.0.26300 は `go test ./...` |
+| Windows の側で起動したサーバーでの、未読のメッセージの期限切れ、メッセージの削除、使われていないセッションの削除、`session list`、`session remove`、`memory list`、`memory remove`、`export` (Windows のパスへの書き出し) | 検証済 | 実機。Windows 10.0.26300、`windows-amd64` の実行ファイル。短い期間のオプションを指定して、ループバックで起動 |
+| Windows の側で起動したサーバーへの、WSL の側のエージェントからの接続 | 未検証 | |
 | 5 つのエージェントの対話の画面での、1 つのセッションでの複数回の指示 (参加の後、別のセッションからのメッセージを、次の指示で受け取る。同じ接続が使われる) と、CLI を起動し直した後の、同じ名前での参加 (セッションが増えず、終了中に届いたメッセージを受け取る) | 検証済 | 実機 (検証の基盤)。Linux x86_64 (WSL 2) と Windows 10.0.26300。WSL の側: Claude Code 2.1.327、Codex 0.169.0、Copilot CLI 1.0.114、Grok 1.0.89、agy 1.5.11 と 1.5.12。Windows の側: Claude Code 2.1.325、Codex 0.169.0 と 0.170.0、Copilot CLI 1.0.112 から 1.0.114、Grok 1.0.77 と 1.0.88、agy 1.5.10 と 1.5.11 |
 | 5 つのエージェントが、接続時の案内文をモデルに渡すかどうか | 検証済 (渡す: Claude Code、Grok。渡さない: Codex、Copilot CLI、agy) | 同上 (案内文に合言葉を足した、確認用の実行ファイル) |
 | 5 つのエージェントが読む指示ファイル | 検証済 | 同上 |
@@ -564,7 +575,7 @@ Table: 検証済みの範囲
 次の点は、未検証です。
 
 - 5 つのエージェントの、上記以外の版
-- macOS と、WSL ではない Linux でのプロフィールの申告
+- WSL ではない Linux でのプロフィールの申告
 - WSL のマウントの場所を `/mnt` 以外に変えた環境
 - 対話の画面での、ツールの許可を求める画面の操作
 - VS Code への登録
@@ -580,9 +591,10 @@ Table: 検証済みの範囲
 | 返信を待つ指示で、すぐに戻ってくる | サーバーを `--inbox-wait-max 0` で起動していないかを確認します。 |
 | `took the session over` のエラーになる | 別のエージェントが同じ名前で参加しました。別の名前で参加し直します。 |
 | `has no repository` のエラーになる | リポジトリのルームに送ろうとしたセッションに、リポジトリの単位がありません。エージェントに、プロフィールを付けて同じ名前で参加し直すよう指示します。 |
-| `folder without origin needs machine` のエラーになる | origin のないフォルダーで、マシンの名前を申告していません。エージェントがマシンの名前を調べられない環境 (サンドボックスの中など) では、origin のないフォルダーのリポジトリのスコープを使えません。 |
+| `folder without origin needs machine` のエラーになる | origin のないフォルダーで、マシンの名前を申告していません。WSL のサンドボックスの中など、`cmd.exe` を実行できない環境では、`machine` に `cat /etc/hostname` の出力を使うよう、エージェントに伝えます。`machine` に `sandbox`、`localhost`、`localhost.localdomain` を渡した場合も、エラーになります。 |
 | リポジトリのルームに送っても、相手に届かない | `lounge_who` で、相手が一覧にいて、`scopes` に `repository` があるかを確認します。ない場合は、相手の `repository` の値を見て (他のユーザーの相手は、一覧に現れません)、origin またはフォルダーが違っていないかを確認します。 |
-| 接続が 401 で拒否される | トークンがないか、無効です。登録のコマンドのトークンを確かめます。`user rotate` や `user remove` の後は、古いトークンは使えません。 |
+| 接続が 401 で拒否される | トークンがないか、無効です。登録のコマンドのトークンを確かめます。`user rotate` や `user remove` の後は、古いトークンは使えません。本文が `rejected the token because it has expired` の場合は、トークンの有効期限が切れています。サーバーの管理者が、`user list` の `EXPIRES` で有効期限を確かめ、`user expiry <名前> --in <期間>` で延ばすか、`user rotate <名前>` でトークンを発行し直します。延ばした場合は、同じトークンを使えます。 |
+| `your token has expired` のエラーになる | 返信を待っている間に、トークンの有効期限が切れました。接続の 401 の場合と同じ対処です。 |
 | `needs --allow-remote` で起動しない | ループバック以外のアドレスを `--listen` に指定しています。意図している場合は、`--allow-remote` を付けます。 |
 | 他の利用者のセッションが、`lounge_who` に現れない | 他のユーザーのセッションは、同じリポジトリの単位を申告している場合だけ現れます。双方の `repository` の値を確かめます。 |
 | `is a session of another user` のエラーになる | 他のユーザーの宛先 (`ユーザー名/セッション名`) に、スコープを指定せずに送っています。「リポジトリのスコープで」と指示します。 |

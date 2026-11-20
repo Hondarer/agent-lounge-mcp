@@ -4,11 +4,14 @@ Windows (Windows needs pywinpty):
   python3 -m unittest discover -s scripts/interactive/tests
 """
 
+import http.server
 import os
+import queue
 import random
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
@@ -17,8 +20,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from harness import screen, terminal  # noqa: E402
-from harness.agents import CTRL_U, ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
-from harness.scenarios.common import answer, connections, new_lines  # noqa: E402
+from harness.agents import CTRL_U, DEFINITIONS, ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
+from harness.scenarios.common import answer, connections, new_lines, tools_called  # noqa: E402
+from harness.lounge import Client  # noqa: E402
 from harness.server import Server  # noqa: E402
 
 
@@ -37,6 +41,11 @@ class PlainTest(unittest.TestCase):
         word, ask = screen.completion()
         self.assertTrue(word.startswith("IVDONE"))
         self.assertFalse(screen.contains(ask, word))
+
+    def test_completion_token_does_not_begin_with_e(self):
+        for _ in range(200):
+            word, _ask = screen.completion()
+            self.assertNotEqual(word[len("IVDONE")], "E")
 
     def test_words(self):
         self.assertEqual(screen.words("\x1b[31m◐◓\x1b[0m"), 0)
@@ -156,6 +165,21 @@ class ServerEventsTest(unittest.TestCase):
                                           2: {"client": "", "tools": []}})
 
 
+    def test_tools_called_skips_own_connections_and_earlier_calls(self):
+        s = Server("unused", "unused.db")
+        s._lines = [(1.0, "agent-lounge-mcp: connection 1: request tools/call lounge_join"),
+                    (2.0, "agent-lounge-mcp: connection 2: request tools/call lounge_send"),
+                    (3.0, "agent-lounge-mcp: connection 2: request tools/list"),
+                    (3.5, "agent-lounge-mcp: connection 2: initialized test/1"),
+                    (4.0, "agent-lounge-mcp: connection 3: request tools/call lounge_help"),
+                    (5.0, "agent-lounge-mcp: connection 2: request tools/call lounge_read")]
+        self.assertEqual(tools_called(s, 0), ["lounge_join", "lounge_send", "lounge_help", "lounge_read"])
+        self.assertEqual(tools_called(s, 0, own={1, 3}), ["lounge_send", "lounge_read"])
+        self.assertEqual(tools_called(s, 2.5), ["lounge_help", "lounge_read"])  # not tools/list or initialized
+        self.assertEqual(tools_called(s, 2.5, own={2}), ["lounge_help"])
+        self.assertEqual(tools_called(s, 6), [])
+
+
 class EnvironmentTest(unittest.TestCase):
     @unittest.skipUnless(os.name == "posix", "PWD is a POSIX convention")
     def test_pwd_names_the_working_folder(self):
@@ -192,6 +216,182 @@ class TypeLineTest(unittest.TestCase):
         t.type_line("say token123", pause=0, confirm=0, shown="token123", clear=[CTRL_U])
         self.assertEqual(t.written[:3], ["say token123", CTRL_U, "say token123"])
         self.assertEqual(t.field, "say token123")  # not "say say token123"
+
+
+class Fed(terminal.Terminal):
+    """A terminal with no program: the test feeds the output through feed()."""
+
+    def __init__(self):
+        super().__init__()
+        self._chunks: queue.Queue = queue.Queue()
+
+    def feed(self, chunk: str) -> None:
+        self._chunks.put(chunk)
+
+    def _spawn(self, argv, cwd, env, columns, rows):
+        pass
+
+    def _read_chunk(self) -> str:
+        return self._chunks.get()
+
+    def alive(self) -> bool:
+        return not self.closed()
+
+    def _kill(self) -> None:
+        self._chunks.put("")
+
+    def settle(self) -> None:
+        """Wait until the collector has taken everything fed so far."""
+        deadline = time.monotonic() + 5
+        while not self._chunks.empty() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        time.sleep(0.05)
+
+
+def _in_background(fn):
+    """Run fn in a thread; return a function that waits for it and gives its result."""
+    box = {}
+    thread = threading.Thread(target=lambda: box.update(result=fn()), daemon=True)
+    thread.start()
+
+    def result():
+        thread.join(10)
+        assert not thread.is_alive(), "wait_for did not return"
+        return box["result"]
+    return result
+
+
+class WaitForTest(unittest.TestCase):
+    def setUp(self):
+        self.t = Fed().start(["unused"], ".")
+        self.addCleanup(self.t.stop, (), 1)
+
+    def test_finds_text_that_arrives_later(self):
+        result = _in_background(lambda: self.t.wait_for(["needle"], 5))
+        time.sleep(0.2)
+        self.t.feed("some text, then the needle\r\n")
+        self.assertEqual(result(), "needle")
+
+    def test_returns_none_at_the_timeout_and_when_the_program_ends(self):
+        self.t.feed("nothing here\r\n")
+        began = time.monotonic()
+        self.assertIsNone(self.t.wait_for(["needle"], 0.6))
+        self.assertGreaterEqual(time.monotonic() - began, 0.5)
+        result = _in_background(lambda: self.t.wait_for(["needle"], 30))
+        time.sleep(0.2)
+        self.t.feed("")  # the end of the output
+        self.assertIsNone(result())
+
+    def test_later_searches_continue_from_where_the_previous_one_ended(self):
+        searched = []
+        text = self.t._plain.text
+        self.t._plain.text = lambda start=0: (searched.append(start), text(start))[1]
+        self.t.feed("x" * 20000 + "\r\n")
+        self.t.settle()
+        result = _in_background(lambda: self.t.wait_for(["needle"], 5))
+        time.sleep(0.3)
+        self.assertEqual(searched, [0])  # the first look covers everything
+        self.t.feed("y" * 100 + " needle")
+        self.assertEqual(result(), "needle")
+        self.assertEqual(len(searched), 2)
+        # The second look starts near the end of what the first one covered, not at 0.
+        self.assertGreater(searched[1], 20000 - 5000)
+        self.assertLess(searched[1], 20000 + 1)
+
+    def test_finds_a_needle_split_between_two_pieces_of_output(self):
+        # The screen is cleared between the pieces, so that only the plain output holds the
+        # whole needle.
+        self.t.feed("x" * 20000 + "ABC\x1b[2J\x1b[H")
+        self.t.settle()
+        result = _in_background(lambda: self.t.wait_for(["ABCDEF"], 5))
+        time.sleep(0.3)
+        self.t.feed("DEF")
+        self.assertEqual(result(), "ABCDEF")
+        self.assertFalse(screen.contains(self.t.transcript(), "ABCDEF"))
+
+    def test_start_skips_the_output_before_it(self):
+        self.t.feed("old needle\x1b[2J\x1b[H")  # gone from the screen, still in the output
+        self.t.settle()
+        self.assertEqual(self.t.wait_for(["old needle"], 2), "old needle")
+        mark = self.t.mark()
+        self.assertIsNone(self.t.wait_for(["old needle"], 0.6, start=mark))
+        result = _in_background(lambda: self.t.wait_for(["old needle", "new needle"], 5, start=mark))
+        time.sleep(0.2)
+        self.t.feed("new needle")
+        self.assertEqual(result(), "new needle")
+
+    def test_start_in_the_middle_of_the_output_covers_the_rest(self):
+        self.t.feed("a" * 20000 + "\x1b[2J\x1b[H")
+        self.t.settle()
+        mark = self.t.mark()
+        self.t.feed("late needle")
+        self.t.settle()
+        self.assertEqual(self.t.wait_for(["late needle"], 2, start=mark), "late needle")
+
+    def test_watch_judges_the_screen_and_its_text_is_the_result(self):
+        seen = []
+
+        def watch(display):
+            seen.append(display)
+            return "answered" if "PROMPT" in display else None
+
+        result = _in_background(lambda: self.t.wait_for(["never shown"], 5, watch=watch))
+        time.sleep(0.7)  # the watch runs also while nothing arrives
+        self.assertGreaterEqual(len(seen), 1)
+        self.t.feed("PROMPT")
+        self.assertEqual(result(), "answered")
+
+    def test_watch_does_not_see_the_history(self):
+        self.t.feed("PROMPT\r\n" + "line\r\n" * 80)  # PROMPT scrolled into the history
+        self.t.settle()
+        self.assertIn("PROMPT", self.t.transcript())
+        self.assertNotIn("PROMPT", self.t.display())
+        calls = []
+
+        def watch(display):
+            calls.append(display)
+            return "answered" if "PROMPT" in display else None
+
+        self.assertIsNone(self.t.wait_for(["never shown"], 0.6, watch=watch))
+        self.assertTrue(calls)
+
+    def test_a_needle_wins_over_watch_and_watch_is_not_called_after_the_end(self):
+        called = []
+        self.t.feed("found needle")
+        self.t.settle()
+        self.assertEqual(self.t.wait_for(["needle"], 2, watch=lambda d: called.append(d) or "watched"), "needle")
+        self.assertEqual(called, [])
+        self.t.stop((), 1)
+        self.assertIsNone(self.t.wait_for(["absent"], 2, watch=lambda d: called.append(d) or "watched"))
+        self.assertEqual(called, [])
+
+
+class LoungeClientTest(unittest.TestCase):
+    def test_close_ends_the_session_and_leaves_no_connection_open(self):
+        seen = []
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_DELETE(self):
+                seen.append(self.headers.get("Mcp-Session-Id"))
+                self.send_response(200)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        httpd = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+        thread.start()
+        try:
+            c = Client(f"http://127.0.0.1:{httpd.server_address[1]}/mcp", timeout=5)
+            c.session = "s1"
+            c.close()
+            self.assertEqual((seen, c.session), (["s1"], ""))
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            thread.join(5)
 
 
 def _alive(pid: int) -> bool:
@@ -249,8 +449,15 @@ class AgentTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def start(self, definition=None, **kwargs):
+        """Start the fake agent, and end it at the end of the test even when the test fails:
+        a terminal left open keeps its console (on Windows, its sockets) open."""
+        a = Agent(definition or fake(**kwargs), self.tmp.name)
+        self.addCleanup(a.quit)
+        return a.start(timeout=30)
+
     def test_dialog_instruction_and_quit(self):
-        a = Agent(fake(dialog=True), self.tmp.name).start(timeout=30)
+        a = self.start(dialog=True)
         reply = a.ask("Say hello.", timeout=20, settle=1)
         self.assertTrue(reply.complete, reply.text)
         reply = a.ask("Say hello slow.", timeout=20, settle=1)
@@ -260,7 +467,7 @@ class AgentTest(unittest.TestCase):
         self.assertFalse(term.alive())
 
     def test_permission_prompts_are_answered_and_counted(self):
-        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        a = self.start()
         # Three prompts in a row, of which only the command line is redrawn.
         began = time.monotonic()
         reply = a.ask("Say hello after permission and permission and permission.", timeout=40, settle=1)
@@ -271,8 +478,39 @@ class AgentTest(unittest.TestCase):
         self.assertEqual((reply.approvals, a.approvals), (0, 3))
         a.quit()
 
+    def test_the_same_command_asked_for_in_a_row_is_answered_each_time_without_the_retry(self):
+        a = self.start()
+        # Three prompts with the same lines; between them, only lines outside the prompt change.
+        began = time.monotonic()
+        reply = a.ask("Say hello after twin and twin and twin.", timeout=40, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual(reply.approvals, 3)
+        self.assertLess(time.monotonic() - began, 14)  # no prompt waited for the retry time
+        a.quit()
+
+    def test_an_answered_prompt_that_stays_a_while_is_answered_once(self):
+        a = self.start()
+        # The prompt stays 5 seconds after the answer (longer than the settle time of prompts),
+        # with only symbols drawn meanwhile.
+        reply = a.ask("Say hello after linger.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual(reply.approvals, 1)
+        a.quit()
+
+    def test_copilot_path_access_is_allowed_and_the_same_question_elsewhere_is_not(self):
+        d = Definition(**{**fake().__dict__, "approvals": DEFINITIONS["copilot"].approvals})
+        a = self.start(d)
+        reply = a.ask("Say hello after pathaccess.", timeout=20, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual(reply.approvals, 1)
+        # The same question under another title is not a prompt of the definition.
+        reply = a.ask("Say hello after urlaccess.", timeout=4, settle=1)
+        self.assertFalse(reply.complete)
+        self.assertEqual(reply.approvals, 0)
+        a.quit()
+
     def test_a_prompt_that_stays_is_answered_once_and_the_timeout_holds(self):
-        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        a = self.start()
         began = time.monotonic()
         reply = a.ask("This one is stuck.", timeout=5, settle=1)
         self.assertFalse(reply.complete)
@@ -281,7 +519,7 @@ class AgentTest(unittest.TestCase):
         a.quit()
 
     def test_reply_is_not_complete_while_busy(self):
-        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        a = self.start()
         reply = a.ask("Say hello and pause.", timeout=30, settle=1)
         self.assertTrue(reply.complete, reply.text)
         # The word came 3 seconds before the work ended: the reply covers the work.
@@ -291,13 +529,13 @@ class AgentTest(unittest.TestCase):
     def test_busy_until_the_timeout_is_not_complete(self):
         d = fake()
         d = Definition(**{**d.__dict__, "busy": ["Fake Agent"]})  # a text that stays on the screen
-        a = Agent(d, self.tmp.name).start(timeout=30)
+        a = self.start(d)
         reply = a.ask("Say hello.", timeout=4, settle=1)
         self.assertFalse(reply.complete)
         a.quit()
 
     def test_no_reply_times_out(self):
-        a = Agent(fake(), self.tmp.name).start(timeout=30)
+        a = self.start()
         began = time.monotonic()
         reply = a.ask("never reply", timeout=3, settle=1)
         self.assertFalse(reply.complete)

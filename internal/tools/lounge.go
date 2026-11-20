@@ -63,7 +63,7 @@ type JoinInput struct {
 	// Profile. agent, os_user and machine: omit to keep the recorded value, "" to clear it.
 	// origin, folder and wsl_distro: see joinParams.
 	OSUser    *string `json:"os_user,omitempty" jsonschema:"OS user name running you, as printed by the command lounge_help lists for your environment (on WSL and Windows, the Windows user name). Omit to keep the recorded value, empty to clear it"`
-	Machine   *string `json:"machine,omitempty" jsonschema:"machine name, as printed by the command lounge_help lists (on WSL, cmd.exe /c hostname: the Windows computer name of the host). Omit to keep the recorded value, empty to clear it"`
+	Machine   *string `json:"machine,omitempty" jsonschema:"machine name, as printed by the command lounge_help lists (on WSL, cmd.exe /c hostname: the Windows computer name of the host; if cmd.exe fails or is not found, cat /etc/hostname). Omit to keep the recorded value, empty to clear it"`
 	Origin    *string `json:"origin,omitempty" jsonschema:"URL of the Git origin of your working folder, as printed by git remote get-url origin, without credentials; empty when there is none. origin and folder are replaced together: omit origin, folder and wsl_distro to keep the recorded ones"`
 	Folder    *string `json:"folder,omitempty" jsonschema:"top of the Git working tree (git rev-parse --show-toplevel), or the working folder outside Git (pwd). origin and folder are replaced together"`
 	WSLDistro *string `json:"wsl_distro,omitempty" jsonschema:"on WSL (echo $WSL_DISTRO_NAME prints a name), that distribution name; omit elsewhere. Used only to convert folder, not stored"`
@@ -176,7 +176,7 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	sess, resumed, err := d.Store.JoinSession(ctx, p)
 	switch {
 	case errors.Is(err, store.ErrMachineRequired):
-		return nil, JoinOutput{}, errors.New("folder without origin needs machine: pass machine (on WSL the output of cmd.exe /c hostname, on Windows of hostname, on Linux and macOS of uname -n), " +
+		return nil, JoinOutput{}, errors.New("folder without origin needs machine: pass machine (on WSL the output of cmd.exe /c hostname, or of cat /etc/hostname if cmd.exe fails or is not found; on Windows of hostname, on Linux and macOS of uname -n), " +
 			"so that the same path on another machine is not taken for the same repository")
 	case errors.Is(err, store.ErrTooManySessions):
 		return nil, JoinOutput{}, fmt.Errorf("your user has %d sessions, the most allowed: join with the name of an existing session (%s lists them)",

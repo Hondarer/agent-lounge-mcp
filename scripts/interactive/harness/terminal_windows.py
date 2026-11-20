@@ -52,6 +52,16 @@ class WindowsTerminal(Terminal):
             self._proc.close(force=True)
         except Exception:
             pass
+        # pywinpty reads and writes the console through a pair of sockets. close() can stop
+        # before it reaches them (when ending the program fails), and a socket left open
+        # shows up as a ResourceWarning at garbage collection. Closing twice is harmless.
+        for name in ("fileobj", "_server"):
+            sock = getattr(self._proc, name, None)
+            if sock is not None and hasattr(sock, "close"):
+                try:
+                    sock.close()
+                except Exception:
+                    pass
 
 
 def new_terminal() -> WindowsTerminal:
