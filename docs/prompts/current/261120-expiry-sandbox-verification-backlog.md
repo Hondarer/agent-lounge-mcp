@@ -1,29 +1,29 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 残課題一覧 (backlog)
-最終更新日時: 2026-11-20 13:20:00 JST
+最終更新日時: 2026-11-20 16:44:44 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53SsJ6j1XoXzWU5edaQ
 稼働 OS: Linux (WSL)
-上流文書: `261120-small-fixes-overview.md` (全体管理文書)、`261120-small-fixes-discussion.md` (検討用 Markdown)、`261120-small-fixes-lightadr.md` (簡易 ADR)、`261120-small-fixes-design.md` (最終仕様)。転記元: `../past/261119-connection-guidance-backlog.md` (前の案件の残課題一覧)。いずれも未作成の場合や、削除されている場合があります。
-下流文書: この残課題一覧を対策する継続作業が開始された場合は、その全体管理文書・検討用 Markdown・最終仕様・残課題一覧のパスを追記します。この案件の最終仕様は `261120-small-fixes-design.md` です。未作成の場合や、削除されている場合があります。
+上流文書: `261120-expiry-sandbox-verification-overview.md` (全体管理文書)、`261120-expiry-sandbox-verification-discussion.md` (検討用 Markdown)、`261120-expiry-sandbox-verification-lightadr.md` (簡易 ADR)、`261120-expiry-sandbox-verification-design.md` (最終仕様)。転記元: `../past/261120-small-fixes-backlog.md` (前の案件の残課題一覧)。いずれも未作成の場合や、削除されている場合があります。
+下流文書: この残課題一覧を対策する継続作業が開始された場合は、その全体管理文書・検討用 Markdown・最終仕様・残課題一覧のパスを追記します。この案件の最終仕様は `261120-expiry-sandbox-verification-design.md` です (作成済み)。未作成の場合や、削除されている場合があります。
 再開手順: このファイルを開いたエージェントは、作業の前に agree-before-implement スキルを読み込んでください。「整理状態」が「随時追記中」であれば、案件の作業中です。気付いた事項を追記し、第 3 ゲートの前に文書を再構築して整理します。上流文書が存在する場合は、各課題の背景と見送りの判断を上流文書で確認します。存在しない場合は、この文書を単体の残課題一覧として扱います。このファイルの残課題を参照して新たな成果物の作成または更新を始めるときは、元案件の再開とは別の作業として扱います。その開始には agree-before-implement を原則として使い、新しい全体管理文書と検討用 Markdown から開始してください。継続作業によってこのファイルの残課題を対策する場合は、このファイルや各項目の記載を削除することなく、継続作業の開始時 (全体管理文書と検討用 Markdown の作成時) から検討・設計・実装・整理の各段階において、このファイルのメタ情報、各項目の状態、および経緯と対処を随時更新することを原則とします。また、フェーズ分けした対策で対処ができていない項目がある場合は、当該継続作業の backlog にも必ず転記し、最新作業の backlog を見れば残件が把握できるようにしてください。最終更新エージェントのセッション情報や稼働 OS・最終更新日時が参照可能であれば再開時のコンテキストや環境差分の把握に利用し、別エージェントや別環境・別 OS からの引き継ぎ、担当変更によりセッションが見つからない場合も異常とせず、文書の記載から継続してください。
 -->
 
 # 残課題一覧 (バックログ)
 
-ファイル名: `261120-small-fixes-backlog.md`
+ファイル名: `261120-expiry-sandbox-verification-backlog.md`
 
 ## 案件の識別
 
-案件名: `small-fixes` (残課題の小さな直し: プロフィールの正規化、読み返しのルーム名、待ち受けと参加の確かめ方、検証の基盤)  
+案件名: `expiry-sandbox-verification` (未検証の項目の消化、トークンの有効期限、サンドボックスの中でのマシンの名前)  
 作成日: `2026-11-20`  
-整理状態: 整理済み (第 3 ゲートの前に再構築。2026-11-20)
+整理状態: 随時追記中
 
 この文書は、見送る決定がなされた問題点や、作業中に潜在または別問題として判明したが今回は対策しなかった残課題を記録するものです。案件の作業中は随時追記し、第 3 ゲートの前に再構築して整理します。各項目は、チケット管理システムへの起票にそのまま利用できる詳細度で記載します。
 
-残課題は、案件ごとに全量を引き継ぎます (利用者の指示)。この文書は、前の案件 `connection-guidance` の残課題一覧 (`docs/prompts/past/261119-connection-guidance-backlog.md`) の未対処の 16 件を、同じ課題 ID ですべて転記して作成しました。BL-001 から BL-003、BL-005 から BL-008、BL-010、BL-012、BL-015 から BL-026、BL-037 から BL-039 は、転記元までに対応済み、または対応不要としたため、転記していません (欠番)。
+残課題は、案件ごとに全量を引き継ぎます (利用者の指示)。この文書は、前の案件 `small-fixes` の残課題一覧 (`docs/prompts/past/261120-small-fixes-backlog.md`) の未対処の 15 件を、同じ課題 ID ですべて転記して作成しました。BL-001 から BL-003、BL-005 から BL-008、BL-010、BL-012、BL-015 から BL-026、BL-029、BL-037 から BL-039 は、転記元までに対応済み、または対応不要としたため、転記していません (欠番)。
 
-この案件では、小さな問題をまとめて対処しました (利用者の指示)。BL-029 (プロフィールの細部) は、残っていた 2 番、3 番、4 番をすべて対応したため、整理の際に除きました (欠番。対処と結果は、最終仕様 `261120-small-fixes-design.md` と確認の記録 `261120-small-fixes-validation.md` にあります)。BL-032 は 1 番、BL-033 は 3 番と 4 番、BL-035 は (2)、(4)、(5)、(6)、(8)、(11) と (1) のうち Copilot CLI の分を対応し、残る番号だけを書いています。残りは 15 件です。
+この案件では、BL-027、BL-028、BL-030、BL-031 の (1)、BL-032 の 4 番、BL-035 の (12)、(14)、(15)、(16)、BL-040 を対象にします (利用者の選択。検討用 Markdown の Q-001)。整理の前のため、対象の項目も、転記元の記載のまま載せています。第 3 ゲートの前に再構築して、残ったものだけにします。
 
 優先度は、Claude Code の提案です。利用者の評価は受けていません。
 
@@ -36,16 +36,16 @@
 | BL-011 | 管理コマンド (メッセージの一覧、書き出しの絞り込み) | 過去 backlog からの転記 | 低 | 未着手 |
 | BL-013 | 英語の文書の作成 (`docs/en/`、`README.md`、GitHub の概要) | 過去 backlog からの転記 | 中 | 未着手 |
 | BL-014 | セッション名への UTF-8 (日本語など) の使用 | 過去 backlog からの転記 | 低 | 未着手 |
-| BL-027 | サンドボックスの中で実行する CLI が、WSL からホストの Windows の値を取得できない | 過去 backlog からの転記 | 中 (origin のないフォルダーで、リポジトリの空間を使えない) | 未着手 |
-| BL-028 | Windows の側の未検証の項目 (キーボードからの Ctrl+C、Windows の側で起動したサーバーでの会話と管理コマンド、`cmd` と Git Bash での申告) | 過去 backlog からの転記 | 低 | 未着手 |
-| BL-030 | 未検証の構成 (物理的に別のマシン、リバース プロキシでの HTTPS) と、サーバー自身による HTTPS | 過去 backlog からの転記 | 中 (平文の HTTP のまま、他のマシンに開く使い方になる) | 未着手 |
-| BL-031 | トークンの運用の機能 (有効期限、権限の区分、接続元の制限、CLI の設定と履歴に残るトークン) | 過去 backlog からの転記 | 中 | 未着手 |
-| BL-032 | 認証の細部 (最後の利用日時) | 過去 backlog からの転記 | 低 | 一部対応 (1 番、2 番、3 番、5 番を対応。4 番が残る) |
+| BL-027 | サンドボックスの中で実行する CLI が、WSL からホストの Windows の値を取得できない | 過去 backlog からの転記 | 中 (origin のないフォルダーで、リポジトリの空間を使えない) | 検討中 (案件 `expiry-sandbox-verification` で対応中) |
+| BL-028 | Windows の側の未検証の項目 (キーボードからの Ctrl+C、Windows の側で起動したサーバーでの会話と管理コマンド、`cmd` と Git Bash での申告) | 過去 backlog からの転記 | 低 | 検討中 (案件 `expiry-sandbox-verification` で対応中) |
+| BL-030 | 未検証の構成 (物理的に別のマシン、リバース プロキシでの HTTPS) と、サーバー自身による HTTPS | 過去 backlog からの転記 | 中 (平文の HTTP のまま、他のマシンに開く使い方になる) | 検討中 (案件 `expiry-sandbox-verification` で対応中。nginx を置いた構成) |
+| BL-031 | トークンの運用の機能 (有効期限、権限の区分、接続元の制限、CLI の設定と履歴に残るトークン) | 過去 backlog からの転記 | 中 | 一部検討中 (案件 `expiry-sandbox-verification` で、(1) を対応中) |
+| BL-032 | 認証の細部 (最後の利用日時) | 過去 backlog からの転記 | 低 | 検討中 (案件 `expiry-sandbox-verification` で、残る 4 番を対応中) |
 | BL-033 | 送達の確認と読み返しの拡張 (参加の前のルームのやりとり、受信と同時の完了の記録) | 過去 backlog からの転記 | 低 | 一部対応 (3 番、4 番、5 番を対応。1 番と 2 番が残る) |
 | BL-034 | メモリの忘却の設定を、空間ごとに変えられるようにする | 前提検討時に見送り | 低 | 未着手 |
-| BL-035 | 検証の基盤の残り (他の CLI の許可の画面、画面の再現の細部、Windows での未検証の点、macOS) | 実装中に判明 | 低 | 一部対応 (残る番号は本文) |
+| BL-035 | 検証の基盤の残り (他の CLI の許可の画面、画面の再現の細部、Windows での未検証の点、macOS) | 実装中に判明 | 低 | 一部検討中 (案件 `expiry-sandbox-verification` で、(12)、(14)、(15)、(16) を対応中) |
 | BL-036 | MCP のプロトコルの版 2026-07-28 への対応 | 実装中に判明 | 中 (CLI が古い版での接続し直しをやめると、接続できなくなる) | 一部対応 (停止の通知を対応。版への対応が残る) |
-| BL-040 | agy が、閉じられた MCP の接続の後に、ツールを呼べなくなる | 前提検討時に判明 | 中 (1 時間使わなかった agy は、起動し直すまでツールを呼べない場合がある) | 未着手 |
+| BL-040 | agy が、閉じられた MCP の接続の後に、ツールを呼べなくなる | 前提検討時に判明 | 中 (1 時間使わなかった agy は、起動し直すまでツールを呼べない場合がある) | 検討中 (案件 `expiry-sandbox-verification` で、agy 1.5.13 での確かめ直しを対応中) |
 
 ## BL-004 `shared` の空間と `scope` 引数
 
@@ -58,7 +58,7 @@
 
 - **摘出契機**: 前提検討時に見送り (Q-003)。
 - **今回の見送り理由**: スコープ外。ユーザーが 1 人だけの段階では、`shared` と `user` の違いを確認できないためです。
-- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件で、`chat_send` に `scope` 引数 (値は `user` と `repository`) を追加します (検討用 Markdown の Q-012)。`shared` の値と、他のツールの `scope` は、この項目に残します。 その他の部分は、この案件では対策しません。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件で、対話先をスコープ (種類と識別子) と対象の組み合わせで決める形にし、`chat_send` の `scope` に `user` と `repository` を実装しました。`shared` は、スコープの値と規則を 1 つ足す形で加えられます (`internal/store/scope.go`)。`shared` の実装と、全ユーザーの一覧は、この項目に残します。前提だったトークンによるユーザーの識別 (BL-003) は、対策済みです。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件では、メモリの空間を `user` と `repository` にします (Q-003)。`shared` の空間のメモリは、この項目に残します。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件で、`chat_send` に `scope` 引数 (値は `user` と `repository`) を追加します (検討用 Markdown の Q-012)。`shared` の値と、他のツールの `scope` は、この項目に残します。 その他の部分は、この案件では対策しません。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件で、対話先をスコープ (種類と識別子) と対象の組み合わせで決める形にし、`chat_send` の `scope` に `user` と `repository` を実装しました。`shared` は、スコープの値と規則を 1 つ足す形で加えられます (`internal/store/scope.go`)。`shared` の実装と、全ユーザーの一覧は、この項目に残します。前提だったトークンによるユーザーの識別 (BL-003) は、対策済みです。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件では、メモリの空間を `user` と `repository` にします (Q-003)。`shared` の空間のメモリは、この項目に残します。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -81,7 +81,7 @@
 
 - **摘出契機**: 前提検討時に見送り (Q-005、Q-012)。
 - **今回の見送り理由**: スコープ外。仕様が企画提案書に定義されておらず、別途検討が必要なためです。
-- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -104,7 +104,7 @@
 
 - **摘出契機**: 前提検討時に見送り (Q-012)。疎通確認の結果の照合では、データベースを読む一時的なプログラムを作って対応しました。
 - **今回の見送り理由**: スコープ外。企画提案書で、後の段階に置かれているためです。
-- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、チャットの書き出し (`export`) と、セッションの管理コマンド (`session list`、`session remove`) を対策しました (Q-002、Q-012。最終仕様 `261118-chat-completion-design.md`、確認の記録 `261118-chat-completion-validation.md`)。メモリの書き出し、メッセージを一覧するコマンド、書き出しの絞り込みは、この項目に残します。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、メモリの書き出しと、メモリの管理コマンド (`memory list`、`memory remove`) を対策します (Q-002。最終仕様 `261118-memory-design.md`)。メッセージを一覧するコマンドと、書き出しの絞り込みは、この項目に残します。 メモリの書き出しと、メモリの管理コマンドは、この案件で対策しました (確認の記録 `261118-memory-validation.md`)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、チャットの書き出し (`export`) と、セッションの管理コマンド (`session list`、`session remove`) を対策しました (Q-002、Q-012。最終仕様 `261118-chat-completion-design.md`、確認の記録 `261118-chat-completion-validation.md`)。メモリの書き出し、メッセージを一覧するコマンド、書き出しの絞り込みは、この項目に残します。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、メモリの書き出しと、メモリの管理コマンド (`memory list`、`memory remove`) を対策します (Q-002。最終仕様 `261118-memory-design.md`)。メッセージを一覧するコマンドと、書き出しの絞り込みは、この項目に残します。 メモリの書き出しと、メモリの管理コマンドは、この案件で対策しました (確認の記録 `261118-memory-validation.md`)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -127,7 +127,7 @@
 
 - **摘出契機**: 前提検討時に見送り (Q-013 の補足、Q-019 の補足、Q-020)。
 - **今回の見送り理由**: 英語版は、ある程度検証が進んでから、まとめて作成するという利用者の判断のためです。
-- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -150,7 +150,7 @@
 
 - **摘出契機**: 最終仕様の承認時に見送り (利用者の指示。最終仕様の文字の制限は承認し、UTF-8 への対応を残課題とする)。
 - **今回の見送り理由**: 最終仕様を変えずに、疎通確認を先に進めるためです。
-- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -173,7 +173,7 @@
 
 - **摘出契機**: 5 つのエージェントでの確認 (到達点 1、3) で判明しました。
 - **今回の見送り理由**: 利用者の決定により、Codex と agy は、サンドボックスを外した実行で確認しました (2026-11-17)。サンドボックスの中での対策は、範囲外としました。
-- **継続作業での経緯と対処**: `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件の確認でも、WSL の側の Codex と agy は、サンドボックスの中ではリポジトリの単位を申告できず、サンドボックスを外して確認しました。Windows の側では、5 つとも個別の許可で申告できました。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件の確認でも、Codex はサンドボックスの中で `cmd.exe` を実行できず、agy はマシンの名前を `sandbox` と申告しました。origin のあるフォルダーで確認したため、影響しませんでした。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件の確認でも、WSL の側の Codex と agy は、サンドボックスの中ではリポジトリの単位を申告できず、サンドボックスを外して確認しました。Windows の側では、5 つとも個別の許可で申告できました。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件の確認でも、Codex はサンドボックスの中で `cmd.exe` を実行できず、agy はマシンの名前を `sandbox` と申告しました。origin のあるフォルダーで確認したため、影響しませんでした。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -197,7 +197,7 @@
 
 - **摘出契機**: Windows の側の Claude Code のセッションとの確認 (利用者の指示で、最終仕様の到達点 5 を検証に変更) で判明しました。
 - **今回の見送り理由**: スコープ外。Ctrl+C のキー操作と対話の画面は、非対話の実行では確認できません。Windows の側には Go がなく、サーバーは WSL の側で起動しました。
-- **継続作業での経緯と対処**: `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件では、(6) を追加しました。今回の変更は OS によって変わる部分を含まないため、Windows の側での確認を省きました (検討用 Markdown `261118-chat-completion-discussion.md` の Q-015)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件でも、Windows の側での確認を省きます (Q-024)。メモリのツールと管理コマンドを、未検証の項目に加えます。 (7) を追加しました。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 この案件で、Windows で動くエージェントでの `chat_ack`、`chat_status`、`chat_history` とメモリのツールは、OS によって変わる部分を含まないため、確認の必要がない (`-`) と決め、利用ガイドの検証済みの範囲を改めました (2026-11-20、検討用 Markdown `261119-connection-guidance-discussion.md` の Q-014、Q-015)。(6) と (7) から、これらを除きました。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件では、(6) を追加しました。今回の変更は OS によって変わる部分を含まないため、Windows の側での確認を省きました (検討用 Markdown `261118-chat-completion-discussion.md` の Q-015)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件でも、Windows の側での確認を省きます (Q-024)。メモリのツールと管理コマンドを、未検証の項目に加えます。 (7) を追加しました。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 この案件で、Windows で動くエージェントでの `chat_ack`、`chat_status`、`chat_history` とメモリのツールは、OS によって変わる部分を含まないため、確認の必要がない (`-`) と決め、利用ガイドの検証済みの範囲を改めました (2026-11-20、検討用 Markdown `261119-connection-guidance-discussion.md` の Q-014、Q-015)。(6) と (7) から、これらを除きました。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -220,7 +220,7 @@
 
 - **摘出契機**: 前提検討時に見送り (Q-006、Q-010)。
 - **今回の見送り理由**: スコープ外。別のマシンとリバース プロキシの用意は、利用者の準備が要ります。HTTPS は、企画提案書の構成 (前段に nginx などを置く) に従いました。
-- **継続作業での経緯と対処**: `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -244,7 +244,7 @@
 
 - **摘出契機**: 設計の時点で、範囲外としました (最終仕様の「今回実装しないこと」)。(5) は、確認で判明しました。
 - **今回の見送り理由**: スコープ外。企画提案書は、強い安全対策を対象外としています。(6) は、リポジトリのスコープを、内容を隠す仕組みではなく、連絡が混ざらないようにする仕組みと位置づけています (文書に明記)。
-- **継続作業での経緯と対処**: `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 案件 `interactive-verification` で、5 番の実態を、2 つの OS で調べました (2026-11-19。トークンの形 `alm_` と 43 文字で、各 CLI の設定、履歴、ログのフォルダーを走査)。本物のトークンは、どちらの OS でも、案件 `multi-user-access` の確認のものだけでした。残っていた場所は、確認用のフォルダーで動かした Grok のセッションの履歴 (設定ファイルの `Authorization` の値を、Grok が読んで履歴に残したもの) と、確認を行った Claude Code のセッションの会話の記録 (確認のコマンドに書いたもの) です。トークンは発行し直しまたはデータベースの削除で、無効になっています。Grok の履歴は削除しました。Claude Code の会話の記録は、セッションの再開に使うため、残しています。各エージェントのセッションのデータが残ることは、セキュリティの問題ではなく、各エージェントの動作であるため、今後は原則として対処しません (利用者の判断。2026-11-19)。5 番は、この判断に従い、追加の対策を行いません。 協調テストで使うデータベースはテスト用で、テストの後に削除するため、テストのトークンが会話や確認の記録に残っても問題ない、という判断も受けました (利用者。2026-11-19)。この案件のシナリオ 6 のトークンは、どこにも残っていませんでした。CLI の設定のバックアップ (`.claude/backups/`) は、入れ替わって、トークンを含まなくなっていました。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 案件 `interactive-verification` で、5 番の実態を、2 つの OS で調べました (2026-11-19。トークンの形 `alm_` と 43 文字で、各 CLI の設定、履歴、ログのフォルダーを走査)。本物のトークンは、どちらの OS でも、案件 `multi-user-access` の確認のものだけでした。残っていた場所は、確認用のフォルダーで動かした Grok のセッションの履歴 (設定ファイルの `Authorization` の値を、Grok が読んで履歴に残したもの) と、確認を行った Claude Code のセッションの会話の記録 (確認のコマンドに書いたもの) です。トークンは発行し直しまたはデータベースの削除で、無効になっています。Grok の履歴は削除しました。Claude Code の会話の記録は、セッションの再開に使うため、残しています。各エージェントのセッションのデータが残ることは、セキュリティの問題ではなく、各エージェントの動作であるため、今後は原則として対処しません (利用者の判断。2026-11-19)。5 番は、この判断に従い、追加の対策を行いません。 協調テストで使うデータベースはテスト用で、テストの後に削除するため、テストのトークンが会話や確認の記録に残っても問題ない、という判断も受けました (利用者。2026-11-19)。この案件のシナリオ 6 のトークンは、どこにも残っていませんでした。CLI の設定のバックアップ (`.claude/backups/`) は、入れ替わって、トークンを含まなくなっていました。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -268,7 +268,7 @@
 
 - **摘出契機**: 実装のレビューで判明しました (サブエージェントの報告)。
 - **今回の見送り理由**: 低リスク。(4) は、表示だけの問題です。
-- **継続作業での経緯と対処**: `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、2 番 (上限の起動オプション) を対策しました (Q-002)。1 番、3 番、4 番は、この項目に残します。5 番を追加しました。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、5 番 (件数の単数形と複数形) を対策します (Q-002)。 この案件で、5 番を対策しました (件数が 1 のときに単数形にする関数を、管理コマンドとログで共有)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件に、3 番 (401 のときの動作の確認) を同梱します (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-002)。 確認は、2 つの OS で行います (Q-020)。 最終仕様 (`261118-interactive-verification-design.md`) を作成し、承認を受けました (2026-11-18)。 3 番を対応しました。2 つの OS で、Codex と Copilot CLI は、認証の失敗を利用者に伝えます (Copilot CLI は、OAuth にも触れます)。agy は、認証に触れず、サーバーが使えないと伝えます。3 つとも、時間の上限までに終わり、登録の解除の後に、トークンは残りません。1 番と 4 番は、この項目に残します (2026-11-19)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 この案件で、1 番を検討します (Q-001)。 待ち受け中、5[秒] ごとと新着のときにトークンを確かめ、無効なら打ち切ります (Q-005、最終仕様の第 4 章)。 1 番を対応しました (2026-11-20)。待ち受け中の `chat_inbox` は、5[秒] ごとと新着のときにトークンを確かめ、無効なら、メッセージを渡さずにエラーで終わります (確認の記録 `261120-small-fixes-validation.md`)。4 番は、この項目に残します。
+- **継続作業での経緯と対処**: `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、2 番 (上限の起動オプション) を対策しました (Q-002)。1 番、3 番、4 番は、この項目に残します。5 番を追加しました。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件で、5 番 (件数の単数形と複数形) を対策します (Q-002)。 この案件で、5 番を対策しました (件数が 1 のときに単数形にする関数を、管理コマンドとログで共有)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件に、3 番 (401 のときの動作の確認) を同梱します (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-002)。 確認は、2 つの OS で行います (Q-020)。 最終仕様 (`261118-interactive-verification-design.md`) を作成し、承認を受けました (2026-11-18)。 3 番を対応しました。2 つの OS で、Codex と Copilot CLI は、認証の失敗を利用者に伝えます (Copilot CLI は、OAuth にも触れます)。agy は、認証に触れず、サーバーが使えないと伝えます。3 つとも、時間の上限までに終わり、登録の解除の後に、トークンは残りません。1 番と 4 番は、この項目に残します (2026-11-19)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 この案件で、1 番を検討します (Q-001)。 待ち受け中、5[秒] ごとと新着のときにトークンを確かめ、無効なら打ち切ります (Q-005、最終仕様の第 4 章)。 1 番を対応しました (2026-11-20)。待ち受け中の `chat_inbox` は、5[秒] ごとと新着のときにトークンを確かめ、無効なら、メッセージを渡さずにエラーで終わります (確認の記録 `261120-small-fixes-validation.md`)。4 番は、この項目に残します。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -291,7 +291,7 @@
 
 - **摘出契機**: (1) と (2) は、前提検討時に見送り (検討用 Markdown `261118-chat-completion-discussion.md` の Q-003、Q-007)。
 - **今回の見送り理由**: (1) は、リポジトリの単位が申告の値で、申告するだけで過去のやりとりを読める範囲を広げないためです。(2) は、エージェントが引数の意味を取り違える余地が増えるためです。
-- **継続作業での経緯と対処**: 案件 `chat-completion` で追加しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件に、5 番 (`chat-probe.sh` が残すメッセージ) を同梱します (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-002)。 確認の最後に、残したメッセージを受け取り、完了を記録する形に直します (Q-021)。 最終仕様 (`261118-interactive-verification-design.md`) を作成し、承認を受けました (2026-11-18)。 5 番を対応しました。`chat-probe.sh` は、確認の最後に、受信箱が空になるまで受け取り、この実行のメッセージの完了を記録します。同じデータベースでの 2 回の実行で確かめました。1 番から 4 番は、この項目に残します (2026-11-19)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 この案件で、3 番と 4 番を検討します (Q-001)。 3 番は、`chat_send` と同じエラーにします (最終仕様の第 3 章)。4 番は、最終利用時刻の更新と存在の確認を 1 回の問い合わせにまとめます (Q-006、最終仕様の第 5 章)。 3 番と 4 番を対応しました (2026-11-20)。`chat_history` は、存在しないルーム名を `chat_send` と同じエラーにします。セッションの存在の確認は、最終利用時刻の更新と 1 回の問い合わせにまとめました (管理コマンドによる削除は、今と同じく、次の呼び出しで検出します)。1 番と 2 番は、この項目に残します。
+- **継続作業での経緯と対処**: 案件 `chat-completion` で追加しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 この案件に、5 番 (`chat-probe.sh` が残すメッセージ) を同梱します (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-002)。 確認の最後に、残したメッセージを受け取り、完了を記録する形に直します (Q-021)。 最終仕様 (`261118-interactive-verification-design.md`) を作成し、承認を受けました (2026-11-18)。 5 番を対応しました。`chat-probe.sh` は、確認の最後に、受信箱が空になるまで受け取り、この実行のメッセージの完了を記録します。同じデータベースでの 2 回の実行で確かめました。1 番から 4 番は、この項目に残します (2026-11-19)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 この案件で、3 番と 4 番を検討します (Q-001)。 3 番は、`chat_send` と同じエラーにします (最終仕様の第 3 章)。4 番は、最終利用時刻の更新と存在の確認を 1 回の問い合わせにまとめます (Q-006、最終仕様の第 5 章)。 3 番と 4 番を対応しました (2026-11-20)。`chat_history` は、存在しないルーム名を `chat_send` と同じエラーにします。セッションの存在の確認は、最終利用時刻の更新と 1 回の問い合わせにまとめました (管理コマンドによる削除は、今と同じく、次の呼び出しで検出します)。1 番と 2 番は、この項目に残します。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -314,7 +314,7 @@
 
 - **摘出契機**: 前提検討時に見送り (検討用 Markdown `261118-memory-discussion.md` の Q-018)。
 - **今回の見送り理由**: 空間ごとに値を変える必要があるかは、使ってみないと分からないためです。
-- **継続作業での経緯と対処**: 案件 `memory` で追加しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: 案件 `memory` で追加しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -337,7 +337,7 @@
 
 - **摘出契機**: (1) は、前提検討時に見送り (検討用 Markdown `261118-interactive-verification-discussion.md` の Q-006、Q-015)。(3) と (7) は、実装のレビューで判明しました。(9) と (10) は、実装中に判明しました。(12) から (16) は、案件 `small-fixes` の確認とレビューで判明しました (2026-11-20)。
 - **今回の見送り理由**: 確認の結果に影響しなかったためです。(1) の他の CLI の画面は、画面を出す設定にしないと、文字列を調べられません。(12) は、記録の手順が、Codex ではサーバーの登録を、Copilot CLI では許可への応答を欠いていたためです。
-- **継続作業での経緯と対処**: 案件 `interactive-verification` で追加しました (2026-11-19)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 この案件で、一部の番号を検討します (Q-001、Q-004)。 (1)、(2)、(4)、(5)、(6)、(8) を直し、(11) を記録して除きます。(1) は Copilot CLI の画面だけを定義します (Q-004、Q-010、Q-011、最終仕様の第 6 章)。(3)、(7)、(9)、(10) と、他の 4 つの CLI の許可の画面は、この項目に残します。 (2)、(4)、(5)、(6)、(8) を対応し、(11) は残ったプロセスがないことを確かめて除きました (2026-11-20)。(1) は、Copilot CLI のシェルのコマンドの許可の画面に応答する形にし、一括の許可 (`--allow-tool shell`) をやめました。WSL と Windows の実機で確かめました (確認の記録 `261120-small-fixes-validation.md`)。(12) から (16) を追加しました。
+- **継続作業での経緯と対処**: 案件 `interactive-verification` で追加しました (2026-11-19)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 この案件で、一部の番号を検討します (Q-001、Q-004)。 (1)、(2)、(4)、(5)、(6)、(8) を直し、(11) を記録して除きます。(1) は Copilot CLI の画面だけを定義します (Q-004、Q-010、Q-011、最終仕様の第 6 章)。(3)、(7)、(9)、(10) と、他の 4 つの CLI の許可の画面は、この項目に残します。 (2)、(4)、(5)、(6)、(8) を対応し、(11) は残ったプロセスがないことを確かめて除きました (2026-11-20)。(1) は、Copilot CLI のシェルのコマンドの許可の画面に応答する形にし、一括の許可 (`--allow-tool shell`) をやめました。WSL と Windows の実機で確かめました (確認の記録 `261120-small-fixes-validation.md`)。(12) から (16) を追加しました。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -360,7 +360,7 @@
 
 - **摘出契機**: 案件 `interactive-verification` の実装中に判明しました (接続の診断の出力)。
 - **今回の見送り理由**: 2026-07-28 に対応する Go SDK は先行版 (v1.9.0-pre.1) だけで、対応は状態を持たない受け口に限られます。参加を MCP の接続に結び付けている今の設計 (`internal/tools/presence.go`) を作り直す必要があります。古い版での接続し直しで、5 つの CLI は使えています (検討用 Markdown `261119-connection-guidance-discussion.md` の Q-003)。
-- **継続作業での経緯と対処**: 案件 `interactive-verification` で追加しました (2026-11-19)。案件 `connection-guidance` で、元の項目の 2 番 (停止の通知の手段) を対応しました。停止のログ通知とログの機能の宣言をやめ、停止はツールの呼び出しのエラーだけで伝えます (2026-11-20、Q-004、最終仕様の第 2 章)。1 番 (版への対応) は、今の動作をテストで保ち、この項目に残しました (Q-003、最終仕様の第 3 章)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: 案件 `interactive-verification` で追加しました (2026-11-19)。案件 `connection-guidance` で、元の項目の 2 番 (停止の通知の手段) を対応しました。停止のログ通知とログの機能の宣言をやめ、停止はツールの呼び出しのエラーだけで伝えます (2026-11-20、Q-004、最終仕様の第 2 章)。1 番 (版への対応) は、今の動作をテストで保ち、この項目に残しました (Q-003、最終仕様の第 3 章)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
@@ -383,7 +383,7 @@
 
 - **摘出契機**: 案件 `connection-guidance` の前提調査で判明しました (2026-11-19)。BL-039 の対策の前に、使われない接続を 30 秒で閉じる確認用のサーバーで、5 つの CLI の動作を確かめました (検討用 Markdown `261119-connection-guidance-discussion.md` の Q-016)。
 - **今回の見送り理由**: agy の側の不具合と見られ、サーバーの側では直せません。利用者は、使われない接続を閉じる設定を、この制限を文書に書いたうえで採用しました (Q-016、Q-017)。
-- **継続作業での経緯と対処**: 案件 `connection-guidance` で追加しました (2026-11-19)。改善の後のサーバー (`--connection-idle 30s`) で確かめ直し、2 回目の指示でも失敗する場合があることが分かりました (2026-11-20)。利用ガイドの会話の手順と検証済みの範囲、スキルの文書に、agy を起動し直して同じ名前で参加させることを書きました。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
+- **継続作業での経緯と対処**: 案件 `connection-guidance` で追加しました (2026-11-19)。改善の後のサーバー (`--connection-idle 30s`) で確かめ直し、2 回目の指示でも失敗する場合があることが分かりました (2026-11-20)。利用ガイドの会話の手順と検証済みの範囲、スキルの文書に、agy を起動し直して同じ名前で参加させることを書きました。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。
 
 ### 影響範囲とリスク
 
