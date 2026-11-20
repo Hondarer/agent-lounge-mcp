@@ -42,6 +42,11 @@ class PlainTest(unittest.TestCase):
         self.assertTrue(word.startswith("IVDONE"))
         self.assertFalse(screen.contains(ask, word))
 
+    def test_completion_token_does_not_begin_with_e(self):
+        for _ in range(200):
+            word, _ask = screen.completion()
+            self.assertNotEqual(word[len("IVDONE")], "E")
+
     def test_words(self):
         self.assertEqual(screen.words("\x1b[31m◐◓\x1b[0m"), 0)
         self.assertEqual(screen.words("\x1b[31mab1\x1b[0m"), 3)

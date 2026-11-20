@@ -148,7 +148,8 @@ def token() -> str:
 
 def completion() -> tuple[str, str]:
     """A new completion word, and the sentence that asks the agent to end its reply with it."""
-    t = token()
+    # Not e first: "IVDONE" ends with E, and a model may write the E of "IVDONEE..." only once.
+    t = "abcdf"[secrets.randbelow(5)] + token()[1:]
     word = "IVDONE" + t.upper()
     return word, (f'When you have finished, end your reply with the word "ivdone" followed by "{t}", '
                   f"all in capital letters, with nothing between them.")
