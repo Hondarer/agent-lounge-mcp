@@ -70,6 +70,9 @@ class Definition:
     ready: Sequence[str]  # any of these on the screen: ready for an instruction
     dialogs: Sequence[tuple[str, Sequence[str]]] = ()  # (text on the screen, keys that answer it)
     # Permission prompts answered while a reply is awaited: (text on the screen, keys that allow).
+    # The text is the question line; lines before it, separated by line feeds, must stand on
+    # the screen above the question (see _Prompts.ABOVE), for a question that other prompts
+    # also ask.
     approvals: Sequence[tuple[str, Sequence[str]]] = ()
     # Texts the screen shows only while the CLI works on an instruction.
     busy: Sequence[str] = ()
@@ -152,9 +155,12 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
         # allowed commands does not cover, and allowing the whole shell would also allow what
         # the model never asked for. Each command's prompt is answered instead (approvals), and
         # the answers are counted. A command the model asks for still runs as the user who
-        # runs the harness, in or outside the check folder.
+        # runs the harness, in or outside the check folder. A command that reads or writes a
+        # path outside the paths allowed for the session (such as cat /etc/hostname) asks
+        # again for that path; it is allowed once (1. Yes is selected), not for the session.
         interactive=["--allow-tool", SERVER, "--allow-tool", "write"],
-        approvals=[("Do you want to run this command?", [ENTER])],
+        approvals=[("Do you want to run this command?", [ENTER]),
+                   ("Allow path access\nDo you want to allow this?", [ENTER])],
         busy=["ctrl+c interrupt"],
         one_shot=lambda prompt: ["-p", prompt, "--allow-tool", SERVER],
         register=_copilot_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
@@ -208,6 +214,7 @@ class _Prompts:
     RETRY = 15.0
     SETTLE = 2.0
     CONTEXT = 8  # lines above the question that belong to the prompt
+    ABOVE = 16  # lines above the question in which the other lines of a text must stand
 
     def __init__(self, texts: Sequence[str], letters: Callable[[], int]):
         self._texts = list(texts)
@@ -220,8 +227,9 @@ class _Prompts:
     def _find(self, display: str) -> tuple[str, str] | None:
         lines = display.split("\n")
         for text in self._texts:
+            *above, question = text.split("\n")
             for i, line in enumerate(lines):
-                if text in line:
+                if question in line and all(any(a in l for l in lines[max(0, i - self.ABOVE):i]) for a in above):
                     return text, "\n".join(lines[max(0, i - self.CONTEXT):i])
         return None
 

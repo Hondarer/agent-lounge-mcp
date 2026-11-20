@@ -17,6 +17,10 @@ calls made at once: after an answer the prompt is not redrawn at all, and only a
 the remaining requests (written, then erased) and the state of the call above the prompt
 change. "linger" asks once, and after the answer leaves the prompt on the screen for 5
 seconds, drawing only symbols, before it removes it.
+
+"pathaccess" asks, like Copilot CLI, to allow access to a path ("Allow path access" above
+"Do you want to allow this?"), then replies. "urlaccess" asks the same question under another
+title and waits for a key that never comes, like "stuck".
 """
 
 import os
@@ -28,6 +32,14 @@ import time
 def out(text: str) -> None:
     sys.stdout.write(text)
     sys.stdout.flush()
+
+
+def _access(title: str, what: str) -> str:
+    """A prompt to allow access, drawn like Copilot CLI's: the title stands 8 lines above the
+    question."""
+    return ("\x1b[2J\x1b[H" + title + "\r\n" + "-" * 40 + "\r\nThis action may read or write the following.\r\n\r\n"
+            + "+" + "-" * 38 + "+\r\n| " + what + "\r\n+" + "-" * 38 + "+\r\n\r\nDo you want to allow this?\r\n\r\n"
+            "> 1. Yes\r\n  2. Yes, and remember this for this session\r\n  3. No (Esc)\r\n")
 
 
 def main() -> None:
@@ -46,6 +58,11 @@ def main() -> None:
             continue
         if "slow" in line:
             time.sleep(3)
+        if "urlaccess" in line:
+            out(_access("Allow URL access", "https://example.com"))
+            while sys.stdin.readline().strip() != "quit":
+                pass
+            return
         if "stuck" in line:
             out("Do you want to run this command?\r\n> 1. Yes\r\n")
             while sys.stdin.readline().strip() != "quit":
@@ -83,6 +100,11 @@ def main() -> None:
             for i in range(50):
                 out("\x1b7\x1b[20;1H" + "|/-\\"[i % 4] + "\x1b8")  # below the prompt
                 time.sleep(0.1)
+            out("\x1b[2J\x1b[H")
+        if "pathaccess" in line:
+            out(_access("Allow path access", "/etc/hostname"))
+            if not sys.stdin.readline():
+                return
             out("\x1b[2J\x1b[H")
         m = re.search(r'followed by "([0-9a-f]+)"', line)
         word = "IVDONE" + m.group(1).upper() if m else "no word asked"

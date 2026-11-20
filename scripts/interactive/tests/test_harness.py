@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from harness import screen, terminal  # noqa: E402
-from harness.agents import CTRL_U, ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
+from harness.agents import CTRL_U, DEFINITIONS, ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
 from harness.scenarios.common import answer, connections, new_lines, tools_called  # noqa: E402
 from harness.lounge import Client  # noqa: E402
 from harness.server import Server  # noqa: E402
@@ -490,6 +490,18 @@ class AgentTest(unittest.TestCase):
         reply = a.ask("Say hello after linger.", timeout=30, settle=1)
         self.assertTrue(reply.complete, reply.text)
         self.assertEqual(reply.approvals, 1)
+        a.quit()
+
+    def test_copilot_path_access_is_allowed_and_the_same_question_elsewhere_is_not(self):
+        d = Definition(**{**fake().__dict__, "approvals": DEFINITIONS["copilot"].approvals})
+        a = self.start(d)
+        reply = a.ask("Say hello after pathaccess.", timeout=20, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual(reply.approvals, 1)
+        # The same question under another title is not a prompt of the definition.
+        reply = a.ask("Say hello after urlaccess.", timeout=4, settle=1)
+        self.assertFalse(reply.complete)
+        self.assertEqual(reply.approvals, 0)
         a.quit()
 
     def test_a_prompt_that_stays_is_answered_once_and_the_timeout_holds(self):
