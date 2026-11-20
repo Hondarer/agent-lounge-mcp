@@ -226,7 +226,7 @@ type WhoSession struct {
 	Scopes     []ScopeOutput `json:"scopes" jsonschema:"scopes you share with the session, each with its id: pass one as the scope of chat_send to reach it"`
 	Connected  bool          `json:"connected" jsonschema:"true when a connection is joined as this session now"`
 	You        bool          `json:"you" jsonschema:"true for your own session"`
-	LastSeenAt string        `json:"last_seen_at" jsonschema:"time of the session's last successful tool call (RFC 3339, UTC)"`
+	LastSeenAt string        `json:"last_seen_at" jsonschema:"time of the last tool call of a connection joined as the session (RFC 3339, UTC)"`
 }
 
 // WhoOutput is the result of the lounge_who tool.

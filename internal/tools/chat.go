@@ -219,18 +219,34 @@ func (d *Deps) chatInbox(ctx context.Context, req *mcp.CallToolRequest, in Inbox
 		n := min(int(time.Since(start)/time.Second), wait)
 		return &n
 	}
-	for checked := false; ; checked = true {
-		msgs, err := d.Store.FetchInbox(ctx, me.ID, limit)
-		if err != nil {
-			return nil, InboxOutput{}, err
-		}
-		if len(msgs) > 0 {
-			var waitedSeconds *int
-			if checked {
-				waitedSeconds = waited()
+	// The token is checked at an interval and before the messages are read after a wake-up, so
+	// that a revoked token neither keeps waiting nor receives a message (see tokenValid).
+	tokenCheck := time.NewTicker(cmp.Or(d.TokenCheckInterval, DefaultTokenCheckInterval))
+	defer tokenCheck.Stop()
+	// fetch is false after a tick of tokenCheck: the tick only checks the token, so that a
+	// waiting call does not read the inbox (a write transaction) at an interval.
+	for checked, fetch := false, true; ; checked = true {
+		if checked {
+			if valid, err := d.tokenValid(ctx, req); err != nil {
+				return nil, InboxOutput{}, err
+			} else if !valid {
+				return nil, InboxOutput{}, errTokenRevoked
 			}
-			return nil, inboxOutput(me, msgs, waitedSeconds), nil
 		}
+		if fetch {
+			msgs, err := d.Store.FetchInbox(ctx, me.ID, limit)
+			if err != nil {
+				return nil, InboxOutput{}, err
+			}
+			if len(msgs) > 0 {
+				var waitedSeconds *int
+				if checked {
+					waitedSeconds = waited()
+				}
+				return nil, inboxOutput(me, msgs, waitedSeconds), nil
+			}
+		}
+		fetch = true
 		select {
 		case <-w.C:
 			// A new message, or the session was joined by a connection: check again.
@@ -248,6 +264,8 @@ func (d *Deps) chatInbox(ctx context.Context, req *mcp.CallToolRequest, in Inbox
 			}
 		case <-timer.C:
 			return nil, inboxOutput(me, nil, &wait), nil
+		case <-tokenCheck.C:
+			fetch = false // the token is checked at the top of the loop
 		case <-d.notify.stopped:
 			return nil, InboxOutput{}, errShuttingDown
 		case <-ctx.Done():

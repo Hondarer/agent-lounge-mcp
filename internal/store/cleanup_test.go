@@ -178,10 +178,10 @@ func TestCleanupDeletesSessions(t *testing.T) {
 	if r := cleanup(t, s, p); r != (CleanupResult{Sessions: 1, SessionMessages: 2, SessionDeliveries: 4}) {
 		t.Errorf("after the period: %+v", r)
 	}
-	if exists, err := s.SessionExists(ctx, alice); err != nil || exists {
+	if exists, err := sessionExists(ctx, s, alice); err != nil || exists {
 		t.Errorf("alice exists = %v, %v", exists, err)
 	}
-	if exists, _ := s.SessionExists(ctx, bob); !exists {
+	if exists, _ := sessionExists(ctx, s, bob); !exists {
 		t.Error("bob was deleted")
 	}
 	if messageExists(t, s, fromAlice.MessageID) || messageExists(t, s, toAlice.MessageID) {

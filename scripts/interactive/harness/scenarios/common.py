@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .. import screen
+from .. import screen, terminal
 from ..agents import Agent, Definition, Reply, clean_environment, command
 from ..report import Result
 from ..server import Server
@@ -68,6 +68,10 @@ class Context:
             text = text.replace(secret, "<TOKEN>")
         return text
 
+    def approvals(self) -> int:
+        """Permission prompts the harness answered for the CLIs of this scenario."""
+        return sum(a.approvals for a in self._agents)
+
     def close(self) -> None:
         for a in self._agents:
             try:
@@ -112,6 +116,13 @@ def answer(text: str, yes: str, no: str) -> str:
     return "undetermined"
 
 
+def tools_called(server: Server, since: float, own: set[int] = frozenset()) -> list[str]:
+    """The tools called since a time, by connections other than own (the harness's): what
+    an agent called while it was asked to call no tool."""
+    return [e.text[len("request tools/call "):] for e in server.events(since)
+            if e.connection not in own and e.text.startswith("request tools/call ")]
+
+
 def connections(server: Server) -> dict[int, dict[str, Any]]:
     """What the diagnostics say about each connection: client and tools."""
     out: dict[int, dict[str, Any]] = {}
@@ -127,7 +138,7 @@ def connections(server: Server) -> dict[int, dict[str, Any]]:
 def environment(definition: Definition, binary: str) -> dict[str, str]:
     def version(argv: list[str]) -> str:
         try:
-            out = subprocess.run(argv, capture_output=True, text=True, timeout=60, env=clean_environment())
+            out = terminal.run(argv, 60, text=True, env=clean_environment())
             return (out.stdout or out.stderr).strip().splitlines()[0]
         except (OSError, subprocess.TimeoutExpired, IndexError):
             return ""

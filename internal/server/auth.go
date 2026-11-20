@@ -61,6 +61,10 @@ func checkHost(cfg config.Config, next http.Handler) http.Handler {
 // userKey is the context key of the user authenticate decided for a request.
 type userKey struct{}
 
+// tokenHashKey is the context key of the hash of the token the request was authenticated
+// with; absent for a request without a token.
+type tokenHashKey struct{}
+
 // authenticate decides the user of each MCP request from its Authorization header, looking the
 // token up on every request, so that removing a user or rotating its token takes effect at the
 // next request:
@@ -78,6 +82,7 @@ func authenticate(cfg config.Config, sess Session, next http.Handler) http.Handl
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, present, err := auth.BearerToken(r.Header)
 		var user store.User
+		var hash string
 		switch {
 		case err != nil:
 			unauthorized(w, `Bearer error="invalid_token"`, msgTokenInvalid)
@@ -91,7 +96,8 @@ func authenticate(cfg config.Config, sess Session, next http.Handler) http.Handl
 			unauthorized(w, `Bearer error="invalid_token"`, msgTokenInvalid)
 			return
 		default:
-			user, err = sess.Store.UserByTokenHash(r.Context(), auth.Hash(token))
+			hash = auth.Hash(token)
+			user, err = sess.Store.UserByTokenHash(r.Context(), hash)
 			switch {
 			case errors.Is(err, store.ErrNoSuchUser):
 				unauthorized(w, `Bearer error="invalid_token"`, msgTokenInvalid)
@@ -102,7 +108,7 @@ func authenticate(cfg config.Config, sess Session, next http.Handler) http.Handl
 				return
 			}
 		}
-		r = r.Clone(context.WithValue(r.Context(), userKey{}, user))
+		r = r.Clone(context.WithValue(context.WithValue(r.Context(), userKey{}, user), tokenHashKey{}, hash))
 		r.Header.Set("Authorization", "Bearer "+placeholderToken)
 		next.ServeHTTP(w, r)
 	})
@@ -132,7 +138,8 @@ func bindUser(next http.Handler) http.Handler {
 		if !ok {
 			return nil, sdkauth.ErrInvalidToken
 		}
-		return tools.TokenInfo(user), nil
+		hash, _ := ctx.Value(tokenHashKey{}).(string)
+		return tools.TokenInfo(user, hash), nil
 	}
 	// Tokens do not expire (a user's token is replaced with user rotate instead).
 	return sdkauth.RequireBearerToken(verify, &sdkauth.RequireBearerTokenOptions{AllowMissingExpiration: true})(next)

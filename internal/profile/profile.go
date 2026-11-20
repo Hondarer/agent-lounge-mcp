@@ -125,11 +125,19 @@ func Origin(raw string) (string, error) {
 		if i := strings.IndexByte(s, '/'); i >= 0 {
 			head = s[:i]
 		}
+		hasUser := false
 		if i := strings.LastIndexByte(head, '@'); i >= 0 {
-			s = s[i+1:]
+			s, hasUser = s[i+1:], true
 		}
 		i := strings.IndexAny(s, ":/")
 		switch {
+		case !hasUser && (i < 0 || (s[i] == '/' && !looksLikeHost(s, i))):
+			// No scheme, no colon and no user: either the normalized form host/path or a
+			// relative local path (git accepts foo/bar and repo.git as an origin). A value
+			// without a slash cannot be host/path. With a slash, only a first segment that
+			// looks like a host name is read as a host; otherwise two unrelated folders on
+			// different machines would share the unit foo/bar.
+			return "", nil
 		case i < 0:
 			host = s
 		case s[i] == ':':
@@ -168,6 +176,17 @@ func Origin(raw string) (string, error) {
 	return strings.ToLower(host + "/" + strings.Join(segs, "/")), nil
 }
 
+// looksLikeHost reports whether the first segment of s (up to index end, or all of s when end
+// is negative) can be the host of the normalized form host/path: it contains a dot or is
+// localhost. Real output of git remote get-url never has this form; it is accepted so that an
+// agent can pass a repository value it was shown.
+func looksLikeHost(s string, end int) bool {
+	if end >= 0 {
+		s = s[:end]
+	}
+	return strings.Contains(s, ".") || strings.EqualFold(s, "localhost")
+}
+
 // isLocalPath reports whether an origin without a scheme is a local path.
 func isLocalPath(s string) bool {
 	return strings.HasPrefix(s, "/") || strings.HasPrefix(s, `\`) || strings.HasPrefix(s, ".") ||
@@ -177,6 +196,10 @@ func isLocalPath(s string) bool {
 // wslShareRE matches the WSL share prefixes \\wsl$\<distro> and \\wsl.localhost\<distro>
 // (after slashes are turned into backslashes).
 var wslShareRE = regexp.MustCompile(`(?i)^\\\\(wsl\$|wsl\.localhost)\\([^\\]+)(\\|$)`)
+
+// shareDriveRE matches a Windows drive mounted in WSL, in a cleaned path with backslashes:
+// \mnt\<one letter>.
+var shareDriveRE = regexp.MustCompile(`^\\mnt\\([A-Za-z])(\\|$)`)
 
 // mntDriveRE matches a Windows drive mounted in WSL: /mnt/<one letter>.
 var mntDriveRE = regexp.MustCompile(`^/mnt/([A-Za-z])(/|$)`)
@@ -190,7 +213,8 @@ var mntDriveRE = regexp.MustCompile(`^/mnt/([A-Za-z])(/|$)`)
 //     are lowercased as a whole, since Windows ignores case.
 //   - A WSL share (\\wsl$\<distro>\... or \\wsl.localhost\<distro>\...) becomes
 //     \\wsl.localhost\<distro>\...; only the part through the distribution name is lowercased,
-//     since the rest is a Linux path.
+//     since the rest is a Linux path. A share path into a mounted Windows drive
+//     (...\<distro>\mnt\<letter>\...) becomes the drive path <letter>:\... instead.
 //   - Without wslDistro, an absolute POSIX path (Linux, macOS) is cleaned and keeps its case.
 //
 // Repeated and trailing separators are removed, and . and .. are resolved lexically. A path
@@ -226,7 +250,14 @@ func Folder(raw, wslDistro string) (string, error) {
 // uncPath normalizes a path that starts with two backslashes.
 func uncPath(s string) (string, error) {
 	if m := wslShareRE.FindStringSubmatch(s); m != nil {
-		return windowsPath(`\\wsl.localhost\`+strings.ToLower(m[2]), s[len(m[0])-len(m[3]):], false), nil
+		// A Windows drive seen through the share (\\wsl.localhost\<distro>\mnt\c\...) is the
+		// drive path, the same value as /mnt/c/... declared from inside WSL. The check runs on
+		// the cleaned path, so that . and .. cannot hide or fake the mount point.
+		inside := strings.TrimSuffix(windowsPath("", s[len(m[0])-len(m[3]):], false), `\`)
+		if d := shareDriveRE.FindStringSubmatch(inside); d != nil {
+			return windowsPath(strings.ToLower(d[1])+":", inside[len(d[0])-len(d[2]):], true), nil
+		}
+		return `\\wsl.localhost\` + strings.ToLower(m[2]) + inside, nil
 	}
 	parts := strings.SplitN(strings.TrimLeft(s, `\`), `\`, 3)
 	if len(parts) < 2 || parts[0] == "" || parts[1] == "" {

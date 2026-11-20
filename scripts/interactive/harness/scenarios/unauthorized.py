@@ -12,6 +12,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from .. import terminal
 from ..agents import clean_environment, command
 from .common import Context
 
@@ -29,9 +30,10 @@ def _one_shot(ctx: Context, token: str, prompt: str, cwd: Path, timeout: float =
     env["AGENT_LOUNGE_TOKEN"] = token  # Codex reads the token from this variable
     began = time.monotonic()
     try:
-        out = subprocess.run([command(ctx.definition.executable), *ctx.definition.one_shot(prompt), *ctx.definition.settings_args(str(cwd))], cwd=cwd, env=env,
-                             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
-                             stdin=subprocess.DEVNULL)
+        # terminal.run ends the whole process tree at the timeout: the CLI is often the child
+        # of a launcher, and would otherwise keep the harness waiting.
+        out = terminal.run([command(ctx.definition.executable), *ctx.definition.one_shot(prompt), *ctx.definition.settings_args(str(cwd))],
+                           timeout, cwd=cwd, env=env, text=True, encoding="utf-8", errors="replace")
         text, code, timed_out = out.stdout + "\n" + out.stderr, out.returncode, False
     except subprocess.TimeoutExpired as e:
         text = (e.stdout or b"").decode("utf-8", "replace") if isinstance(e.stdout, bytes) else (e.stdout or "")
@@ -43,8 +45,8 @@ def _one_shot(ctx: Context, token: str, prompt: str, cwd: Path, timeout: float =
 def _register(ctx: Context, token: str) -> None:
     d = ctx.definition
     env = clean_environment()
-    subprocess.run([command(d.executable), *d.unregister], capture_output=True, env=env, timeout=60)
-    out = subprocess.run([command(d.executable), *d.register(ctx.url, token)], capture_output=True, text=True, env=env, timeout=60)
+    terminal.run([command(d.executable), *d.unregister], 60, env=env)
+    out = terminal.run([command(d.executable), *d.register(ctx.url, token)], 60, text=True, env=env)
     if out.returncode != 0:
         raise RuntimeError(f"registering with a token failed: {out.stderr.strip()}")
 
@@ -96,5 +98,5 @@ def token_stopped(ctx: Context) -> None:
         v["exit_code"] = second["exit_code"]
     finally:
         d = ctx.definition
-        subprocess.run([command(d.executable), *d.unregister], capture_output=True, env=clean_environment(), timeout=60)
+        terminal.run([command(d.executable), *d.unregister], 60, env=clean_environment())
         v["token_left_in"] = _leftovers(token)

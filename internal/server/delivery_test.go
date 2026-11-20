@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -187,10 +188,40 @@ func TestChatHistory(t *testing.T) {
 		"limit":               {"limit": -1},
 		"before":              {"before": -1},
 		"invalid":             {"with": "/x"},
+		`no room named "other": the only room is lounge`: {"room": "other"},
 	} {
 		if msg := testutil.CallErr(t, bob, "chat_history", want); !strings.Contains(msg, args) {
 			t.Errorf("%v: %s", want, msg)
 		}
+	}
+}
+
+// The room lounge exists in every space, also before its first message: an empty list, not
+// the error of an unknown room.
+func TestHistoryOfLoungeBeforeFirstMessage(t *testing.T) {
+	_, cs := waitServer(t, time.Second, "alice")
+	if h := testutil.Call[historyOut](t, cs[0], "chat_history", map[string]any{"room": "lounge"}); len(h.Messages) != 0 {
+		t.Errorf("history: %+v", h)
+	}
+}
+
+// A call that fails still counts as use of the session: its time of last use advances.
+func TestFailedCallKeepsSessionInUse(t *testing.T) {
+	s, sess := newServer(t)
+	cs := testutil.Connect(t, s.MCP, nil)
+	testutil.Call[joined](t, cs, "lounge_join", map[string]any{"name": "alice"})
+	lastSeen := func() time.Time {
+		list, _, err := sess.Store.ListSessions(context.Background(), sess.LocalUser.ID, 10)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("sessions: %+v, %v", list, err)
+		}
+		return list[0].LastSeenAt
+	}
+	before := lastSeen()
+	time.Sleep(100 * time.Millisecond) // well above the clock's resolution on every system
+	testutil.CallErr(t, cs, "chat_history", map[string]any{"limit": -1})
+	if after := lastSeen(); !after.After(before) {
+		t.Errorf("last use: %s, then %s", before, after)
 	}
 }
 

@@ -42,18 +42,6 @@ var ErrNoSuchMessage = errors.New("no message with that ID was sent by this sess
 // cleanup of unused sessions, by session remove, or with its user).
 var ErrSessionGone = errors.New("the session was deleted")
 
-// SessionExists reports whether sess is still recorded: the same ID, user and name. The user
-// and name are compared too because a deleted session's ID can be given to a new session.
-func (s *Store) SessionExists(ctx context.Context, sess Session) (bool, error) {
-	var n int
-	err := s.db.QueryRowContext(ctx, "SELECT count(*) FROM sessions WHERE id = ? AND user_id = ? AND name = ?",
-		sess.ID, sess.UserID, sess.Name).Scan(&n)
-	if err != nil {
-		return false, fmt.Errorf("look up the session: %w", err)
-	}
-	return n > 0, nil
-}
-
 // Ack records that the session finished handling the given messages: each delivered delivery
 // of these messages to the session becomes acked, with the time. acked lists the IDs whose
 // delivery to the session is acked now, including those acked before (their time is kept), so

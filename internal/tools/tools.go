@@ -4,8 +4,10 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	sdkauth "github.com/modelcontextprotocol/go-sdk/auth"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -23,6 +25,8 @@ type Deps struct {
 	// authenticated, which is this same user for a request without a token on a server that
 	// does not require one.
 	LocalUser store.User
+	// TokenCheckInterval replaces DefaultTokenCheckInterval when it is not zero (tests).
+	TokenCheckInterval time.Duration
 
 	presenceOnce sync.Once
 	presence     *presence
@@ -90,11 +94,43 @@ const userInfoKey = "agent-lounge-mcp/user"
 // UserID combines the user's database ID with its creation time, so that a user added again
 // under a removed user's name (which may get the same ID) does not continue the removed user's
 // connections.
-func TokenInfo(u store.User) *sdkauth.TokenInfo {
+//
+// tokenHash is the hash of the token the request was authenticated with, or "" for a request
+// without a token (the user local). A waiting chat_inbox uses it to notice that the token
+// stopped being valid (see tokenValid). The token itself never reaches the tools.
+func TokenInfo(u store.User, tokenHash string) *sdkauth.TokenInfo {
 	return &sdkauth.TokenInfo{
 		UserID: fmt.Sprintf("%d.%d", u.ID, u.CreatedAt.UnixMilli()),
-		Extra:  map[string]any{userInfoKey: u},
+		Extra:  map[string]any{userInfoKey: u, tokenHashKey: tokenHash},
 	}
+}
+
+// tokenHashKey is the key of the token hash in sdkauth.TokenInfo.Extra.
+const tokenHashKey = "agent-lounge-mcp/token-hash"
+
+// DefaultTokenCheckInterval is how often a waiting chat_inbox checks that its token is still
+// valid.
+const DefaultTokenCheckInterval = 5 * time.Second
+
+// errTokenRevoked is the error of a waiting chat_inbox whose token stopped being valid.
+var errTokenRevoked = errors.New("your token is no longer valid: it was replaced or its user was removed. " +
+	"Tell the user to update the token in this agent's MCP settings.")
+
+// tokenValid reports whether the token a request was authenticated with is still the token of
+// its user. Every HTTP request is authenticated when it arrives, but a waiting chat_inbox
+// stays inside one request for up to the wait limit, and user rotate and user remove run in
+// another process that cannot tell the server: the call has to look itself. A request without
+// a token (the user local) has nothing that can be revoked.
+func (d *Deps) tokenValid(ctx context.Context, req *mcp.CallToolRequest) (bool, error) {
+	if req == nil || req.Extra == nil || req.Extra.TokenInfo == nil {
+		return true, nil
+	}
+	hash, _ := req.Extra.TokenInfo.Extra[tokenHashKey].(string)
+	u, ok := req.Extra.TokenInfo.Extra[userInfoKey].(store.User)
+	if hash == "" || !ok {
+		return true, nil
+	}
+	return d.Store.TokenValid(ctx, u.ID, hash)
 }
 
 // RequestUser returns the user a tool request acts as: the user attached by TokenInfo, or
@@ -195,8 +231,9 @@ type unreadField struct {
 func (u *unreadField) setUnread(n int) { u.Unread = &n }
 
 // registerTool wraps a handler with the processing every tool shares. While the server stops,
-// every call fails with the shutdown error. For a connection that joined, a successful call
-// records the session's activity and reports its unread messages, both as the unread output
+// every call fails with the shutdown error. For a connection that joined, every call
+// records the session's activity (before the handler, see below), and a successful call
+// reports its unread messages, both as the unread output
 // field and as the last line of the text, because agents differ in which of the two they read.
 // The text is the output as JSON, or the output's own text when it has one (see resultTexter).
 func registerTool[In, Out any](s *mcp.Server, d *Deps, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
@@ -208,8 +245,12 @@ func registerTool[In, Out any](s *mcp.Server, d *Deps, t *mcp.Tool, h mcp.ToolHa
 		// A session can be deleted while a connection is joined as it (by the cleanup of
 		// unused sessions, session remove or user remove). The connection is then no longer
 		// joined; tools that need a session say why, the others work as before joining.
+		//
+		// The check is the update of the session's time of last use (one query for both, see
+		// store.Touch), so the time advances with every call of a joined connection, also one
+		// that fails: a session whose calls fail is still in use.
 		if sess, joined := d.presence.lookup(req.Session); joined {
-			exists, err := d.Store.SessionExists(ctx, sess)
+			exists, err := d.Store.Touch(ctx, sess)
 			if err != nil {
 				return nil, zero, err
 			}
@@ -240,7 +281,7 @@ func registerTool[In, Out any](s *mcp.Server, d *Deps, t *mcp.Tool, h mcp.ToolHa
 			}
 			return nil, out, nil
 		}
-		unread, err := d.Store.Seen(ctx, sess.ID)
+		unread, err := d.Store.Unread(ctx, sess.ID)
 		if err != nil {
 			return nil, out, err
 		}
