@@ -164,6 +164,28 @@ func TestJoinProfileErrors(t *testing.T) {
 
 // Sessions of one repository, declared in different forms, share the repository room; sessions
 // of another repository and sessions without one do not receive its messages.
+func TestJoinRejectsGenericMachine(t *testing.T) {
+	cs := connect(t)
+	for _, m := range []string{"sandbox", "Sandbox", "LOCALHOST", "localhost.localdomain"} {
+		msg := testutil.CallErr(t, cs, "lounge_join", map[string]any{"name": "a", "machine": m})
+		if !strings.Contains(msg, "does not identify a machine") || !strings.Contains(msg, "cat /etc/hostname") {
+			t.Errorf("machine %q: error %q", m, msg)
+		}
+	}
+	// A rejected value does not join.
+	if msg := testutil.CallErr(t, cs, "lounge_who", nil); !strings.Contains(msg, "not joined") {
+		t.Errorf("after rejected joins: %q", msg)
+	}
+	// A rejected value leaves the recorded profile unchanged.
+	want := testutil.Call[profileJoined](t, cs, "lounge_join", map[string]any{"name": "a", "os_user": "Honda", "machine": "HOST-A", "folder": "/x"})
+	if msg := testutil.CallErr(t, cs, "lounge_join", map[string]any{"name": "a", "os_user": "Other", "machine": "sandbox", "folder": "/y"}); !strings.Contains(msg, "does not identify") {
+		t.Errorf("rejoin: %q", msg)
+	}
+	if got := testutil.Call[profileJoined](t, cs, "lounge_join", map[string]any{"name": "a"}); got != want {
+		t.Errorf("profile after rejected join = %+v, want %+v", got, want)
+	}
+}
+
 func TestRepositoryRoom(t *testing.T) {
 	s, _ := waitServer(t, 10*time.Second)
 	join := func(args map[string]any) *mcp.ClientSession {
@@ -310,7 +332,7 @@ func TestHelpDescribesProfileAndRepository(t *testing.T) {
 	for _, want := range []string{
 		"## Profile", "## Scopes and targets", "## Users", "os_user", "machine", "origin", "folder", "wsl_distro",
 		"id -un", "uname -n", "you are on WSL", "$env:USERNAME", "echo $USERNAME", `cmd.exe /c "echo %USERNAME%"`, "cmd.exe /c hostname", "git remote get-url origin",
-		"git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
+		"cat /etc/hostname", "git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
 		"before you call other tools", "not verified", "not carried over", "/mnt/<drive letter>",
 	} {
 		if !strings.Contains(guide, want) {

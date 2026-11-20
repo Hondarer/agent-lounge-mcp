@@ -39,7 +39,15 @@ func OSUser(raw string) (string, error) {
 // Machine normalizes the machine name: the last non-empty line is taken, trimmed and
 // lowercased. An empty result means no value.
 func Machine(raw string) (string, error) {
-	return name("machine", strings.ToLower(lastLine(raw)))
+	s := strings.ToLower(lastLine(raw))
+	// Inside some sandboxes uname -n prints "sandbox", and these names are shared by many
+	// machines, so they would make unrelated folders look like the same repository. On WSL
+	// /etc/hostname is the Windows computer name by default, so it is a safe fallback.
+	switch s {
+	case "sandbox", "localhost", "localhost.localdomain":
+		return "", fmt.Errorf("machine %q does not identify a machine: pass the output of cat /etc/hostname, or omit machine", s)
+	}
+	return name("machine", s)
 }
 
 // lastLine returns the last non-empty line of s, trimmed. On WSL, cmd.exe started in a Linux

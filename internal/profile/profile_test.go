@@ -311,6 +311,22 @@ func TestUnexpandedVariable(t *testing.T) {
 	}
 }
 
+func TestMachineRejectsGenericNames(t *testing.T) {
+	for _, v := range []string{"sandbox", "Sandbox", "LOCALHOST", "localhost.localdomain", " Localhost.LocalDomain\r\n"} {
+		_, err := Machine(v)
+		if err == nil {
+			t.Errorf("Machine(%q): no error", v)
+			continue
+		}
+		if !strings.Contains(err.Error(), "does not identify a machine") || !strings.Contains(err.Error(), "cat /etc/hostname") {
+			t.Errorf("Machine(%q): error %q", v, err)
+		}
+	}
+	if got, err := Machine("sandbox-1"); err != nil || got != "sandbox-1" {
+		t.Errorf("Machine(sandbox-1) = %q, %v", got, err)
+	}
+}
+
 func TestLastLine(t *testing.T) {
 	in := "'\\\\wsl.localhost\\Ubuntu\\home\\u'\r\nCMD.EXE was started with the above path as the current directory.\r\nUNC paths are not supported.\r\nHOST-A\r\n\r\n"
 	if got, err := Machine(in); err != nil || got != "host-a" {
