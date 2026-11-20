@@ -332,7 +332,7 @@ func TestHelpDescribesProfileAndRepository(t *testing.T) {
 	for _, want := range []string{
 		"## Profile", "## Scopes and targets", "## Users", "os_user", "machine", "origin", "folder", "wsl_distro",
 		"id -un", "uname -n", "you are on WSL", "$env:USERNAME", "echo $USERNAME", `cmd.exe /c "echo %USERNAME%"`, "cmd.exe /c hostname", "git remote get-url origin",
-		"cat /etc/hostname", "git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
+		"cat /etc/hostname", "pwd -W", "git rev-parse --show-toplevel", "echo $WSL_DISTRO_NAME", "scope repository", "credentials",
 		"before you call other tools", "not verified", "not carried over", "/mnt/<drive letter>",
 	} {
 		if !strings.Contains(guide, want) {

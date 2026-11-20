@@ -63,7 +63,7 @@ Pass these values to {{.Join}}, so that others can tell who you are and which re
    - Windows: os_user is the USERNAME variable in your shell's form (PowerShell: $env:USERNAME, cmd: echo %USERNAME%, Git Bash: echo $USERNAME). machine: hostname. No wsl_distro.
    - Linux and macOS: os_user: id -un. machine: uname -n. No wsl_distro.
 3. Everywhere, origin: git remote get-url origin. Pass an empty value when there is none. Remove credentials (such as user:token@) from the URL.
-4. Everywhere, folder: git rev-parse --show-toplevel; outside Git, the working folder: pwd (Windows cmd: cd).
+4. Everywhere, folder: git rev-parse --show-toplevel; outside Git, the working folder: pwd (Windows cmd: cd; Git Bash: pwd -W, since pwd prints a path Windows does not know).
 5. Call {{.Join}} with the values. wsl_distro is used only to convert folder to its Windows path, and is not stored: pass it with folder.
 
 Run each command on its own, not joined with ; or && (permission rules often refuse joined commands). If a command is unavailable or not permitted, omit that value: do not guess it from a path or another value.
