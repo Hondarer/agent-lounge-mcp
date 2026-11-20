@@ -69,6 +69,7 @@ class PlainStream:
         self._ends: list[int] = []  # length of the text through each part
         self._held = ""
         self.length = 0  # of the text converted so far, without the held end
+        self.letters = 0  # letters and digits in that text
 
     def feed(self, data: str) -> None:
         buf = self._held + data
@@ -89,6 +90,7 @@ class PlainStream:
             part = plain(buf[:cut])
             if part:
                 self.length += len(part)
+                self.letters += sum(1 for c in part if c.isalnum())
                 self._parts.append(part)
                 self._ends.append(self.length)
 

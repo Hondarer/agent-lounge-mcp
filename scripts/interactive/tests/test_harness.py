@@ -473,6 +473,25 @@ class AgentTest(unittest.TestCase):
         self.assertEqual((reply.approvals, a.approvals), (0, 3))
         a.quit()
 
+    def test_the_same_command_asked_for_in_a_row_is_answered_each_time_without_the_retry(self):
+        a = self.start()
+        # Three prompts with the same lines; between them, only lines outside the prompt change.
+        began = time.monotonic()
+        reply = a.ask("Say hello after twin and twin and twin.", timeout=40, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual(reply.approvals, 3)
+        self.assertLess(time.monotonic() - began, 14)  # no prompt waited for the retry time
+        a.quit()
+
+    def test_an_answered_prompt_that_stays_a_while_is_answered_once(self):
+        a = self.start()
+        # The prompt stays 5 seconds after the answer (longer than the settle time of prompts),
+        # with only symbols drawn meanwhile.
+        reply = a.ask("Say hello after linger.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertEqual(reply.approvals, 1)
+        a.quit()
+
     def test_a_prompt_that_stays_is_answered_once_and_the_timeout_holds(self):
         a = self.start()
         began = time.monotonic()

@@ -136,6 +136,11 @@ class Terminal:
         with self._lock:
             return self._ends[-1] if self._ends else 0
 
+    def letters(self) -> int:
+        """How many letters and digits the program has written so far (in its plain text)."""
+        with self._lock:
+            return self._plain.letters
+
     def closed(self) -> bool:
         with self._lock:
             return self._closed

@@ -193,17 +193,29 @@ class _Prompts:
     prompt again when it stands on the same line as the question before, so "written after
     the answer" cannot be the test, and "left the screen in between" is never true for two
     prompts in a row. The lines above the question (what is asked for: the command) tell the
-    prompts apart. A prompt with the same lines as the answered one counts again only after
-    RETRY seconds: either the key was not taken, or the same command is asked for twice.
+    prompts apart.
+
+    When the same command is asked for twice in a row (two calls made at once), the second
+    prompt has the same lines as the first, and the CLI does not redraw the prompt at all: it
+    writes only elsewhere (Copilot CLI writes a line about the remaining requests and the
+    state of the first call). A prompt with the same lines counts again once the CLI wrote
+    letters or digits after the answer and then none for SETTLE seconds: a CLI that took the
+    key and has an answered prompt to remove removes it in the output it writes for the key,
+    not seconds later. A CLI that writes nothing after the answer (the key was not taken, or
+    it has not yet redrawn) gets the same answer again only after RETRY seconds.
     """
 
     RETRY = 15.0
+    SETTLE = 2.0
     CONTEXT = 8  # lines above the question that belong to the prompt
 
-    def __init__(self, texts: Sequence[str]):
+    def __init__(self, texts: Sequence[str], letters: Callable[[], int]):
         self._texts = list(texts)
+        self._letters = letters  # the number of letters and digits the CLI has written so far
         self._last: tuple[str, str] | None = None  # the prompt answered last, and its lines
-        self._at = 0.0
+        self._at = 0.0  # when it was answered
+        self._count = 0  # letters and digits written when last looked
+        self._wrote: float | None = None  # when letters or digits were last seen after the answer
 
     def _find(self, display: str) -> tuple[str, str] | None:
         lines = display.split("\n")
@@ -219,13 +231,23 @@ class _Prompts:
         if seen is None:
             self._last = None  # the answered prompt left the screen: the next one is new
             return None
-        if seen == self._last and time.monotonic() - self._at < self.RETRY:
-            return None
-        return seen[0]
+        if seen != self._last:
+            return seen[0]
+        now = time.monotonic()
+        count = self._letters()
+        if count != self._count:
+            self._count, self._wrote = count, now
+        if self._wrote is not None and now - self._wrote >= self.SETTLE:
+            return seen[0]  # the CLI took the key and drew elsewhere: the same command again
+        if now - self._at >= self.RETRY:
+            return seen[0]  # the key was not taken
+        return None
 
     def answered(self, display: str, text: str) -> None:
+        """Call before the keys of the answer are sent."""
         seen = self._find(display)
-        self._last, self._at = seen if seen and seen[0] == text else (text, ""), time.monotonic()
+        self._last = seen if seen and seen[0] == text else (text, "")
+        self._at, self._count, self._wrote = time.monotonic(), self._letters(), None
 
 
 class AgentNotReady(Exception):
@@ -302,7 +324,7 @@ class Agent:
         start = self.term.mark()
         began = time.monotonic()
         deadline = began + timeout
-        prompts = _Prompts([text for text, _ in self.d.approvals])
+        prompts = _Prompts([text for text, _ in self.d.approvals], self.term.letters)
         approvals = 0
         found = complete = False
         try:
