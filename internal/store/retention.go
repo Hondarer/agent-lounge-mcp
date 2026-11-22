@@ -5,23 +5,27 @@ import (
 	"time"
 )
 
-// The forgetting model of memories. A memory's retention score falls from 1 toward 0 as time
-// passes since it was last touched, and falls more slowly the more often it was referenced:
+// The forgetting model of memories. A memory's retention score falls from 1 toward 0 as
+// effective time passes since it was last touched, and falls more slowly the more often it was
+// referenced:
 //
 //	base      = the later of its last update and its last counted reference
 //	half-life = HalfLife × (1 + log2(1 + references))
-//	score     = 2 ^ ( -(now - base) / half-life )
+//	effective = max(0, (now - base) - (scope.discount - memory.credit) - openDiscount)
+//	score     = 2 ^ ( -effective / half-life )
 //
-// A memory fades when its score falls below Threshold: it no longer appears in plain searches,
-// but can still be fetched by ID, which brings it back. Solving score = Threshold for the time
-// gives the moment it fades:
+// A scope accessed at intervals up to W = HalfLife accumulates no discount, so effective time
+// equals wall-clock time. When a scope stays quiet for q > W, the excess (q - W) advances the
+// forgetting clock at 1/3 speed (openDiscount = 2/3 × (q - W)), so quiet scopes retain memories
+// up to about 3x longer. On the next scope access, openDiscount is folded into scope.discount
+// and memories whose base time moves to now record memory.credit = scope.discount, keeping
+// effective elapsed time continuous across every access.
 //
-//	fades at  = base + half-life × log2(1 / Threshold)
-//
-// It is deleted Grace after it faded. A pinned memory scores 1 and neither fades nor is
-// deleted. With the default HalfLife of 7 days and Threshold of 0.1, a memory never referenced
-// fades about 23 days after it was last touched (7 × 3.32), one referenced once after about 47
-// days, three times after about 70 days and seven times after about 93 days.
+// A memory fades when effective >= half-life × log2(1 / Threshold) and is deleted when
+// effective >= half-life × log2(1 / Threshold) + Grace. A pinned memory scores 1 and neither
+// fades nor is deleted. With the default HalfLife of 7 days, Threshold of 0.1 and Grace of
+// 30 days, an unused memory in an active scope fades after about 23 days (deleted after about
+// 53 days), and in a quiet scope fades after about 56 days (deleted after about 146 days).
 //
 // The score is not stored: it depends on the current time and on the options in effect, and
 // is computed whenever a memory is read, searched or cleaned up.
@@ -62,12 +66,21 @@ func RoundRetention(score float64) float64 {
 	return math.Floor(score*100+1e-6) / 100
 }
 
+// scopeActivity holds the access timing and accumulated forgetting discount of one scope.
+// A zero lastAccess means no activity row exists, so effective elapsed time equals wall-clock
+// elapsed time (the original curve).
+type scopeActivity struct {
+	lastAccess time.Time
+	discount   time.Duration
+}
+
 // retentionState holds the inputs of the forgetting model for one memory.
 type retentionState struct {
 	pinned      bool
 	updatedAt   time.Time
 	accessedAt  time.Time // zero when never referenced
 	accessCount int
+	credit      time.Duration // scope discount at base()
 }
 
 func (st retentionState) base() time.Time {
@@ -86,21 +99,68 @@ func (p RetentionPolicy) halfLife(accessCount int) float64 {
 	return float64(p.HalfLife) * (1 + math.Log2(1+float64(max(accessCount, 0))))
 }
 
-// score returns the retention score of a memory at now: 1 for a pinned memory or when
-// forgetting is disabled.
+// gapClock maps a quiet gap q to the effective forgetting time g(q): q up to HalfLife, then
+// HalfLife + (q - HalfLife) / 3.
+func (p RetentionPolicy) gapClock(q time.Duration) time.Duration {
+	if q <= 0 {
+		return 0
+	}
+	if !p.forgets() || q <= p.HalfLife {
+		return q
+	}
+	return p.HalfLife + (q-p.HalfLife)/3
+}
+
+// openDiscount returns the unclosed forgetting discount for a scope whose last access was at
+// act.lastAccess, evaluated at now: 0 when q <= HalfLife, else 2/3 of (q - HalfLife).
+func (p RetentionPolicy) openDiscount(act scopeActivity, now time.Time) time.Duration {
+	if act.lastAccess.IsZero() || !p.forgets() {
+		return 0
+	}
+	q := now.Sub(act.lastAccess)
+	if q <= p.HalfLife {
+		return 0
+	}
+	return q - p.gapClock(q)
+}
+
+// effectiveElapsed returns the effective forgetting time of st at now under act.
+func (p RetentionPolicy) effectiveElapsed(st retentionState, act scopeActivity, now time.Time) time.Duration {
+	wall := now.Sub(st.base())
+	if wall <= 0 {
+		return 0
+	}
+	if act.lastAccess.IsZero() {
+		return wall
+	}
+	paid := act.discount - st.credit
+	open := p.openDiscount(act, now)
+	eff := wall - paid - open
+	if eff <= 0 {
+		return 0
+	}
+	return eff
+}
+
+// score returns the retention score of a memory at now without scope activity (active scope).
 func (p RetentionPolicy) score(st retentionState, now time.Time) float64 {
+	return p.scoreAt(st, scopeActivity{}, now)
+}
+
+// scoreAt returns the retention score of a memory at now under act: 1 for a pinned memory or
+// when forgetting is disabled.
+func (p RetentionPolicy) scoreAt(st retentionState, act scopeActivity, now time.Time) float64 {
 	if st.pinned || !p.forgets() {
 		return 1
 	}
-	elapsed := float64(now.Sub(st.base()))
-	if elapsed <= 0 {
+	eff := p.effectiveElapsed(st, act, now)
+	if eff <= 0 {
 		return 1
 	}
-	return math.Exp2(-elapsed / p.halfLife(st.accessCount))
+	return math.Exp2(-float64(eff) / p.halfLife(st.accessCount))
 }
 
-// fadesAt returns the moment a memory fades, and false when it never fades (pinned, or
-// forgetting is disabled).
+// fadesAt returns the moment a memory fades in an active scope, and false when it never fades.
 func (p RetentionPolicy) fadesAt(st retentionState) (time.Time, bool) {
 	if st.pinned || !p.forgets() {
 		return time.Time{}, false
@@ -109,12 +169,49 @@ func (p RetentionPolicy) fadesAt(st retentionState) (time.Time, bool) {
 }
 
 // FadesAfter returns how long after it was last touched a memory with the given number of
-// references fades, and false when memories do not fade under p.
+// references fades in an active scope, and false when memories do not fade under p.
 func (p RetentionPolicy) FadesAfter(accessCount int) (time.Duration, bool) {
 	if !p.forgets() {
 		return 0, false
 	}
 	return p.fadeAfter(accessCount), true
+}
+
+// quietWall converts an effective duration eff into the wall-clock duration for a scope that
+// stays quiet from the memory's base time: eff when eff <= HalfLife, else 3*eff - 2*HalfLife
+// (saturating at math.MaxInt64).
+func (p RetentionPolicy) quietWall(eff time.Duration) time.Duration {
+	if eff <= p.HalfLife {
+		return eff
+	}
+	f := 3*float64(eff) - 2*float64(p.HalfLife)
+	if f >= math.MaxInt64 {
+		return math.MaxInt64
+	}
+	return time.Duration(f)
+}
+
+// FadesAfterQuiet returns how long after it was last touched a memory fades in a scope that
+// receives no further memory access, and false when memories do not fade under p.
+func (p RetentionPolicy) FadesAfterQuiet(accessCount int) (time.Duration, bool) {
+	if !p.forgets() {
+		return 0, false
+	}
+	return p.quietWall(p.fadeAfter(accessCount)), true
+}
+
+// DeletesAfterQuiet returns how long after it was last touched a memory is deleted in a scope
+// that receives no further memory access, and false when memories are not deleted under p.
+func (p RetentionPolicy) DeletesAfterQuiet(accessCount int) (time.Duration, bool) {
+	if !p.forgets() || p.Grace <= 0 {
+		return 0, false
+	}
+	fade := p.fadeAfter(accessCount)
+	total := fade + p.Grace
+	if total < fade {
+		return math.MaxInt64, true
+	}
+	return p.quietWall(total), true
 }
 
 // fadeAfter returns how long after it was last touched a memory with the given reference
@@ -131,18 +228,35 @@ func (p RetentionPolicy) fadeAfter(accessCount int) time.Duration {
 	return time.Duration(d)
 }
 
-// faded reports whether a memory has faded at now: its score is below the threshold.
+// faded reports whether a memory has faded at now in an active scope.
 func (p RetentionPolicy) faded(st retentionState, now time.Time) bool {
-	at, ok := p.fadesAt(st)
-	return ok && now.After(at)
+	return p.fadedAt(st, scopeActivity{}, now)
 }
 
-// expired reports whether a faded memory is due for deletion at now: Grace has passed since
-// it faded. It is never due when Grace is zero.
-func (p RetentionPolicy) expired(st retentionState, now time.Time) bool {
-	if p.Grace <= 0 {
+// fadedAt reports whether a memory has faded at now under act: its effective elapsed time has
+// reached fadeAfter.
+func (p RetentionPolicy) fadedAt(st retentionState, act scopeActivity, now time.Time) bool {
+	if st.pinned || !p.forgets() {
 		return false
 	}
-	at, ok := p.fadesAt(st)
-	return ok && now.After(at.Add(p.Grace))
+	return p.effectiveElapsed(st, act, now) >= p.fadeAfter(st.accessCount)
+}
+
+// expired reports whether a faded memory is due for deletion at now in an active scope.
+func (p RetentionPolicy) expired(st retentionState, now time.Time) bool {
+	return p.expiredAt(st, scopeActivity{}, now)
+}
+
+// expiredAt reports whether a faded memory is due for deletion at now under act: effective
+// elapsed time has reached fadeAfter + Grace. It is never due when Grace is zero.
+func (p RetentionPolicy) expiredAt(st retentionState, act scopeActivity, now time.Time) bool {
+	if st.pinned || !p.forgets() || p.Grace <= 0 {
+		return false
+	}
+	fade := p.fadeAfter(st.accessCount)
+	total := fade + p.Grace
+	if total < fade {
+		return false // saturated
+	}
+	return p.effectiveElapsed(st, act, now) >= total
 }

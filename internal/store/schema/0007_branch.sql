@@ -88,16 +88,19 @@ CREATE TABLE memories_v7 (
     updated_user    TEXT    NOT NULL,
     updated_session TEXT    NOT NULL,
     updated_agent   TEXT    NOT NULL DEFAULT '',
+    forgetting_credit INTEGER NOT NULL DEFAULT 0,
     CHECK ((scope = 'user') = (user_id IS NOT NULL))
 ) STRICT;
 
 INSERT INTO memories_v7 (
     id, scope, scope_id, user_id, title, body, pinned, created_at, updated_at, accessed_at,
-    access_count, created_user, created_session, created_agent, updated_user, updated_session, updated_agent
+    access_count, created_user, created_session, created_agent, updated_user, updated_session, updated_agent,
+    forgetting_credit
 )
 SELECT
     id, scope, scope_id, user_id, title, body, pinned, created_at, updated_at, accessed_at,
-    access_count, created_user, created_session, created_agent, updated_user, updated_session, updated_agent
+    access_count, created_user, created_session, created_agent, updated_user, updated_session, updated_agent,
+    0
 FROM memories;
 
 -- Preserve sqlite_sequence for memories even when the highest-ID row (or every row) was deleted.
@@ -115,3 +118,21 @@ ALTER TABLE memories_v7 RENAME TO memories;
 
 CREATE INDEX memories_scope ON memories (scope, scope_id, id);
 CREATE INDEX memories_user ON memories (user_id) WHERE user_id IS NOT NULL;
+
+-- Per-scope memory access timing and accumulated forgetting discount (milliseconds).
+-- When a scope has no memory access for longer than --memory-half-life, the excess gap advances
+-- the forgetting clock at 1/3 speed; the uncharged 2/3 is accumulated in discount when the gap
+-- closes. Each memory records forgetting_credit at its base time so closing a gap never shifts
+-- effective elapsed time.
+CREATE TABLE memory_scope_activity (
+    scope       TEXT    NOT NULL CHECK (scope IN ('user', 'shared', 'repository', 'branch')),
+    scope_id    TEXT    NOT NULL,
+    last_access INTEGER NOT NULL,
+    discount    INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (scope, scope_id)
+) STRICT, WITHOUT ROWID;
+
+INSERT INTO memory_scope_activity (scope, scope_id, last_access, discount)
+SELECT scope, scope_id, max(max(updated_at, accessed_at)), 0
+FROM memories
+GROUP BY scope, scope_id;

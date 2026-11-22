@@ -157,7 +157,7 @@ When the server stops, every tool call and every waiting `chat_inbox` returns an
 
 Unread messages expire after 14 days, messages are deleted 30 days after their last change of state, and sessions unused for 60 days are deleted (the server options `--expire-after`, `--retain-for` and `--session-idle` change the periods; `0` disables one). `agent-lounge-mcp session list|remove` lists and deletes sessions, `agent-lounge-mcp memory list|remove` lists and deletes memories, and `agent-lounge-mcp export --out DIR` writes every message and memory to Markdown files.
 
-Memories fade when they are not used: a memory never referenced fades about 23 days after it was last touched and is deleted 30 days later; references (`memory_get`, the first three results of a search) lengthen its life, and a pinned memory stays (the server options `--memory-half-life`, `--memory-fade-threshold` and `--memory-grace` change this, for every scope alike). `memory list` computes the state with the default values: pass the same options when the server uses others.
+Memories fade when they are not used: in an active scope, a memory never referenced fades about 23 days after it was last touched and is deleted 30 days later; scopes with no memory access for the half-life forget at 1/3 the pace (up to about 3x longer: about 56 days to fade and 146 days to delete). References (`memory_get`, the first three results of a search) lengthen its life, and a pinned memory stays (the server options `--memory-half-life`, `--memory-fade-threshold` and `--memory-grace` change this, for every scope alike). `memory list` computes the state with the default values: pass the same options when the server uses others.
 
 The `shared` space is not implemented.
 
@@ -196,5 +196,6 @@ The `shared` space is not implemented.
 | Branch scope (`branch`): branch declaration and normalization, replacement rules and `hint`, branch-scoped chat and memory, `lounge_who`, `session list` `BRANCH` column, `memory list --scope branch`, export, and migration of a version 6 database | Verified | Automated test (`go test -race ./...`), Linux x86_64 (WSL 2) |
 | Branch scope in the `linux-amd64` executable (`curl` and admin commands: joining with `git branch --show-current`, branch room isolation, branch memory, rejoining after `git switch`, `session list`, `memory list --scope branch`, `export`) | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
 | Branch declaration, branch-room round trip, and rejoining after switching branches in the five agents (WSL and Windows) | Unverified | |
+| Access-interval forgetting pace (active vs quiet scope curves, gap closing continuity, scope independence, cleanup not advancing last access, migration from schema version 6, startup log, and `memory list` with short half-life) | Verified | Automated test (`go test -race ./...`) and `linux-amd64` executable on Linux x86_64 (WSL 2) |
 
 Table: Verified scope

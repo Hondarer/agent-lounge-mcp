@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-22 22:09:00 JST
+最終更新日時: 2026-11-22 22:42:00 JST
 最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
 稼働 OS: Linux (WSL)
 上流文書: `../past/261120-expiry-sandbox-verification-backlog.md` (転記元の残課題一覧)。移動または削除されている場合があります。
@@ -19,9 +19,9 @@
 
 検討 ID: branch-scope
 
-検討用 Markdown の版: 2
+検討用 Markdown の版: 3
 
-状態: 成果物の承認待ち (第 3 ゲート)
+状態: 成果物の承認待ち (第 3 ゲート: BL-043 同梱完了)
 
 ## 作業 WBS と進捗管理
 
@@ -60,7 +60,10 @@
     - ✅ 4.11. 受入条件への適合確認 (全作業の完了確認)
     - ✅ 4.12. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
     - ✅ 4.13. 残課題一覧の再構築と整理
-- 🔄 5. 成果物の承認の受付 (第 3 ゲート)
+- 🔄 5. 追加検討 (BL-043: スコープのアクセス間隔に応じた忘却の進み方) と成果物の承認
+    - ✅ 5.0. 追加確認項目 ([Q-017](261121-branch-scope-discussion.md#q-017-忘却の進み方を緩める計算-bl-043-の採用) から [Q-021](261121-branch-scope-discussion.md#q-021-bl-043-の確認の範囲)) の回答受付と簡易 ADR 反映 (第 1 ゲート通過)
+    - ✅ 5.0a. 追加分の最終仕様 (`261121-branch-scope-design.md`) の更新と承認 (第 2 ゲート通過、2026-11-22 22:34 JST)
+    - ✅ 5.0b. BL-043 の実装・テスト・文書更新・確認の記録更新・`261122-forgetting-pace-backlog.md` の `docs/prompts/past/` への移動
     - ✅ 5.1. 成果物・検証結果・残課題の提示
     - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)。停止理由: 利用者の承認待ち ← **CURRENT**
     - ⏸️ 5.3. 承認の後の、`main` へのマージ、push、作業ブランチの削除 ([Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ))
@@ -69,7 +72,7 @@
 
 対象成果物: 最終仕様 (`261121-branch-scope-design.md`) の 3 章の成果物 (`internal/store/`、`internal/profile/`、`internal/tools/`、`internal/export/`、`cmd/agent-lounge-mcp/`、`docs/ja/`、`docs/agent-lounge-mcp-proposal.md` ほか)。
 
-今回の対象範囲: スコープの種類に `branch` を足すこと ([LADR-003](261121-branch-scope-lightadr.md#ladr-003-ブランチのスコープの形と範囲))。チャットとメモリの両方で使えます。引き継いだ残課題 14 件は、この案件の対象にしていません。
+今回の対象範囲: スコープの種類に `branch` を足すこと ([LADR-003](261121-branch-scope-lightadr.md#ladr-003-ブランチのスコープの形と範囲))、および追加依頼された `261122-forgetting-pace-backlog.md` の BL-043 (スコープのアクセス間隔で、忘却の進み方を緩める)。引き継いだ残課題 14 件は、この案件の対象にしていません。
 
 書き込み可能な検討文書: この文書、検討用 Markdown (`261121-branch-scope-discussion.md`)、簡易 ADR (`261121-branch-scope-lightadr.md`)、残課題一覧 (`261121-branch-scope-backlog.md`)。第 1 ゲートの後は、最終仕様 (`261121-branch-scope-design.md`)
 
@@ -118,6 +121,11 @@
 | [Q-014](261121-branch-scope-discussion.md#q-014-確認の範囲) | 確認の範囲 | 解決済み | Q-007、Q-009、Q-016 | [LADR-007](261121-branch-scope-lightadr.md#ladr-007-確認の範囲) |
 | [Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ) | 作業ブランチとマージ | 解決済み | Q-014、Q-016 | [LADR-008](261121-branch-scope-lightadr.md#ladr-008-作業ブランチとマージ) |
 | [Q-016](261121-branch-scope-discussion.md#q-016-モデルごとの作業の割り当て) | モデルごとの作業の割り当て | 解決済み | Q-014、Q-015 | [LADR-009](261121-branch-scope-lightadr.md#ladr-009-作業の割り当て) |
+| [Q-017](261121-branch-scope-discussion.md#q-017-忘却の進み方を緩める計算-bl-043-の採用) | 忘却の進み方を緩める計算 (BL-043) の採用 | 解決済み | Q-018 から Q-021 | [LADR-010](261121-branch-scope-lightadr.md#ladr-010-スコープのアクセス間隔に応じた忘却の進み方-bl-043) |
+| [Q-018](261121-branch-scope-discussion.md#q-018-bl-043-のスキーマの版と移行スクリプト) | BL-043 のスキーマの版と移行スクリプト | 解決済み | Q-017 | [LADR-010](261121-branch-scope-lightadr.md#ladr-010-スコープのアクセス間隔に応じた忘却の進み方-bl-043) |
+| [Q-019](261121-branch-scope-discussion.md#q-019-lounge_help-の本文の上限と忘却案内の追記) | `lounge_help` の本文の上限と忘却案内の追記 | 解決済み | Q-013、Q-017 | [LADR-006](261121-branch-scope-lightadr.md#ladr-006-使い方の案内文の上限) |
+| [Q-020](261121-branch-scope-discussion.md#q-020-作業ブランチと-forgetting-pace-backlog-の扱い) | 作業ブランチと `forgetting-pace-backlog` の扱い | 解決済み | Q-015、Q-017 | [LADR-008](261121-branch-scope-lightadr.md#ladr-008-作業ブランチとマージ) |
+| [Q-021](261121-branch-scope-discussion.md#q-021-bl-043-の確認の範囲) | BL-043 の確認の範囲 | 解決済み | Q-014、Q-017 | [LADR-007](261121-branch-scope-lightadr.md#ladr-007-確認の範囲) |
 
 ## 対象成果物と合意版
 
@@ -146,6 +154,9 @@
 | 2026-11-22 10:46 | Grok の利用量の上限 | 文書の試作の途中で、Grok が「usage balance exhausted」(402) で終了。文書の変更はなし。以後の実装の担当は、agy (Sonnet 5.5)。承認の前の試作は、ここまでとする |
 | 2026-11-22 21:54 | 第 2 ゲートの通過と引き継ぎ | agy セッションへ引き継ぎ、最終仕様の承認を受領。本セッションが推進を担当し、実機確認は必要最小限として未実施分は残課題一覧 (`261121-branch-scope-backlog.md`) へ回す方針を確定 ([LADR-007](261121-branch-scope-lightadr.md#ladr-007-確認の範囲)、[LADR-009](261121-branch-scope-lightadr.md#ladr-009-作業の割り当て)) |
 | 2026-11-22 22:09 | 実装・文書更新・必要最小限の実機確認の完了、第 3 ゲート提示 | `feature/branch-scope` にてコード・スキーマ版 7・テスト・文書を更新。`go vet ./...`、`go test -race ./...` (案内文 18,864 バイト)、実行ファイルでの実機確認を通過。未実施の 5 CLI / Windows 実機確認を `BL-044` として残課題一覧へ整理し、成果物の承認を依頼 |
+| 2026-11-22 22:22 | BL-043 の追加検討を開始 | 利用者から `261122-forgetting-pace-backlog.md` (BL-043) をこのターンの discussion に追加して進行する指示を受領。`261121-branch-scope-discussion.md` に Q-017〜Q-021 を追記し (版 3)、`261122-forgetting-pace-backlog.md` の状態を「検討中」へ更新 |
+| 2026-11-22 22:31 | BL-043 の第 1 ゲート通過・最終仕様更新 | Q-017〜Q-021 の回答を受領 (Q-017:A、Q-018:B、Q-019:A、Q-020:A、Q-021:A)。簡易 ADR (LADR-006/007/008/010) と最終仕様 (`261121-branch-scope-design.md`) を更新し、追加分の第 2 ゲート承認を依頼 |
+| 2026-11-22 22:42 | BL-043 の第 2 ゲート通過・実装完了・第 3 ゲート提示 | 22:34 に追加仕様の承認を受領。スキーマ版 7 への統合、`retention.go`/`memory.go`/`cleanup.go`/`help.go`、テスト、正本文書を更新し、`go vet ./...`・`go test -race ./...` (案内文 19,026 バイト) および実行ファイルでの実機確認を通過。`261122-forgetting-pace-backlog.md` を対応済みとして `docs/prompts/past/` へ移し、第 3 ゲートの承認を依頼 |
 
 ## 反映と検証の記録
 

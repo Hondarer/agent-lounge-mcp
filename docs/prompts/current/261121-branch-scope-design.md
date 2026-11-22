@@ -1,8 +1,8 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 最終仕様 (design)
-最終更新日時: 2026-11-22 09:54:06 JST
-最終更新エージェント: claude code / セッション ID: session_01KJc53Q5uYksfBEcy3tuEmX
+最終更新日時: 2026-11-22 22:31:00 JST
+最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
 稼働 OS: Linux (WSL)
 上流文書: `261121-branch-scope-overview.md` (全体管理文書)、`261121-branch-scope-discussion.md` (検討用 Markdown)、`261121-branch-scope-lightadr.md` (簡易 ADR)。いずれも削除されている場合があります。
 再開手順: このファイルを開いたエージェントは、作業の前に agree-before-implement スキルを読み込んでください。上流文書の全体管理文書が存在する場合は、その再開手順に従って進行位置を確認し、決定事項を簡易 ADR で、判断の経緯を検討用 Markdown の Q&A で確認します。存在しない場合は、この文書を単体の最終仕様として扱います。最終更新エージェントのセッション情報や稼働 OS・最終更新日時が参照可能であれば再開時のコンテキストや環境差分の把握に利用し、別エージェントや別環境・別 OS からの引き継ぎ、担当変更によりセッションが見つからない場合も異常とせず、文書の記載から継続してください。
@@ -121,10 +121,10 @@
 | Limits | ブランチは引き継がれないこと、ローカルの名前で比べること、大文字と小文字を区別しないこと |
 | Snippet for instruction files | ブランチを切り替えたときも `lounge_join` を呼び直すこと |
 
-本文の上限 (`maxGuideBytes`) を、18,000 バイトから 19,000 バイトに上げます。`lounge_join` と `lounge_who` と `lounge_help` の説明文にも、ブランチを加えます。
+本文の上限 (`maxGuideBytes`) を、19,300 バイトに上げます。`lounge_join` と `lounge_who` と `lounge_help` の説明文にも、ブランチを加えます。また、Forgetting 節に、使われているスコープは現行の日数であること、半減期より長くアクセスが無いスコープは忘却が遅くなり残る期間はおよそ 3 倍を超えないこと、既定値では静かなスコープの参照 0 回は約 56 日で薄れ約 146 日で削除されることを追記します。
 
 > [!IMPORTANT]
-> 上限の理由は、Copilot CLI (1.0.114) が、約 20KB を超えるツールの結果を一時ファイルに保存して分けて読むことです (19,500 バイトは直接読み、20,600 バイトは保存しました)。19,000 バイトでは、直接読んだ大きさとの余裕が 500 バイトになります。足した後の本文が 19,000 バイトを超える場合は、作業を止めて、利用者に確認します。
+> 上限の理由は、Copilot CLI (1.0.114) が、約 20KB を超えるツールの結果を一時ファイルに保存して分けて読むことです (19,500 バイトは直接読み、20,600 バイトは保存しました)。19,300 バイトでは、参加後に付く未読行 (約 50 バイト) を足しても 19,500 バイト未満に収まります。足した後の本文が 19,300 バイトを超える場合は、作業を止めて、利用者に確認します。
 
 ### 2.7. データベース (スキーマの版 7)
 
@@ -135,6 +135,23 @@
 - `rooms` の列 `repository` は、`repository` のスコープではリポジトリの単位を、`branch` のスコープではスコープの識別子を持ちます。制約は、「`scope` が `repository` または `branch` であることと、`repository` が空でないことが一致する」に改めます。一意の索引 (`scope`、ユーザー、`repository`、`name`) は、変えません。
 - `memories` は `AUTOINCREMENT` で、削除したメモリの ID を再び使わないことを保証しています。作り直しでは、`sqlite_sequence` の値を引き継ぎます (最も大きい ID のメモリが削除済みの場合でも、その ID を再び使わない)。全文検索の索引 (`memories_fts`)、`memory_tags`、`memory_refs` は、メモリの ID を保つため、変えません。
 - 既存の行の値は変えません。既存のセッションのブランチは、空です。
+- 忘却の進み方の調整 (2.8) のため、`memories` に列 `forgetting_credit INTEGER NOT NULL DEFAULT 0` (ミリ秒) を含め、スコープごとの活動テーブル `memory_scope_activity (scope TEXT NOT NULL CHECK (scope IN ('user', 'shared', 'repository', 'branch')), scope_id TEXT NOT NULL, last_access INTEGER NOT NULL, discount INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (scope, scope_id)) STRICT, WITHOUT ROWID` を作成します。移行時に既存メモリのスコープごとに `last_access = max(max(updated_at, accessed_at))`、`discount = 0` の初期行を投入します。
+
+### 2.8. スコープのアクセス間隔に応じた忘却の進み方 (BL-043)
+
+- **対象**: 忘却が有効 (`--memory-half-life > 0` かつ `0 < --memory-fade-threshold < 1`) で固定されていないメモリ。`user`、`repository`、`branch` の全スコープに適用し、起動オプションは追加しません。
+- **計算式** (`W = --memory-half-life`、`q = max(0, now - last_access)`):
+  - 空白の忘却時計 `g(q) = q` (`q <= W`)、`W + (q - W) / 3` (`q > W`)。
+  - 開いている割引 `open_discount = q - g(q)` (`0` または `(2/3) * (q - W)`)。
+  - 有効経過 `effective = max(0, (now - base) - (discount - forgetting_credit) - open_discount)`。
+  - 保持スコア `2 ^ (-effective / half_life)`、薄れる条件 `effective >= half_life * log2(1 / threshold)`、削除条件 `effective >= half_life * log2(1 / threshold) + grace`。
+  - 既定値 (7 日 / 0.1 / 30 日) で、静かなスコープの参照 0 回は約 56 日 (55.760490 日) で薄れ、約 146 日 (145.760490 日) で削除されます。使われているスコープは現行と同じ (約 23 日 / 約 53 日) です。
+- **アクセスとして数える操作**:
+  - `memory_put` (作成・更新)、`memory_get`、`memory_search` (対象スコープすべて、件数 0 でも進める)、`memory_pin` (固定・解除)、`memory_forget` は、同一トランザクション内で開いている空白を閉じて (`discount += q - g(q)`、`last_access = T`) 更新します。
+  - 基準時刻が `T` に動く操作 (作成、更新、参照として数えた取得・検索、固定の解除) は `forgetting_credit = discount` (閉じた後の値) に更新します。基準時刻が動かないメモリは `forgetting_credit` を変えません。
+  - 定期削除 (`deleteForgottenMemories`)、`export`、`memory list`、`memory remove` は `last_access` を進めません。
+  - 活動行が無いスコープは `discount = 0`、`open_discount = 0` として現行曲線で計算します。活動行は最後のメモリ削除後も残します。
+  - 起動ログ (`describeMemoryPolicy`) に、半減期のあいだアクセスが無いスコープはその後の忘却が 1/3 の速さになり残る期間はおよそ 3 倍までであることを 1 行追加します。
 
 スコープの規則 (`internal/store/scope.go`) に、`branch` を 1 つ足します。
 
@@ -272,3 +289,4 @@ Windows の側のセッションが使えない場合、または CLI の利用�
 | 案内文の上限の値と、Copilot CLI との余裕 | `internal/tools/help.go` の `maxGuideBytes` のコメント、`docs/ja/reference.md` |
 | 利用場面、制限事項、検証済みの範囲 | `docs/ja/reference.md`、`docs/ja/user-guide.md` |
 | 空間の分け方 (ユーザー、リポジトリ、ブランチ) | `docs/agent-lounge-mcp-proposal.md` |
+| スコープのアクセス間隔に応じた忘却の計算式、開いている割引と閉じた割引の不変条件、既定値での日数表 | `internal/store/retention.go`、`0007_branch.sql` のコメント、`docs/ja/reference.md`、`docs/ja/user-guide.md` |

@@ -1,8 +1,8 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 検討用 Markdown (discussion)
-最終更新日時: 2026-11-22 09:49:10 JST
-最終更新エージェント: claude code / セッション ID: session_01KJc53Q5uYksfBEcy3tuEmX
+最終更新日時: 2026-11-22 22:31:00 JST
+最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
 稼働 OS: Linux (WSL)
 上流文書: `261121-branch-scope-overview.md` (全体管理文書)。削除されている場合があります。
 下流文書: `261121-branch-scope-lightadr.md` (簡易 ADR)、`261121-branch-scope-design.md` (最終仕様)、`261121-branch-scope-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -830,3 +830,231 @@ A が選ばれました。最終仕様の承認の後に、作業ブランチ `f
 **Related**
 
 [Q-014](#q-014-確認の範囲)、[Q-015](#q-015-作業ブランチとマージ)
+
+### Q-017 忘却の進み方を緩める計算 (BL-043) の採用
+
+**Status**
+
+解決済み
+
+**Question**
+
+`docs/prompts/current/261122-forgetting-pace-backlog.md` (BL-043) に記載された「採用する計算」「アクセスとして数える操作」「保存と移行」の方針を、そのまま今回の実装に採用してよいですか。
+
+**Context**
+
+- **経緯と背景**: 利用者から、`docs/prompts/current/261122-forgetting-pace-backlog.md` (BL-043: スコープのアクセス間隔で、忘却の進み方を緩める) をこのターンの検討に追加して実装したいとの指示を受けました。
+- **BL-043 の要点**:
+  - スコープごとの最終アクセスからの空白 `q` に対し、`q <= W` (`W = --memory-half-life`) では傾き 1、`q > W` では傾き 1/3 (`g(q) = W + (q - W) / 3`) とし、残る期間の上限を現状のおよそ 3 倍にします。
+  - 既定値 (半減期 7 日、しきい値 0.1、猶予 30 日) で、参照 0 回・静かなスコープは 約 56 日で薄れ、約 146 日で削除されます。使われているスコープは現行どおり約 23 日 / 約 53 日です。
+  - 起動オプションは追加しません。`user`、`repository`、`branch` のすべてのスコープに同じ規則を適用します (空間の種類ごとの半減期変更は BL-034 のまま対象外)。
+  - `memory_scope_activity (scope, scope_id, last_access, discount)` と `memories.forgetting_credit` を保存し、移行時に既存メモリの基準時刻の最大値から初期行を作成します。
+  - `memory_put` / `memory_get` / `memory_search` / `memory_pin` / `memory_forget` でスコープの最終アクセスを進め、定期削除・`export`・`memory list`・`memory remove` では進めません。
+  - `describeMemoryPolicy` の起動ログ、`docs/ja/reference.md`、`docs/ja/user-guide.md` を更新し、企画提案書は編集しません。
+
+**Answer**
+
+選択方式: 単一選択
+
+- [x] A: (推奨) BL-043 の記載どおりに採用する (`W = 基本半減期`、傾き 1/3、起動オプション追加なし、BL-034 は対象外のまま)
+- [ ] B: 一部を変更して採用する (変更点を補足に記入)
+- [ ] C: その他
+- [ ] X: 意図不明 (詳細な質問内容に再生成すること)
+
+その他の回答 / 補足:
+
+回答者: Tetsuo Honda  
+回答日時: 2026-11-22 22:30:14 JST (検討用 Markdown の保存の時刻)
+
+**Assessment**
+
+A が選ばれました。BL-043 の計算式、アクセスとして数える操作、保存・移行方針、起動ログ、文書更新範囲をそのまま採用します。
+
+**Recommendation**
+
+推奨: A  
+理由: BL-043 はすでに計算式・境界条件・テーブル構造・移行方針・採らなかった案まで詳細に設計済みであり、現行の `internal/store/retention.go` と `internal/store/memory.go` にも無理なく統合できます。
+
+**Related**
+
+[Q-018](#q-018-bl-043-のスキーマの版と移行スクリプト)、[Q-019](#q-019-lounge_help-の本文の上限と忘却案内の追記)、[Q-020](#q-020-作業ブランチと-forgetting-pace-backlog-の扱い)、[Q-021](#q-021-bl-043-の確認の範囲)
+
+### Q-018 BL-043 のスキーマの版と移行スクリプト
+
+**Status**
+
+解決済み
+
+**Question**
+
+`memory_scope_activity` テーブルと `memories.forgetting_credit` 列を追加する移行スクリプトは、新しい版 8 (`0008_forgetting_pace.sql`) として追加してよいですか。
+
+**Context**
+
+- **今の状態**: 作業ブランチ `feature/branch-scope` では、すでに `internal/store/schema/0007_branch.sql` (スキーマの版 7) を作成し、版 6 → 版 7 の移行テスト (`TestMigrationV6ToV7PreservesDataAndSequence`) も通過しています。ただし、`0007_branch.sql` はまだ `main` へマージ (リリース) されていません。
+- **比較**:
+  - A (`0008_forgetting_pace.sql` を新規追加): `0007_branch.sql` の責務とテストを保ったまま、版 7 → 版 8 の移行として独立して検証できます。`memory_scope_activity.scope` の CHECK 制約にも `'branch'` を含めます。
+  - B (`0007_branch.sql` に統合): スキーマの版を 7 のままにできますが、1 つのスクリプトに 2 機能の DDL と移行ロジックが混ざり、既存の版 7 向けテストと検証記録を作り直す必要があります。
+
+**Answer**
+
+選択方式: 単一選択
+
+- [ ] A: (推奨) `internal/store/schema/0008_forgetting_pace.sql` を新規追加し、スキーマの版を 8 にする
+- [x] B: 未リリースの `0007_branch.sql` に統合し、スキーマの版を 7 のままにする
+- [ ] C: その他
+- [ ] X: 意図不明 (詳細な質問内容に再生成すること)
+
+その他の回答 / 補足: まだ製品化していないので、破壊的変更を許可します。
+
+回答者: Tetsuo Honda  
+回答日時: 2026-11-22 22:30:14 JST (検討用 Markdown の保存の時刻)
+
+**Assessment**
+
+B が選ばれました。未リリースの `internal/store/schema/0007_branch.sql` に `memories.forgetting_credit` 列、`memory_scope_activity` テーブル、および版 6 からの初期行投入を統合し、スキーマの版は 7 のままとします。
+
+**Recommendation**
+
+推奨: A  
+理由: 機能ごとにスクリプトを分けたほうが変更の追跡と移行テスト (版 6 → 版 7 → 版 8) が明快で、`branch-scope` 側の検証済みコードも壊しません。
+
+**Related**
+
+[Q-017](#q-017-忘却の進み方を緩める計算-bl-043-の採用)
+
+### Q-019 lounge_help の本文の上限と忘却案内の追記
+
+**Status**
+
+解決済み
+
+**Question**
+
+`lounge_help` の本文に BL-043 の案内 (使われているスコープと静かなスコープでの忘却の違い、既定値での約 56 日 / 約 146 日) を足すと、現在の上限 19,000 バイトを超えます。上限 (`maxGuideBytes`) と本文の記述をどう扱いますか。
+
+**Context**
+
+- **今の状態**: ブランチのスコープの案内を足した現在の `lounge_help` 本文 (既定の設定) は **18,864 バイト** です (上限 `maxGuideBytes = 19000` に対して残り **136 バイト**)。
+- **見込み**: BL-043 の推奨案 (「使われているスコープは今の日数であること、半減期より長くアクセスが無いスコープは忘却が遅くなり、残る期間はおよそ 3 倍を超えないこと、既定値では静かなスコープの参照 0 回は約 56 日で薄れ、約 146 日で削除されること」) を英語で簡潔に足すと、約 180〜230 バイト増え、全体は **約 19,050〜19,100 バイト** になります。
+- **技術的制約 (LADR-006)**: Copilot CLI (1.0.114) は 19,500 バイトのツール結果を直接読み、20,600 バイトの結果を一時ファイルに保存しました。参加後に末尾へ付く未読件数の行 (`\nUnread messages: N (call chat_inbox to read them)`) は約 50 バイトです。
+- **各案**:
+  - A (`maxGuideBytes` を 19,300 バイトに上げる): 他の記述を縮めずに BL-043 の案内を明記でき、未読行を足しても 19,500 バイト未満に収まります。
+  - B (上限を 19,000 バイトのまま保ち、他の記述を約 150〜200 バイト言い換えて縮める): 余裕 500 バイトを保てますが、既存文面の調整が必要です。
+  - C (上限を 19,000 バイトのまま保ち、`lounge_help` には 130 バイト以内の短い 1 文だけ足し、静かなスコープの具体的な日数は `docs/ja/` のみに記載する): 既存文面は変えませんが、`lounge_help` 上の具体日数は省かれます。
+
+**Answer**
+
+選択方式: 単一選択
+
+- [x] A: (推奨) `maxGuideBytes` を 19,300 バイトに上げ、他の記述は縮めずに BL-043 の案内を簡潔に追記する
+- [ ] B: 上限は 19,000 バイトのまま保ち、他の記述を言い換えて縮めて収める
+- [ ] C: 上限は 19,000 バイトのまま保ち、`lounge_help` には 130 バイト以内の短い 1 文だけ足す (具体日数は文書のみ)
+- [ ] D: その他
+- [ ] X: 意図不明 (詳細な質問内容に再生成すること)
+
+その他の回答 / 補足:
+
+回答者: Tetsuo Honda  
+回答日時: 2026-11-22 22:30:14 JST (検討用 Markdown の保存の時刻)
+
+**Assessment**
+
+A が選ばれました。`maxGuideBytes` を 19,300 バイトに引き上げ、他の記述は縮めずに BL-043 の案内を `lounge_help` の Forgetting 節へ追記します。
+
+**Recommendation**
+
+推奨: A  
+理由: LADR-006 の「他の記述は縮めない」方針を保ちつつ、未読行を含めても Copilot CLI (1.0.114) で直接読めることが確認済みの 19,500 バイト未満に収まります。
+
+**Related**
+
+[Q-013](#q-013-使い方の案内文の大きさ)、[Q-017](#q-017-忘却の進み方を緩める計算-bl-043-の採用)
+
+### Q-020 作業ブランチと forgetting-pace-backlog の扱い
+
+**Status**
+
+解決済み
+
+**Question**
+
+BL-043 の実装を現在の作業ブランチ `feature/branch-scope` に追加し、完了後にまとめて `main` へマージするとともに、`docs/prompts/current/261122-forgetting-pace-backlog.md` を解決済みとして `docs/prompts/past/` へ移してよいですか。
+
+**Context**
+
+- **今の状態**:
+  - 作業ブランチ `feature/branch-scope` に `branch-scope` の実装・テスト・文書がコミットおよび push 済みです (第 3 ゲート承認待ち)。
+  - `docs/prompts/current/261122-forgetting-pace-backlog.md` は BL-043 の 1 件だけを持つ未追跡のバックログ ファイルです。
+- **AGENTS.md の規則**: 残課題一覧のすべての項目が解消または転記されたら、`docs/prompts/current/` から `docs/prompts/past/` へ移します。
+
+**Answer**
+
+選択方式: 単一選択
+
+- [x] A: (推奨) 同じ作業ブランチ `feature/branch-scope` に追加実装し、まとめて第 3 ゲートで承認後に `main` へマージする。BL-043 の完了時に `261122-forgetting-pace-backlog.md` の状態を「対応済み」に更新し、`docs/prompts/past/` へ移す
+- [ ] B: 同じ作業ブランチ `feature/branch-scope` に追加実装するが、`261122-forgetting-pace-backlog.md` は `docs/prompts/current/` に残す
+- [ ] C: その他
+- [ ] X: 意図不明 (詳細な質問内容に再生成すること)
+
+その他の回答 / 補足:
+
+回答者: Tetsuo Honda  
+回答日時: 2026-11-22 22:30:14 JST (検討用 Markdown の保存の時刻)
+
+**Assessment**
+
+A が選ばれました。`feature/branch-scope` に BL-043 を追加実装し、完了時に `261122-forgetting-pace-backlog.md` を「対応済み」にして `docs/prompts/past/` へ移します。
+
+**Recommendation**
+
+推奨: A  
+理由: このターンの discussion に追加して進行する指示と `AGENTS.md` の移動規則に合致します。
+
+**Related**
+
+[Q-015](#q-015-作業ブランチとマージ)、[Q-017](#q-017-忘却の進み方を緩める計算-bl-043-の採用)
+
+### Q-021 BL-043 の確認の範囲
+
+**Status**
+
+解決済み
+
+**Question**
+
+BL-043 の確認は、自動テスト (`go vet ./...`、`go test -race ./...`、BL-043 記載の全テスト項目、版 7 → 版 8 の移行テスト) と、WSL 上の実行ファイルでの必要最小限の確認 (起動ログ、`memory list` の保持スコア確認) としてよいですか。
+
+**Context**
+
+- **経緯と背景**: BL-043 はサーバー内部の保持スコア計算・定期削除・起動ログ・`memory list` の変更であり、OS や CLI ごとに異なる接続手順・コマンド実行は変更しません。また、第 2 ゲート承認時に「実機確認は必要最小限で、実施できなかったものは backlog に回していい」との方針をいただいています (LADR-007)。
+- **確認する内容**:
+  - 自動テスト: `g(q)`・有効経過の単体テスト、使われているスコープ / 静かなスコープの日数、空白を閉じる前後の一致、閉じた後の毎日アクセス、`user` / `repository` / `branch` スコープ間の独立性、定期削除が最終アクセスを進めないこと、固定・半減期 0・猶予 0、版 7 → 版 8 移行 (最後のアクセスが 7 日以内 / 30 日静かの両ケース)。
+  - 実機確認 (WSL 実行ファイル): 短い半減期を指定したサーバー起動で `describeMemoryPolicy` のログを確認し、時間経過後の `memory list` で保持スコアと状態が緩やかに進むことを確認。
+
+**Answer**
+
+選択方式: 単一選択
+
+- [x] A: (推奨) 自動テストと、WSL 上の実行ファイルでの必要最小限の実機確認を行う (5 CLI・Windows 側の実機確認は不要)
+- [ ] B: 自動テストのみ行う (実機確認は省略)
+- [ ] C: その他
+- [ ] X: 意図不明 (詳細な質問内容に再生成すること)
+
+その他の回答 / 補足:
+
+回答者: Tetsuo Honda  
+回答日時: 2026-11-22 22:30:14 JST (検討用 Markdown の保存の時刻)
+
+**Assessment**
+
+A が選ばれました。自動テスト (版 6 → 版 7 移行テストを含む) と、WSL 上の実行ファイルでの必要最小限の確認を実施します。
+
+**Recommendation**
+
+推奨: A  
+理由: 時間経過を伴う忘却曲線は時刻を制御できる自動テストで最も厳密に検証でき、実行ファイルでは起動ログと管理コマンドの結合を最小限に確認すれば十分です。
+
+**Related**
+
+[Q-014](#q-014-確認の範囲)、[Q-017](#q-017-忘却の進み方を緩める計算-bl-043-の採用)

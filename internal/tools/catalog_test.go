@@ -78,7 +78,8 @@ func TestGuideRetentionAndLimits(t *testing.T) {
 func TestGuideMemory(t *testing.T) {
 	g := guide(config.Default())
 	for _, want := range []string{"## Memory", "falling by half every 7d", "below 0.1", "about 23 days", "about 47 days",
-		"deleted 30d after it faded", "at most 16384 bytes", "at most 10000 memories", "up to 10 memories", "first 3 results",
+		"deleted 30d after it faded", "1/3 the pace", "about 56 days", "about 146 days",
+		"at most 16384 bytes", "at most 10000 memories", "up to 10 memories", "first 3 results",
 		"memory_search with words of the task"} {
 		if !strings.Contains(g, want) {
 			t.Errorf("guide does not contain %q", want)

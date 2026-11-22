@@ -310,20 +310,20 @@ func TestMemoryCommands(t *testing.T) {
 	if code, _, stderr := memory("list", "--db", db); code != 1 || !strings.Contains(stderr, "does not exist") {
 		t.Errorf("list without a database: %d %q", code, stderr)
 	}
-	// Created 30 days ago: faded with the default retention.
-	userID, repoID := seedMemories(t, db, time.Now().Add(-30*24*time.Hour))
+	// Created 60 days ago: faded even in a quiet scope with the default retention.
+	userID, repoID := seedMemories(t, db, time.Now().Add(-60*24*time.Hour))
 
 	code, stdout, _ := memory("list", "--db", db)
 	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
 	if code != 0 || len(lines) != 3 || lines[0] != "ID\tSCOPE\tSCOPE_ID\tSTATE\tRETENTION\tUPDATED\tCREATED_BY\tTITLE" ||
-		!strings.HasPrefix(lines[1], fmt.Sprintf("%d\trepository\tgithub.com/org/a\tfaded\t0.05\t", repoID)) ||
+		!strings.HasPrefix(lines[1], fmt.Sprintf("%d\trepository\tgithub.com/org/a\tfaded\t0.08\t", repoID)) ||
 		!strings.HasSuffix(lines[1], "\tlocal/carol\tfirst line of a long body that goes on a...") ||
 		!strings.HasPrefix(lines[2], fmt.Sprintf("%d\tuser\tlocal\tfaded\t", userID)) || !strings.HasSuffix(lines[2], "\tBuild fix") {
 		t.Errorf("list: %d %q", code, stdout)
 	}
 	// With a longer half-life, the same memories are active.
 	if code, stdout, _ := memory("list", "--scope", "user", "--memory-half-life", "30d", "--db", db); code != 0 ||
-		!(strings.Contains(stdout, "\tuser\tlocal\tactive\t0.49\t") || strings.Contains(stdout, "\tuser\tlocal\tactive\t0.50\t")) || strings.Contains(stdout, "repository") {
+		!(strings.Contains(stdout, "\tuser\tlocal\tactive\t0.39\t") || strings.Contains(stdout, "\tuser\tlocal\tactive\t0.40\t")) || strings.Contains(stdout, "repository") {
 		t.Errorf("list --scope user --memory-half-life 30d: %d %q", code, stdout)
 	}
 	if code, stdout, _ := memory("list", "--scope", "branch", "--db", db); code != 0 || stdout != "ID\tSCOPE\tSCOPE_ID\tSTATE\tRETENTION\tUPDATED\tCREATED_BY\tTITLE\n" {
@@ -395,11 +395,11 @@ func TestPlural(t *testing.T) {
 		t.Errorf("describeCleanup = %q", got)
 	}
 	cfg := config.Default()
-	if got := describeMemoryPolicy(cfg); got != "memories: half-life 7d, longer with references; they fade below a retention score of 0.1 and are deleted 30d after they fade" {
+	if got := describeMemoryPolicy(cfg); got != "memories: half-life 7d, longer with references; they fade below a retention score of 0.1 and are deleted 30d after they fade; scopes with no memory access for 7d forget at 1/3 the pace (up to about 3x longer)" {
 		t.Errorf("describeMemoryPolicy = %q", got)
 	}
 	cfg.MemoryGrace = 0
-	if got := describeMemoryPolicy(cfg); !strings.HasSuffix(got, "are never deleted") {
+	if got := describeMemoryPolicy(cfg); !strings.Contains(got, "are never deleted") || !strings.Contains(got, "1/3 the pace") {
 		t.Errorf("describeMemoryPolicy without grace = %q", got)
 	}
 	cfg.MemoryHalfLife = 0
