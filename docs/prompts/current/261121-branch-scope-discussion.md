@@ -839,11 +839,11 @@ A が選ばれました。最終仕様の承認の後に、作業ブランチ `f
 
 **Question**
 
-`docs/prompts/current/261122-forgetting-pace-backlog.md` (BL-043) に記載された「採用する計算」「アクセスとして数える操作」「保存と移行」の方針を、そのまま今回の実装に採用してよいですか。
+`docs/prompts/past/261122-forgetting-pace-backlog.md` (BL-043) に記載された「採用する計算」「アクセスとして数える操作」「保存と移行」の方針を、そのまま今回の実装に採用してよいですか。
 
 **Context**
 
-- **経緯と背景**: 利用者から、`docs/prompts/current/261122-forgetting-pace-backlog.md` (BL-043: スコープのアクセス間隔で、忘却の進み方を緩める) をこのターンの検討に追加して実装したいとの指示を受けました。
+- **経緯と背景**: 利用者から、`docs/prompts/past/261122-forgetting-pace-backlog.md` (BL-043: スコープのアクセス間隔で、忘却の進み方を緩める) をこのターンの検討に追加して実装したいとの指示を受けました。
 - **BL-043 の要点**:
   - スコープごとの最終アクセスからの空白 `q` に対し、`q <= W` (`W = --memory-half-life`) では傾き 1、`q > W` では傾き 1/3 (`g(q) = W + (q - W) / 3`) とし、残る期間の上限を現状のおよそ 3 倍にします。
   - 既定値 (半減期 7 日、しきい値 0.1、猶予 30 日) で、参照 0 回・静かなスコープは 約 56 日で薄れ、約 146 日で削除されます。使われているスコープは現行どおり約 23 日 / 約 53 日です。
@@ -979,13 +979,13 @@ A が選ばれました。`maxGuideBytes` を 19,300 バイトに引き上げ、
 
 **Question**
 
-BL-043 の実装を現在の作業ブランチ `feature/branch-scope` に追加し、完了後にまとめて `main` へマージするとともに、`docs/prompts/current/261122-forgetting-pace-backlog.md` を解決済みとして `docs/prompts/past/` へ移してよいですか。
+BL-043 の実装を現在の作業ブランチ `feature/branch-scope` に追加し、完了後にまとめて `main` へマージするとともに、`261122-forgetting-pace-backlog.md` を解決済みとして `docs/prompts/current/` から `docs/prompts/past/` へ移してよいですか (移動後の場所は `docs/prompts/past/261122-forgetting-pace-backlog.md`)。
 
 **Context**
 
 - **今の状態**:
   - 作業ブランチ `feature/branch-scope` に `branch-scope` の実装・テスト・文書がコミットおよび push 済みです (第 3 ゲート承認待ち)。
-  - `docs/prompts/current/261122-forgetting-pace-backlog.md` は BL-043 の 1 件だけを持つ未追跡のバックログ ファイルです。
+  - `docs/prompts/past/261122-forgetting-pace-backlog.md` は BL-043 の 1 件だけを持つ未追跡のバックログ ファイルです。
 - **AGENTS.md の規則**: 残課題一覧のすべての項目が解消または転記されたら、`docs/prompts/current/` から `docs/prompts/past/` へ移します。
 
 **Answer**

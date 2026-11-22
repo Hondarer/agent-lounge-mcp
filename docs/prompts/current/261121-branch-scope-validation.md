@@ -1,8 +1,8 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 確認の記録 (validation)
-最終更新日時: 2026-11-22 22:42:00 JST
-最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
+最終更新日時: 2026-11-23 07:53:00 JST
+最終更新エージェント: agy / セッション ID: 56a179ca-dec9-4b75-bd9f-e73a4ce45814
 稼働 OS: Linux (WSL)
 上流文書: `261121-branch-scope-overview.md` (全体管理文書)、`261121-branch-scope-design.md` (最終仕様)、`261121-branch-scope-lightadr.md` (簡易 ADR)。
 -->
@@ -55,3 +55,14 @@
 | --- | --- | --- |
 | WSL の側の 5 つの CLI (Claude Code、Codex、Copilot CLI、Grok、agy) の非対話実行による、案内からのブランチ申告・1 往復・切り替え追従 (最終仕様 5.2 の a〜c) | 未検証 | `BL-044` へ記録 |
 | Windows の側のセッションでの PowerShell 申告・大文字と小文字の動作 (`Main` / `main`)・WSL とのブランチのルーム 1 往復 (最終仕様 5.3 の d〜f) | 未検証 | `BL-044` へ記録 |
+
+## 4. 成果物の審査
+
+Claude Code (Opus 5.5) のセッションが、作業ブランチの差分を審査しました。
+
+- `go vet ./...` と `go test -race ./...`: 検証済 (通る)。
+- `lounge_help` の本文: 19,026 バイト (上限 19,300 バイト以下) を確認。
+- コードの指摘 3 点:
+  - `memory_scope_activity` の行が削除されない: `BL-045` へ起票。
+  - ブランチの名前の検査が Git の規則より厳しい (全角空白、`head`): `BL-046` へ起票。
+  - 薄れる判定の境界が `now.After(fadesAt)` (より大きい) から「有効経過 >= 薄れるまでの時間」(以上) に変わった。最終仕様 2.8 の式どおりで、差は 1 ミリ秒以下のため、変更は不要とした。

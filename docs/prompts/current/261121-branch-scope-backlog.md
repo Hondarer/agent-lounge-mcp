@@ -1,8 +1,8 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 残課題一覧 (backlog)
-最終更新日時: 2026-11-22 22:09:00 JST
-最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
+最終更新日時: 2026-11-23 07:53:00 JST
+最終更新エージェント: agy / セッション ID: 56a179ca-dec9-4b75-bd9f-e73a4ce45814
 稼働 OS: Linux (WSL)
 上流文書: `261121-branch-scope-overview.md` (全体管理文書)、`261121-branch-scope-discussion.md` (検討用 Markdown)、`261121-branch-scope-lightadr.md` (簡易 ADR)、`261121-branch-scope-design.md` (最終仕様)。転記元: `../past/261120-expiry-sandbox-verification-backlog.md` (前の案件の残課題一覧)。いずれも未作成の場合や、削除されている場合があります。
 下流文書: なし (この案件の最終仕様は `261121-branch-scope-design.md`、確認の記録は `261121-branch-scope-validation.md`)。
@@ -40,12 +40,14 @@
 | BL-030 | 未検証の構成 (物理的に別のマシン) と、サーバー自身による HTTPS | 過去 backlog からの転記 | 中 (平文の HTTP のまま、他のマシンに開く使い方になる) | 未着手 |
 | BL-031 | トークンの運用の機能 (有効期限、権限の区分、接続元の制限、CLI の設定と履歴に残るトークン) | 過去 backlog からの転記 | 中 | 一部対応 ((1) を対応。(2) から (6) が残る) |
 | BL-033 | 送達の確認と読み返しの拡張 (参加の前のルームのやりとり、受信と同時の完了の記録) | 過去 backlog からの転記 | 低 | 一部対応 (3 番、4 番、5 番を対応。1 番と 2 番が残る) |
-| BL-034 | メモリの忘却の設定を、空間ごとに変えられるようにする | 前提検討時に見送り | 低 | 未着手 (検討時は `261122-forgetting-pace-backlog.md` の BL-043 とペア) |
+| BL-034 | メモリの忘却の設定を、空間ごとに変えられるようにする | 前提検討時に見送り | 低 | 未着手 (BL-043 は案件 `branch-scope` で対応済み) |
 | BL-035 | 検証の基盤の残り (他の CLI の許可の画面、画面の再現の細部、WSL ではない Linux、二重の応答の余地) | 実装中に判明 | 低 | 一部対応 (残る番号は本文) |
 | BL-036 | MCP のプロトコルの版 2026-07-28 への対応 | 実装中に判明 | 中 (CLI が古い版での接続し直しをやめると、接続できなくなる) | 一部対応 (停止の通知を対応。版への対応が残る) |
 | BL-040 | agy が、閉じられた MCP の接続の後に、ツールを呼べなくなる | 前提検討時に判明 | 中 (1 時間使わなかった agy は、起動し直すまでツールを呼べない場合がある) | 未着手 (1.5.13 でも再現) |
 | BL-042 | Windows の Codex で、出力の途中に作業中の表示が画面にない | 実装中に判明 | 低 (検証の基盤が、Codex の作業中を見落とす) | 未着手 |
 | BL-044 | ブランチのスコープの 5 つの CLI での実機確認 (WSL および Windows) | 実装・検証時に見送り | 中 (案内文だけでのブランチ申告・切り替え追従と、Windows の大文字・小文字の動作が未検証) | 未着手 |
+| BL-045 | `memory_scope_activity` の行が削除されない | 成果物の審査で判明 | 低 (1 行は小さいが、増え続ける) | 未着手 |
+| BL-046 | ブランチの名前の検査が Git の規則より厳しい | 成果物の審査で判明 | 低 | 未着手 |
 
 ## BL-004 `shared` の空間と `scope` 引数
 
@@ -261,13 +263,13 @@
 ### 概要と問題点
 
 - **現状の事象**: 基本半減期、しきい値、猶予期間は、すべての空間に共通の起動オプションで決めます。企画提案書は、空間ごとに変えられるようにすることを提案しています。
-- **本来あるべき姿**: 必要であれば、空間 (`user`、`repository`、`shared`) ごとに、忘却の設定を変えられます。
+- **本来あるべき姿**: 必要であれば、空間 (`user`、`repository`、`branch`、`shared`) ごとに、忘却の設定を変えられます。
 
 ### 経緯と見送り理由
 
 - **摘出契機**: 前提検討時に見送り (検討用 Markdown `261118-memory-discussion.md` の Q-018)。
 - **今回の見送り理由**: 空間ごとに値を変える必要があるかは、使ってみないと分からないためです。
-- **継続作業での経緯と対処**: 案件 `memory` で追加しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-expiry-sandbox-verification-backlog.md` の同じ課題 ID から、案件 `branch-scope` の残課題一覧 (この文書) へ転記しました (2026-11-21)。 2026-11-22 に、検討時は `docs/prompts/current/261122-forgetting-pace-backlog.md` の BL-043 とペアで進める注釈を追加しました。
+- **継続作業での経緯と対処**: 案件 `memory` で追加しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-expiry-sandbox-verification-backlog.md` の同じ課題 ID から、案件 `branch-scope` の残課題一覧 (この文書) へ転記しました (2026-11-21)。 BL-043 (スコープのアクセス間隔に応じた忘却の進み方。`docs/prompts/past/261122-forgetting-pace-backlog.md`) は、案件 `branch-scope` で対応済みです (2026-11-22)。この項目 (空間の種類ごとの設定) は、未着手のまま残します。
 
 ### 影響範囲とリスク
 
@@ -277,8 +279,8 @@
 ### 推奨される対応策
 
 - **恒久対応案**: 共通のオプションを既定値として残し、空間ごとのオプションを足します。
-- **検討時のペア**: この項目を検討するときは、`docs/prompts/current/261122-forgetting-pace-backlog.md` の BL-043 (スコープのアクセス間隔で、忘却の進み方を緩める) も同じ検討で進めます。
-- **参考情報**: 企画提案書の「忘却モデル」。`docs/prompts/current/261122-forgetting-pace-backlog.md` の BL-043。
+- **検討時の前提**: BL-043 (スコープのアクセス間隔で、忘却の進み方を緩める) は、案件 `branch-scope` で対応済みです。この項目は、BL-043 の計算式の上に、空間の種類ごとの設定を足す形で検討します。
+- **参考情報**: 企画提案書の「忘却モデル」。`docs/prompts/past/261122-forgetting-pace-backlog.md` の BL-043。
 
 ## BL-035 検証の基盤の残り
 
@@ -394,3 +396,49 @@
 
 - **恒久対応案**: 最終仕様 (`261121-branch-scope-design.md`) の 5.2 (WSL 側 5 CLI の a〜c) と 5.3 (Windows 側の d〜f) を実行し、結果を文書の「検証済みの範囲」に反映します。案内文で申告が漏れる CLI があれば、`internal/tools/help.go` の表現を改善します。
 - **参考情報**: `261121-branch-scope-design.md` の 5.2、5.3、`261121-branch-scope-validation.md`。
+
+## BL-045 `memory_scope_activity` の行が削除されない
+
+### 概要と問題点
+
+- **現状の事象**: スコープの活動行 (`memory_scope_activity`) は、最後のメモリの削除後も残す仕様です (最終仕様 2.8)。`memory_search` は件数 0 でもアクセスとして数えるため、メモリのないスコープにも行ができます。ブランチのスコープは短命で数が多く、`user remove` でユーザーを消しても `user` のスコープの行が残ります。結果として、表が単調に増えます。
+- **本来あるべき姿**: メモリがなく、しばらくアクセスのないスコープの活動行が、定期の処理で削除されます。
+
+### 経緯と見送り理由
+
+- **摘出契機**: 案件 `branch-scope` の成果物の審査 (Claude Code、Opus 5.5。2026-11-23)。
+- **今回の見送り理由**: 1 行は小さく、すぐには問題にならないためです。仕様 (2.8) どおりの実装で、承認済みの範囲を変えないことを優先しました。
+- **継続作業での経緯と対処**: 案件 `branch-scope` で新規起票しました (2026-11-23)。
+
+### 影響範囲とリスク
+
+- **影響対象**: `internal/store/memory.go` (`touchScopeActivity`、`deleteForgottenMemories`)、`user remove`、`docs/ja/reference.md`。
+- **放置した場合のリスク**: 表が単調に増え続けます。1 行は小さいため、影響は緩やかです。
+
+### 推奨される対応策
+
+- **恒久対応案**: 定期の処理で、メモリがなく、最終アクセスから一定期間 (たとえば半減期 × log2(1/しきい値) + 猶予期間) を過ぎた行を消します。消しても割引が 0 から始まるだけで、メモリがなければ保持スコアに影響しません。`user remove` で、そのユーザーの `user` のスコープの行も消します。
+- **参考情報**: `internal/store/memory.go` の `touchScopeActivity`、`deleteForgottenMemories`。最終仕様 2.8。
+
+## BL-046 ブランチの名前の検査が Git の規則より厳しい
+
+### 概要と問題点
+
+- **現状の事象**: `profile.Branch` は `unicode.IsSpace` で、全角空白 (U+3000) などの Unicode の空白をすべて拒否します。Git は ASCII の空白と制御文字だけを拒否し、全角空白を含む名前を許します。また、小文字にそろえた後の `head` を拒否するため、Git が許す `head` や `Head` という名前のブランチを申告できません (Git が拒否するのは `HEAD` だけです)。該当する名前のブランチでは、ブランチのスコープが使えません。
+- **本来あるべき姿**: Git が許すブランチの名前を、できるだけ申告できます。
+
+### 経緯と見送り理由
+
+- **摘出契機**: 案件 `branch-scope` の成果物の審査 (Claude Code、Opus 5.5。2026-11-23)。
+- **今回の見送り理由**: 該当する名前のブランチは、実際にはまれなためです。最終仕様 2.2 の 5 と 6 のとおりの実装で、承認済みの範囲を変えないことを優先しました。
+- **継続作業での経緯と対処**: 案件 `branch-scope` で新規起票しました (2026-11-23)。
+
+### 影響範囲とリスク
+
+- **影響対象**: `internal/profile/profile.go` (`Branch`、`isInvalidBranchRune`)、最終仕様 2.2 の 5 と 6、`docs/ja/reference.md`。
+- **放置した場合のリスク**: 全角空白を含む名前や `head`、`Head` のブランチで、ブランチのスコープが使えません。
+
+### 推奨される対応策
+
+- **恒久対応案**: 空白の検査を、ASCII の空白と制御文字に限ります。`head` の拒否は、`git rev-parse --abbrev-ref HEAD` の誤用の検出のために残すか、元の値が `HEAD` (大文字) の場合だけに限るかを決めます。
+- **参考情報**: `internal/profile/profile.go` の `Branch`、`isInvalidBranchRune`。最終仕様 2.2 の 5 と 6。

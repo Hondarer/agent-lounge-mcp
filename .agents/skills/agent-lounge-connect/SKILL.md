@@ -197,5 +197,6 @@ The `shared` space is not implemented.
 | Branch scope in the `linux-amd64` executable (`curl` and admin commands: joining with `git branch --show-current`, branch room isolation, branch memory, rejoining after `git switch`, `session list`, `memory list --scope branch`, `export`) | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
 | Branch declaration, branch-room round trip, and rejoining after switching branches in the five agents (WSL and Windows) | Unverified | |
 | Access-interval forgetting pace (active vs quiet scope curves, gap closing continuity, scope independence, cleanup not advancing last access, migration from schema version 6, startup log, and `memory list` with short half-life) | Verified | Automated test (`go test -race ./...`) and `linux-amd64` executable on Linux x86_64 (WSL 2) |
+| Access-interval forgetting pace on Windows | - | The calculation and the database handling do not depend on the OS and have no Windows-specific code, so verification is not needed. |
 
 Table: Verified scope

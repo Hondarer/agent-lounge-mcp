@@ -1,8 +1,8 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-22 22:42:00 JST
-最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
+最終更新日時: 2026-11-23 08:05:00 JST
+最終更新エージェント: claude code / セッション ID: session_01KJc53Rexv15kVLx9D4ynGM
 稼働 OS: Linux (WSL)
 上流文書: `../past/261120-expiry-sandbox-verification-backlog.md` (転記元の残課題一覧)。移動または削除されている場合があります。
 下流文書: `261121-branch-scope-discussion.md` (検討用 Markdown)、`261121-branch-scope-lightadr.md` (簡易 ADR)、`261121-branch-scope-design.md` (最終仕様)、`261121-branch-scope-backlog.md` (残課題一覧)。未作成の場合や、削除されている場合があります。
@@ -21,7 +21,7 @@
 
 検討用 Markdown の版: 3
 
-状態: 成果物の承認待ち (第 3 ゲート: BL-043 同梱完了)
+状態: 完了 (第 3 ゲート通過、`main` へマージ済み)
 
 ## 作業 WBS と進捗管理
 
@@ -51,7 +51,7 @@
     - ✅ 4.2. スキーマの版 7 (`internal/store/schema/0007_branch.sql`)、`internal/store/` (スコープの規則、セッションのブランチ、`ErrNoBranch`、セッションの一覧)、`internal/profile/` (`Branch`) とテスト
     - ✅ 4.3. `internal/tools/` (`lounge_join` の引数と出力と `hint`、`lounge_who` の出力、`chat.go`、`delivery.go`、`memory.go` の `scope` の説明文とエラーの文、`help.go` の本文と上限) とテスト
     - ✅ 4.4. 管理コマンドと書き出し (`cmd/agent-lounge-mcp/admin.go`、`internal/export/`) とテスト
-    - ✅ 4.5. 機械的検証 (`go vet ./...`、`go test -race ./...`) と、実装のレビュー
+    - ✅ 4.5. 機械的検証 (`go vet ./...`、`go test -race ./...`) と、実装のレビュー (実装と同じ担当が行ったため、別担当のレビューは 5.1a で行った)
     - ✅ 4.6. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/agent-lounge-mcp-proposal.md`。該当する記述があれば `README.md`、`docs/README.md`、`docs/ja/interactive-verification.md`、`.agents/skills/` の `SKILL.md`) の更新
     - ✅ 4.7. 正本ドキュメントおよびコード コメントへの永続的知見の反映 (最終仕様の 8 章)
     - ✅ 4.8. 実機の確認 (WSL の側。必要最小限として実行ファイルでの `probe.sh`・`chat-probe.sh`・MCP 直接呼び出し・管理コマンドを確認。5 CLI 非対話確認は `BL-044` へ記録)
@@ -60,13 +60,14 @@
     - ✅ 4.11. 受入条件への適合確認 (全作業の完了確認)
     - ✅ 4.12. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
     - ✅ 4.13. 残課題一覧の再構築と整理
-- 🔄 5. 追加検討 (BL-043: スコープのアクセス間隔に応じた忘却の進み方) と成果物の承認
+- ✅ 5. 追加検討 (BL-043: スコープのアクセス間隔に応じた忘却の進み方) と成果物の承認
     - ✅ 5.0. 追加確認項目 ([Q-017](261121-branch-scope-discussion.md#q-017-忘却の進み方を緩める計算-bl-043-の採用) から [Q-021](261121-branch-scope-discussion.md#q-021-bl-043-の確認の範囲)) の回答受付と簡易 ADR 反映 (第 1 ゲート通過)
     - ✅ 5.0a. 追加分の最終仕様 (`261121-branch-scope-design.md`) の更新と承認 (第 2 ゲート通過、2026-11-22 22:34 JST)
     - ✅ 5.0b. BL-043 の実装・テスト・文書更新・確認の記録更新・`261122-forgetting-pace-backlog.md` の `docs/prompts/past/` への移動
     - ✅ 5.1. 成果物・検証結果・残課題の提示
-    - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)。停止理由: 利用者の承認待ち ← **CURRENT**
-    - ⏸️ 5.3. 承認の後の、`main` へのマージ、push、作業ブランチの削除 ([Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ))
+    - ✅ 5.1a. 成果物の審査 (Claude Code、Opus 5.5) と指摘の修正、残課題の起票 (BL-045、BL-046)
+    - ✅ 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)。2026-11-23 07:57 JST に承認受領
+    - ✅ 5.3. 承認の後の、`main` へのマージ、push、作業ブランチの削除 ([Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ))。`main` に別の作業で追加された `261122-cli-without-mcp-backlog.md` の課題 ID `BL-043` がこの案件の BL-043 と重なったため、マージの後に、未着手のその項目を `BL-047` に付け替えた。この案件の記録は、残課題一覧に未対処の項目があるため `docs/prompts/current/` に残す
 
 ## 対象と参照資料
 
@@ -157,16 +158,19 @@
 | 2026-11-22 22:22 | BL-043 の追加検討を開始 | 利用者から `261122-forgetting-pace-backlog.md` (BL-043) をこのターンの discussion に追加して進行する指示を受領。`261121-branch-scope-discussion.md` に Q-017〜Q-021 を追記し (版 3)、`261122-forgetting-pace-backlog.md` の状態を「検討中」へ更新 |
 | 2026-11-22 22:31 | BL-043 の第 1 ゲート通過・最終仕様更新 | Q-017〜Q-021 の回答を受領 (Q-017:A、Q-018:B、Q-019:A、Q-020:A、Q-021:A)。簡易 ADR (LADR-006/007/008/010) と最終仕様 (`261121-branch-scope-design.md`) を更新し、追加分の第 2 ゲート承認を依頼 |
 | 2026-11-22 22:42 | BL-043 の第 2 ゲート通過・実装完了・第 3 ゲート提示 | 22:34 に追加仕様の承認を受領。スキーマ版 7 への統合、`retention.go`/`memory.go`/`cleanup.go`/`help.go`、テスト、正本文書を更新し、`go vet ./...`・`go test -race ./...` (案内文 19,026 バイト) および実行ファイルでの実機確認を通過。`261122-forgetting-pace-backlog.md` を対応済みとして `docs/prompts/past/` へ移し、第 3 ゲートの承認を依頼 |
+| 2026-11-23 07:53 | 成果物の審査と、指摘の修正・起票の完了 | 2026-11-23 07:45 ごろに Claude Code (Opus 5.5) のセッションが審査。指摘: 受入条件 8・9 の不整合、最終仕様 5.3・7.2 の未反映、レビューの独立性、全体管理文書の古い値、BL-034 の参照切れ。コードは承認可能。修正と、残課題 BL-045、BL-046 の起票を完了 (agy、Sonnet 5.5 medium。[LADR-009](261121-branch-scope-lightadr.md#ladr-009-作業の割り当て)) |
+| 2026-11-23 07:57 | 成果物の承認 (第 3 ゲート通過) | 利用者が対話セッションで本案件を承認し、`main` へのマージ、push、作業ブランチの削除を指示。マージの前に、移動済みの記録を指す `current/` のパス (検討用 Markdown、簡易 ADR) を `past/` に直し、利用ガイドの「検証済みの範囲」から残課題の ID の記載を除いた。`main` に追加されていた `261122-cli-without-mcp-backlog.md` の `BL-043` を、ID の重複を避けるため `BL-047` に付け替えた (Claude Code、Opus 5.5) |
 
 ## 反映と検証の記録
 
 - **対応箇所**:
+  - 忘却の進み方 (BL-043): `internal/store/retention.go`、`cmd/agent-lounge-mcp/cleanup.go`、`internal/store/forgetting_pace_test.go`、`internal/store/memory_test.go` (BL-043 による期待値の変更)、`docs/prompts/past/261122-forgetting-pace-backlog.md`
   - スキーマ・ストア・プロフィール: `internal/store/schema/0007_branch.sql`、`internal/store/scope.go`、`chat.go`、`admin.go`、`memory.go`、`internal/profile/profile.go`、および各テスト (`branch_test.go`、`profile_test.go` ほか)
   - MCP ツール・案内文: `internal/tools/lounge.go`、`chat.go`、`delivery.go`、`memory.go`、`help.go`、`catalog_test.go`、`internal/server/branch_test.go`、`repository_test.go`
   - 管理コマンド・書き出し: `cmd/agent-lounge-mcp/admin.go`、`admin_test.go`、`internal/export/export_test.go`
   - 正本ドキュメント・スキル: `docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/agent-lounge-mcp-proposal.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`
   - 確認の記録・残課題一覧: `docs/prompts/current/261121-branch-scope-validation.md`、`261121-branch-scope-backlog.md`
 - **検証結果**:
-  - `go vet ./...`、`go test -race ./...`: 全パッケージ PASS (`lounge_help` 本文 18,864 バイト / 上限 19,000 バイト)
+  - `go vet ./...`、`go test -race ./...`: 全パッケージ PASS (`lounge_help` 本文 19,026 バイト / 上限 19,300 バイト)
   - 実機確認 (Linux x86_64 WSL 2、`dist/agent-lounge-mcp`): `probe.sh`、`chat-probe.sh`、ブランチ申告 (`git branch --show-current`)、ブランチのルーム分離、ブランチメモリ、`git switch` 後の呼び直し、`session list`・`memory list --scope branch`・`export` を確認済み (`261121-branch-scope-validation.md`)
 - **未完了項目**: 5 つの CLI の非対話実機確認 (WSL) および Windows 側の実機確認は、第 2 ゲート承認時の方針に従い `261121-branch-scope-backlog.md` の `BL-044` へ移管し、文書の「検証済みの範囲」に未検証と明記済み。
