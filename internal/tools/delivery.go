@@ -112,7 +112,7 @@ type StatusRecipient struct {
 type StatusOutput struct {
 	MessageID  int64             `json:"message_id" jsonschema:"ID of the message"`
 	SentAt     string            `json:"sent_at" jsonschema:"time the message was sent (RFC 3339, UTC)"`
-	Scope      string            `json:"scope" jsonschema:"scope of the message: user or repository"`
+	Scope      string            `json:"scope" jsonschema:"scope of the message: user, repository or branch"`
 	ScopeID    string            `json:"scope_id" jsonschema:"identifier of the scope"`
 	Room       string            `json:"room,omitempty" jsonschema:"room the message was posted to; absent for a message to a session"`
 	Counts     StatusCounts      `json:"counts" jsonschema:"number of recipients in each state"`
@@ -164,7 +164,7 @@ func optionalTime(t time.Time) string {
 
 // HistoryInput defines arguments for the chat_history tool.
 type HistoryInput struct {
-	Scope   string `json:"scope,omitempty" jsonschema:"user or repository: only the messages of that scope. Omit for every scope"`
+	Scope   string `json:"scope,omitempty" jsonschema:"user, repository or branch: only the messages of that scope. Omit for every scope"`
 	Room    string `json:"room,omitempty" jsonschema:"only the messages posted to the room of that name (lounge). Not with 'with'"`
 	With    string `json:"with,omitempty" jsonschema:"address of another session (name, or user/name for a session of another user): only the messages between you and it addressed to a session, in both directions. Not with room"`
 	Unacked bool   `json:"unacked,omitempty" jsonschema:"true: only the messages addressed to you that you read with chat_inbox and did not record as handled with chat_ack"`
@@ -181,7 +181,7 @@ type HistoryMessage struct {
 	FromAgent   string `json:"from_agent" jsonschema:"agent name the sender declared when it sent the message"`
 	FromOSUser  string `json:"from_os_user,omitempty" jsonschema:"OS user name the sender declared when it sent the message; absent when not declared"`
 	FromMachine string `json:"from_machine,omitempty" jsonschema:"machine name the sender declared when it sent the message; absent when not declared"`
-	Scope       string `json:"scope" jsonschema:"scope of the message: user or repository"`
+	Scope       string `json:"scope" jsonschema:"scope of the message: user, repository or branch"`
 	ScopeID     string `json:"scope_id" jsonschema:"identifier of the scope"`
 	Room        string `json:"room,omitempty" jsonschema:"room the message was posted to; absent for a message to a session"`
 	To          string `json:"to,omitempty" jsonschema:"address of the recipient of a message to a session; absent for a room message"`
@@ -205,7 +205,7 @@ func (d *Deps) chatHistory(ctx context.Context, req *mcp.CallToolRequest, in His
 	}
 	switch {
 	case in.Scope != "" && !store.ValidScope(in.Scope):
-		return nil, HistoryOutput{}, fmt.Errorf("invalid scope %q: use %s or %s, or omit it", in.Scope, store.ScopeUser, store.ScopeRepository)
+		return nil, HistoryOutput{}, fmt.Errorf("invalid scope %q: use %s, %s or %s, or omit it", in.Scope, store.ScopeUser, store.ScopeRepository, store.ScopeBranch)
 	case in.Room != "" && in.With != "":
 		return nil, HistoryOutput{}, errors.New("give either room or with, not both")
 	case in.Room != "" && in.Room != store.LoungeRoom:

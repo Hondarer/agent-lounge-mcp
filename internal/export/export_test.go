@@ -235,3 +235,33 @@ func TestWriteMarkdownMemories(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestWriteMarkdownBranchScope(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "out")
+	branchScope := store.Scope{Kind: store.ScopeBranch, ID: "github.com/org/a:feature/x"}
+	msgs := []store.ExportMessage{{
+		ID: 10, Scope: branchScope, Room: "lounge", FromUser: "local", From: "alice",
+		SentAt: t0, Body: "branch message", Deliveries: []store.ExportDelivery{},
+	}}
+	mems := []store.Memory{{
+		ID: 20, Scope: branchScope, Title: "note", Body: "branch memory", Tags: []string{},
+		CreatedAt: t0, UpdatedAt: t0,
+		CreatedBy: store.Author{User: "local", Session: "alice"},
+		UpdatedBy: store.Author{User: "local", Session: "alice"},
+	}}
+	sum, err := WriteMarkdown(dir, feed(msgs, mems...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum != (Summary{Files: 2, Messages: 1, Memories: 1}) {
+		t.Fatalf("summary = %+v", sum)
+	}
+	wantDir := SafeName("branch-github.com/org/a:feature/x")
+	wantFiles := []string{
+		"chat/" + wantDir + "/room-lounge.md",
+		"memory/" + wantDir + ".md",
+	}
+	if got := files(t, dir); !slices.Equal(got, wantFiles) {
+		t.Errorf("files = %v, want %v", got, wantFiles)
+	}
+}

@@ -91,7 +91,9 @@ func describeMemoryPolicy(cfg config.Config) string {
 	s := fmt.Sprintf("memories: half-life %s, longer with references; they fade below a retention score of %v",
 		config.FormatDuration(cfg.MemoryHalfLife), cfg.MemoryFadeThreshold)
 	if cfg.MemoryGrace == 0 {
-		return s + " and are never deleted"
+		s += " and are never deleted"
+	} else {
+		s += " and are deleted " + config.FormatDuration(cfg.MemoryGrace) + " after they fade"
 	}
-	return s + " and are deleted " + config.FormatDuration(cfg.MemoryGrace) + " after they fade"
+	return s + "; scopes with no memory access for " + config.FormatDuration(cfg.MemoryHalfLife) + " forget at 1/3 the pace (up to about 3x longer)"
 }

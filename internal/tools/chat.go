@@ -24,8 +24,9 @@ func registerChat(r *Registry, d *Deps) {
 		Title: "Send a message",
 		Description: "Send a message within a scope, to one session ('to') or to every other session of the scope through the room ('room'); give exactly one of them. " +
 			"scope chooses the range of sessions: user (default) is the sessions of your user; " +
-			"repository is the sessions that declared your repository at lounge_join, whatever their user or machine. " +
-			"The scope is never inferred from 'to': to reach a session of another user (address user/name), pass scope repository. " +
+			"repository is the sessions that declared your repository at lounge_join, whatever their user or machine; " +
+			"branch is the sessions that declared your repository and your branch, whatever their user or machine. " +
+			"The scope is never inferred from 'to': to reach a session of another user (address user/name), pass scope repository or branch. " +
 			"Take 'to' and the scope from the address and scopes that lounge_who lists, or reply with the scope and reply_to of a received message. " +
 			"The message waits on the server until the recipient calls chat_inbox. " +
 			"Check whether each recipient read it (delivered) and finished handling it (acked) with chat_status and the returned message_id. " +
@@ -54,7 +55,7 @@ type SendInput struct {
 	Room string `json:"room,omitempty" jsonschema:"room to post to; the only room is lounge. Give either to or room"`
 	Body string `json:"body" jsonschema:"message text"`
 	// Scope is one of store.ScopeKinds; empty means user.
-	Scope string `json:"scope,omitempty" jsonschema:"range of sessions: user (default; the sessions of your user) or repository (the sessions that declared your repository, whatever their user). Required as repository to reach a session of another user"`
+	Scope string `json:"scope,omitempty" jsonschema:"range of sessions: user (default; the sessions of your user), repository (the sessions that declared your repository, whatever their user) or branch (the sessions that declared your repository and branch, whatever their user). Required as repository or branch to reach a session of another user"`
 }
 
 // SendOutput is the result of the chat_send tool.
@@ -63,8 +64,8 @@ type SendOutput struct {
 	SentAt     string   `json:"sent_at" jsonschema:"time the message was accepted (RFC 3339, UTC)"`
 	Recipients []string `json:"recipients" jsonschema:"addresses of the sessions the message is queued for"`
 	Skipped    []string `json:"skipped,omitempty" jsonschema:"addresses of the sessions of the room that did not get the message because their inbox is full; absent when none"`
-	Scope      string   `json:"scope" jsonschema:"scope of the message: user or repository"`
-	ScopeID    string   `json:"scope_id" jsonschema:"identifier of the scope: your user name for user, your repository for repository"`
+	Scope      string   `json:"scope" jsonschema:"scope of the message: user, repository or branch"`
+	ScopeID    string   `json:"scope_id" jsonschema:"identifier of the scope: your user name for user, your repository for repository, repository:branch for branch"`
 	unreadField
 }
 
@@ -76,7 +77,7 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 	scope := cmp.Or(in.Scope, store.ScopeUser)
 	switch {
 	case !store.ValidScope(scope):
-		return nil, SendOutput{}, fmt.Errorf("invalid scope %q: use %s (default) or %s", in.Scope, store.ScopeUser, store.ScopeRepository)
+		return nil, SendOutput{}, fmt.Errorf("invalid scope %q: use %s (default), %s or %s", in.Scope, store.ScopeUser, store.ScopeRepository, store.ScopeBranch)
 	case in.To != "" && in.Room != "":
 		return nil, SendOutput{}, errors.New("give either to (a session address) or room, not both")
 	case in.To == "" && in.Room == "":
@@ -94,7 +95,7 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 		// The scope comes from the argument only, never from the form of the address.
 		if target.User != me.UserName && scope == store.ScopeUser {
 			return nil, SendOutput{}, fmt.Errorf("%q is a session of another user (%s): sessions of other users are reached only in a scope you share with them. "+
-				"Pass scope %s with this to (%s lists the scopes you share with each session)", in.To, target.User, store.ScopeRepository, toolWho)
+				"Pass scope %s or %s with this to (%s lists the scopes you share with each session)", in.To, target.User, store.ScopeRepository, store.ScopeBranch, toolWho)
 		}
 	}
 
@@ -113,6 +114,10 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 	case errors.Is(err, store.ErrNoRepository):
 		return nil, SendOutput{}, fmt.Errorf("your session has no repository: call %s with the same name and your origin, "+
 			"or your folder and machine (see %s), then send again", toolJoin, toolHelp)
+	case errors.Is(err, store.ErrNoBranch):
+		return nil, SendOutput{}, fmt.Errorf("your session cannot use scope %s: call %s with the same name, your origin (or folder and machine), "+
+			"and branch (the output of git branch --show-current), then send again. Scope %s is not available when not on a branch (detached HEAD)",
+			store.ScopeBranch, toolJoin, store.ScopeBranch)
 	case errors.Is(err, store.ErrNoSuchRoom):
 		return nil, SendOutput{}, fmt.Errorf("no room named %q: the only room is %s", in.Room, store.LoungeRoom)
 	case err != nil:
@@ -159,8 +164,8 @@ type InboxMessage struct {
 	FromOSUser  string `json:"from_os_user,omitempty" jsonschema:"OS user name the sender declared when it sent the message; absent when not declared"`
 	FromMachine string `json:"from_machine,omitempty" jsonschema:"machine name the sender declared when it sent the message; absent when not declared"`
 	FromUser    string `json:"from_user" jsonschema:"user of the sender"`
-	Scope       string `json:"scope" jsonschema:"scope of the message: user (sessions of one user) or repository (sessions of one repository)"`
-	ScopeID     string `json:"scope_id" jsonschema:"identifier of the scope: the user name for user, the repository for repository"`
+	Scope       string `json:"scope" jsonschema:"scope of the message: user (sessions of one user), repository (sessions of one repository) or branch (sessions of one repository and branch)"`
+	ScopeID     string `json:"scope_id" jsonschema:"identifier of the scope: the user name for user, the repository for repository, repository:branch for branch"`
 	ReplyTo     string `json:"reply_to" jsonschema:"address of the sender: to reply, pass it as the 'to' of chat_send with this message's scope"`
 	Room        string `json:"room,omitempty" jsonschema:"room the message was posted to; absent for a message addressed to your session"`
 	Body        string `json:"body" jsonschema:"message text, written by the sender"`

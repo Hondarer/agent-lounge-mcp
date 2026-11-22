@@ -357,9 +357,9 @@ func TestMemorySearchOrder(t *testing.T) {
 	if ms := search(t, s, alice, MemorySearch{Query: "deploy"}); !slices.Equal(memoryIDs(ms), []int64{strong.ID, weak.ID}) {
 		t.Errorf("by relevance = %v", memoryIDs(ms))
 	}
-	// After 20 days without use, the strong match's retention is low (the first search counted
-	// one reference: a half-life of 14 days); a weak match used just now comes first.
-	clock.advance(20 * day)
+	// After 50 quiet days without use, the strong match's effective elapsed time is 7 + 43/3 days
+	// (the first search counted one reference: a half-life of 14 days); a weak match used just now comes first.
+	clock.advance(50 * day)
 	if _, err := s.GetMemory(context.Background(), alice.ID, weak.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestMemorySearchOrder(t *testing.T) {
 	if !slices.Equal(memoryIDs(ms), []int64{weak.ID, strong.ID}) {
 		t.Errorf("by relevance and retention = %v", memoryIDs(ms))
 	}
-	if ms[0].Retention != 1 || math.Abs(ms[1].Retention-math.Exp2(-20.0/14)) > 1e-6 {
+	if ms[0].Retention != 1 || math.Abs(ms[1].Retention-math.Exp2(-(7.0+43.0/3.0)/14)) > 1e-6 {
 		t.Errorf("retention = %v, %v", ms[0].Retention, ms[1].Retention)
 	}
 }
@@ -384,13 +384,14 @@ func TestMemoryForgetting(t *testing.T) {
 	if _, err := s2.PinMemory(ctx, bob.ID, p.ID, true); err != nil {
 		t.Fatal(err)
 	}
-	clock2.advance(24 * day)
+	// In a quiet scope, an unused memory fades after about 55.76 days.
+	clock2.advance(56 * day)
 	if ms := search(t, s2, bob, MemorySearch{}); !slices.Equal(memoryIDs(ms), []int64{p.ID}) {
-		t.Errorf("day 24, plain list = %v", memoryIDs(ms))
+		t.Errorf("day 56, plain list = %v", memoryIDs(ms))
 	}
 	ms := search(t, s2, bob, MemorySearch{IncludeFaded: true})
 	if len(ms) != 2 || !ms[1].Faded || ms[1].ID != f.ID || ms[0].Faded {
-		t.Errorf("day 24, with faded = %+v", ms)
+		t.Errorf("day 56, with faded = %+v", ms)
 	}
 	// Searching with a term does not count a faded memory, even with include_faded.
 	if ms := search(t, s2, bob, MemorySearch{Query: "fades", IncludeFaded: true}); len(ms) != 1 || !ms[0].Faded {
@@ -401,16 +402,16 @@ func TestMemoryForgetting(t *testing.T) {
 		t.Errorf("get brings it back: %+v, %v", got, err)
 	}
 
-	// Deleted by the cleanup 30 days after it faded.
+	// Deleted by the cleanup in a quiet scope after about 145.76 days.
 	g := createMemory(t, s2, bob, "", "gone")
-	clock2.advance(53 * day)
+	clock2.advance(145 * day)
 	if r := cleanup(t, s2, CleanupPolicy{}); r.Memories != 0 {
-		t.Errorf("day 53: %d deleted", r.Memories)
+		t.Errorf("day 145: %d deleted", r.Memories)
 	}
 	clock2.advance(day)
 	r := cleanup(t, s2, CleanupPolicy{})
 	if r.Memories != 1 {
-		t.Errorf("day 54: %d deleted", r.Memories)
+		t.Errorf("day 146: %d deleted", r.Memories)
 	}
 	if _, err := s2.MemoryByID(ctx, g.ID); !errors.Is(err, ErrNoSuchMemory) {
 		t.Errorf("deleted memory: %v", err)
@@ -515,7 +516,7 @@ func TestMemoryReferences(t *testing.T) {
 	}
 	// A faded memory counts even within the day: reading it brings it back.
 	last := res[4]
-	clock.advance(30 * day)
+	clock.advance(60 * day)
 	if _, err := s.GetMemory(ctx, alice.ID, last.ID); err != nil {
 		t.Fatal(err)
 	}
@@ -523,9 +524,9 @@ func TestMemoryReferences(t *testing.T) {
 	if got, _ := s.MemoryByID(ctx, last.ID); got.Faded {
 		t.Fatal("read memory is faded")
 	}
-	// Make it fade again within alice's window by pushing the clock past its fade time:
-	// with one reference it fades after about 47 days.
-	clock.advance(48 * day)
+	// Make it fade again within alice's window by pushing the clock past its quiet fade time:
+	// with one reference it fades after about 125.52 days in a quiet scope.
+	clock.advance(130 * day)
 	if _, err := s.db.ExecContext(ctx, "UPDATE memory_refs SET counted_at = ?", millis(clock.now())); err != nil {
 		t.Fatal(err)
 	}
@@ -648,7 +649,7 @@ func TestMigrateVersion4(t *testing.T) {
 	}
 	dump := func() string {
 		return dumpRows(t, s, []string{
-			"SELECT id, name, token_hash, created_at FROM users ORDER BY id", "SELECT * FROM sessions ORDER BY id", "SELECT * FROM rooms ORDER BY id",
+			"SELECT id, name, token_hash, created_at FROM users ORDER BY id", "SELECT id, user_id, name, agent, created_at, last_seen_at, os_user, machine, origin, folder, repository FROM sessions ORDER BY id", "SELECT * FROM rooms ORDER BY id",
 			"SELECT * FROM messages ORDER BY id", "SELECT * FROM deliveries ORDER BY message_id",
 		})
 	}
@@ -719,7 +720,8 @@ func TestSearchCountsTopThreeOnly(t *testing.T) {
 	for i := range 4 {
 		createMemory(t, s, alice, "", "topic and some other words "+strings.Repeat("y", i+1))
 	}
-	clock.advance(23 * day)
+	// In a quiet scope, faded (created 12h earlier) fades at 55.76d while the other 4 stay active.
+	clock.advance(55*day + 12*time.Hour)
 	res := search(t, s, bob, MemorySearch{Query: "topic", IncludeFaded: true})
 	if len(res) != 5 {
 		t.Fatalf("results = %v", memoryIDs(res))
@@ -767,13 +769,13 @@ func TestCleanupReferencedAndNoGrace(t *testing.T) {
 	if _, err := s.GetMemory(ctx, alice.ID, m.ID); err != nil {
 		t.Fatal(err)
 	}
-	clock.advance(76 * day) // one reference: fades after about 46.5 days, deleted 30 days later
+	clock.advance(215 * day) // one reference in a quiet scope: deleted after about 215.52 days
 	if r := cleanup(t, s, CleanupPolicy{}); r.Memories != 0 {
-		t.Fatalf("day 76: %d deleted", r.Memories)
+		t.Fatalf("day 215: %d deleted", r.Memories)
 	}
 	clock.advance(day)
 	if r := cleanup(t, s, CleanupPolicy{}); r.Memories != 1 {
-		t.Errorf("day 77: %d deleted", r.Memories)
+		t.Errorf("day 216: %d deleted", r.Memories)
 	}
 
 	keep := createMemory(t, s, alice, "", "kept faded")

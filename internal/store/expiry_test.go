@@ -224,8 +224,9 @@ func TestMigrateVersion5(t *testing.T) {
 	}
 	dump := func() string {
 		return dumpRows(t, s, []string{
-			"SELECT id, name, token_hash, created_at FROM users ORDER BY id", "SELECT * FROM sessions ORDER BY id",
-			"SELECT * FROM rooms ORDER BY id", "SELECT * FROM messages ORDER BY id", "SELECT * FROM memories ORDER BY id",
+			"SELECT id, name, token_hash, created_at FROM users ORDER BY id", "SELECT id, user_id, name, agent, created_at, last_seen_at, os_user, machine, origin, folder, repository FROM sessions ORDER BY id",
+			"SELECT * FROM rooms ORDER BY id", "SELECT * FROM messages ORDER BY id",
+			"SELECT id, scope, scope_id, user_id, title, body, pinned, created_at, updated_at, accessed_at, access_count, created_user, created_session, created_agent, updated_user, updated_session, updated_agent FROM memories ORDER BY id",
 		})
 	}
 	before := dump()

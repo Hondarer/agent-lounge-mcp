@@ -18,7 +18,8 @@ import (
 
 // Memories are short-lived pieces of knowledge that sessions share within a scope, as messages
 // are shared: the memories of scope user are shared by the sessions of one user, those of
-// scope repository by the sessions that declare one repository unit, whatever their user.
+// scope repository by the sessions that declare one repository unit, and those of scope branch
+// by the sessions that declare one repository unit and one branch, whatever their user.
 // Every session that can use a scope can read, update, pin and delete all of its memories.
 // A memory of a scope the session cannot use is reported as missing, so that a session does
 // not learn whether it exists.
@@ -99,17 +100,22 @@ type Memory struct {
 	// time the memory was read, under the store's RetentionPolicy.
 	Retention float64
 	Faded     bool
+
+	forgettingCredit time.Duration
 }
 
 func (m Memory) state() retentionState {
-	return retentionState{pinned: m.Pinned, updatedAt: m.UpdatedAt, accessedAt: m.AccessedAt, accessCount: m.AccessCount}
+	return retentionState{
+		pinned: m.Pinned, updatedAt: m.UpdatedAt, accessedAt: m.AccessedAt,
+		accessCount: m.AccessCount, credit: m.forgettingCredit,
+	}
 }
 
-// assess fills in Retention and Faded at now.
-func (p RetentionPolicy) assess(m *Memory, now time.Time) {
+// assessWith fills in Retention and Faded at now under act.
+func (p RetentionPolicy) assessWith(m *Memory, act scopeActivity, now time.Time) {
 	st := m.state()
-	m.Retention = p.score(st, now)
-	m.Faded = p.faded(st, now)
+	m.Retention = p.scoreAt(st, act, now)
+	m.Faded = p.fadedAt(st, act, now)
 }
 
 // MemoryInput holds the fields of a memory to write. A nil field is not given: creating a
@@ -181,16 +187,65 @@ func (s *Store) checkBody(body string) error {
 
 // memoryColumns selects a Memory from memories m; see scanMemory.
 const memoryColumns = `m.id, m.scope, m.scope_id, m.title, m.body, m.pinned, m.created_at, m.updated_at, m.accessed_at,
-	m.access_count, m.created_user, m.created_session, m.created_agent, m.updated_user, m.updated_session, m.updated_agent`
+	m.access_count, m.created_user, m.created_session, m.created_agent, m.updated_user, m.updated_session, m.updated_agent,
+	m.forgetting_credit`
 
 func scanMemory(r rowScanner) (Memory, error) {
 	var m Memory
-	var created, updated, accessed int64
+	var created, updated, accessed, credit int64
 	err := r.Scan(&m.ID, &m.Scope.Kind, &m.Scope.ID, &m.Title, &m.Body, &m.Pinned, &created, &updated, &accessed,
 		&m.AccessCount, &m.CreatedBy.User, &m.CreatedBy.Session, &m.CreatedBy.Agent,
-		&m.UpdatedBy.User, &m.UpdatedBy.Session, &m.UpdatedBy.Agent)
+		&m.UpdatedBy.User, &m.UpdatedBy.Session, &m.UpdatedBy.Agent, &credit)
 	m.CreatedAt, m.UpdatedAt, m.AccessedAt = fromMillis(created), fromMillis(updated), optionalTime(accessed)
+	m.forgettingCredit = time.Duration(credit) * time.Millisecond
 	return m, err
+}
+
+// loadScopeActivity reads the activity row of sc, returning a zero scopeActivity when absent.
+func loadScopeActivity(ctx context.Context, tx *sql.Tx, sc Scope) (scopeActivity, error) {
+	var lastMs, discMs int64
+	err := tx.QueryRowContext(ctx,
+		"SELECT last_access, discount FROM memory_scope_activity WHERE scope = ? AND scope_id = ?",
+		sc.Kind, sc.ID).Scan(&lastMs, &discMs)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return scopeActivity{}, nil
+	case err != nil:
+		return scopeActivity{}, err
+	}
+	return scopeActivity{lastAccess: fromMillis(lastMs), discount: time.Duration(discMs) * time.Millisecond}, nil
+}
+
+// touchScopeActivity closes any open quiet gap for sc at now and records now as its last
+// access, returning the updated scopeActivity.
+func (s *Store) touchScopeActivity(ctx context.Context, tx *sql.Tx, sc Scope, now time.Time) (scopeActivity, error) {
+	nowMs := millis(now)
+	nowT := fromMillis(nowMs)
+	var lastMs, discMs int64
+	err := tx.QueryRowContext(ctx,
+		"SELECT last_access, discount FROM memory_scope_activity WHERE scope = ? AND scope_id = ?",
+		sc.Kind, sc.ID).Scan(&lastMs, &discMs)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		if _, err := tx.ExecContext(ctx,
+			"INSERT INTO memory_scope_activity (scope, scope_id, last_access, discount) VALUES (?, ?, ?, 0)",
+			sc.Kind, sc.ID, nowMs); err != nil {
+			return scopeActivity{}, err
+		}
+		return scopeActivity{lastAccess: nowT}, nil
+	case err != nil:
+		return scopeActivity{}, err
+	}
+	cur := scopeActivity{lastAccess: fromMillis(lastMs), discount: time.Duration(discMs) * time.Millisecond}
+	openMs := s.retention.openDiscount(cur, nowT).Milliseconds()
+	newDiscMs := discMs + openMs
+	newLastMs := max(lastMs, nowMs)
+	if _, err := tx.ExecContext(ctx,
+		"UPDATE memory_scope_activity SET last_access = ?, discount = ? WHERE scope = ? AND scope_id = ?",
+		newLastMs, newDiscMs, sc.Kind, sc.ID); err != nil {
+		return scopeActivity{}, err
+	}
+	return scopeActivity{lastAccess: fromMillis(newLastMs), discount: time.Duration(newDiscMs) * time.Millisecond}, nil
 }
 
 // loadMemories returns the memories with the given IDs, with their tags, by ID. Missing IDs
@@ -356,19 +411,25 @@ func (s *Store) CreateMemory(ctx context.Context, sessionID int64, kind string, 
 			userID = sess.UserID
 		}
 		now := s.now()
+		act, err := s.touchScopeActivity(ctx, tx, m.Scope, now)
+		if err != nil {
+			return err
+		}
 		m.CreatedAt, m.UpdatedAt = fromMillis(millis(now)), fromMillis(millis(now))
 		m.CreatedBy, m.UpdatedBy = authorOf(sess), authorOf(sess)
+		m.forgettingCredit = act.discount
 		err = tx.QueryRowContext(ctx, `
 			INSERT INTO memories (scope, scope_id, user_id, title, body, created_at, updated_at,
-				created_user, created_session, created_agent, updated_user, updated_session, updated_agent)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+				created_user, created_session, created_agent, updated_user, updated_session, updated_agent, forgetting_credit)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 			kind, id, userID, m.Title, m.Body, millis(now), millis(now),
-			m.CreatedBy.User, m.CreatedBy.Session, m.CreatedBy.Agent, m.UpdatedBy.User, m.UpdatedBy.Session, m.UpdatedBy.Agent).
+			m.CreatedBy.User, m.CreatedBy.Session, m.CreatedBy.Agent, m.UpdatedBy.User, m.UpdatedBy.Session, m.UpdatedBy.Agent,
+			act.discount.Milliseconds()).
 			Scan(&m.ID)
 		if err != nil {
 			return err
 		}
-		s.retention.assess(&m, now)
+		s.retention.assessWith(&m, act, now)
 		return writeMemoryIndex(ctx, tx, m)
 	})
 	if err != nil {
@@ -422,13 +483,17 @@ func (s *Store) UpdateMemory(ctx context.Context, sessionID, id int64, in Memory
 			m.Tags = tags
 		}
 		now := s.now()
-		m.UpdatedAt, m.UpdatedBy = fromMillis(millis(now)), authorOf(sess)
-		if _, err := tx.ExecContext(ctx, `
-			UPDATE memories SET title = ?, body = ?, updated_at = ?, updated_user = ?, updated_session = ?, updated_agent = ?
-			WHERE id = ?`, m.Title, m.Body, millis(now), m.UpdatedBy.User, m.UpdatedBy.Session, m.UpdatedBy.Agent, m.ID); err != nil {
+		act, err := s.touchScopeActivity(ctx, tx, m.Scope, now)
+		if err != nil {
 			return err
 		}
-		s.retention.assess(&m, now)
+		m.UpdatedAt, m.UpdatedBy, m.forgettingCredit = fromMillis(millis(now)), authorOf(sess), act.discount
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE memories SET title = ?, body = ?, updated_at = ?, updated_user = ?, updated_session = ?, updated_agent = ?, forgetting_credit = ?
+			WHERE id = ?`, m.Title, m.Body, millis(now), m.UpdatedBy.User, m.UpdatedBy.Session, m.UpdatedBy.Agent, act.discount.Milliseconds(), m.ID); err != nil {
+			return err
+		}
+		s.retention.assessWith(&m, act, now)
 		return writeMemoryIndex(ctx, tx, m)
 	})
 	if err != nil {
@@ -451,15 +516,20 @@ func (s *Store) GetMemory(ctx context.Context, sessionID, id int64) (Memory, err
 			return err
 		}
 		now := s.now()
-		counted, err := s.countReference(ctx, tx, m.ID, sess.ID, now, s.retention.faded(m.state(), now))
+		act, err := s.touchScopeActivity(ctx, tx, m.Scope, now)
+		if err != nil {
+			return err
+		}
+		counted, err := s.countReference(ctx, tx, m.ID, sess.ID, now, act.discount, s.retention.fadedAt(m.state(), act, now))
 		if err != nil {
 			return err
 		}
 		if counted {
 			m.AccessCount++
 			m.AccessedAt = fromMillis(millis(now))
+			m.forgettingCredit = act.discount
 		}
-		s.retention.assess(&m, now)
+		s.retention.assessWith(&m, act, now)
 		return nil
 	})
 	if err != nil {
@@ -468,12 +538,13 @@ func (s *Store) GetMemory(ctx context.Context, sessionID, id int64) (Memory, err
 	return m, nil
 }
 
-// countReference counts a reference of a session to a memory: its reference count grows by one
-// and its last reference becomes now. A session's references to one memory are counted at most
-// once in ReferenceWindow, so that a session that reads or searches again and again does not
-// keep a memory alive by itself. force counts the reference regardless (reading a faded memory
-// by ID). It reports whether the reference was counted.
-func (s *Store) countReference(ctx context.Context, tx *sql.Tx, memoryID, sessionID int64, now time.Time, force bool) (bool, error) {
+// countReference counts a reference of a session to a memory: its reference count grows by one,
+// its last reference becomes now, and its forgetting_credit becomes credit. A session's
+// references to one memory are counted at most once in ReferenceWindow, so that a session that
+// reads or searches again and again does not keep a memory alive by itself. force counts the
+// reference regardless (reading a faded memory by ID). It reports whether the reference was
+// counted.
+func (s *Store) countReference(ctx context.Context, tx *sql.Tx, memoryID, sessionID int64, now time.Time, credit time.Duration, force bool) (bool, error) {
 	if !force {
 		var at int64
 		err := tx.QueryRowContext(ctx, "SELECT counted_at FROM memory_refs WHERE memory_id = ? AND session_id = ?", memoryID, sessionID).Scan(&at)
@@ -490,14 +561,16 @@ func (s *Store) countReference(ctx context.Context, tx *sql.Tx, memoryID, sessio
 		ON CONFLICT (memory_id, session_id) DO UPDATE SET counted_at = excluded.counted_at`, memoryID, sessionID, millis(now)); err != nil {
 		return false, err
 	}
-	_, err := tx.ExecContext(ctx, "UPDATE memories SET access_count = access_count + 1, accessed_at = ? WHERE id = ?", millis(now), memoryID)
+	_, err := tx.ExecContext(ctx, "UPDATE memories SET access_count = access_count + 1, accessed_at = ?, forgetting_credit = ? WHERE id = ?",
+		millis(now), credit.Milliseconds(), memoryID)
 	return err == nil, err
 }
 
 // PinMemory pins or unpins a memory of the session's scopes. A pinned memory neither fades nor
-// is deleted. Unpinning sets its last reference to now, so that a memory pinned for a long time
-// does not fade, or get deleted, right after it is unpinned; its reference count is unchanged.
-// Setting the state it already has changes nothing.
+// is deleted. Unpinning sets its last reference to now and updates forgetting_credit to the
+// scope's current discount, so that a memory pinned for a long time does not fade, or get
+// deleted, right after it is unpinned; its reference count is unchanged. Setting the state it
+// already has changes nothing to the memory (the scope access is still recorded).
 func (s *Store) PinMemory(ctx context.Context, sessionID, id int64, pinned bool) (Memory, error) {
 	var m Memory
 	err := s.tx(ctx, func(tx *sql.Tx) error {
@@ -509,19 +582,25 @@ func (s *Store) PinMemory(ctx context.Context, sessionID, id int64, pinned bool)
 			return err
 		}
 		now := s.now()
+		act, err := s.touchScopeActivity(ctx, tx, m.Scope, now)
+		if err != nil {
+			return err
+		}
 		if m.Pinned != pinned {
 			m.Pinned = pinned
 			if pinned {
 				_, err = tx.ExecContext(ctx, "UPDATE memories SET pinned = 1 WHERE id = ?", m.ID)
 			} else {
 				m.AccessedAt = fromMillis(millis(now))
-				_, err = tx.ExecContext(ctx, "UPDATE memories SET pinned = 0, accessed_at = ? WHERE id = ?", millis(now), m.ID)
+				m.forgettingCredit = act.discount
+				_, err = tx.ExecContext(ctx, "UPDATE memories SET pinned = 0, accessed_at = ?, forgetting_credit = ? WHERE id = ?",
+					millis(now), act.discount.Milliseconds(), m.ID)
 			}
 			if err != nil {
 				return err
 			}
 		}
-		s.retention.assess(&m, now)
+		s.retention.assessWith(&m, act, now)
 		return nil
 	})
 	if err != nil {
@@ -537,7 +616,11 @@ func (s *Store) ForgetMemory(ctx context.Context, sessionID, id int64) error {
 		if err != nil {
 			return err
 		}
-		if _, err := accessibleMemory(ctx, tx, sess, id); err != nil {
+		m, err := accessibleMemory(ctx, tx, sess, id)
+		if err != nil {
+			return err
+		}
+		if _, err := s.touchScopeActivity(ctx, tx, m.Scope, s.now()); err != nil {
 			return err
 		}
 		return deleteMemories(ctx, tx, []int64{id})
@@ -621,6 +704,16 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 			scopes = ScopesOf(sess)
 		}
 
+		now := s.now()
+		acts := make(map[Scope]scopeActivity, len(scopes))
+		for _, sc := range scopes {
+			act, err := s.touchScopeActivity(ctx, tx, sc, now)
+			if err != nil {
+				return err
+			}
+			acts[sc] = act
+		}
+
 		var where []string
 		var args []any
 		var scopeConds []string
@@ -661,27 +754,29 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 			}
 			args = append(args, len(tags))
 		}
-		rows, err := tx.QueryContext(ctx, "SELECT m.id, m.pinned, m.updated_at, m.accessed_at, m.access_count, "+rank+
+		rows, err := tx.QueryContext(ctx, "SELECT m.id, m.scope, m.scope_id, m.pinned, m.updated_at, m.accessed_at, m.access_count, m.forgetting_credit, "+rank+
 			" FROM "+from+" WHERE "+strings.Join(where, " AND "), args...)
 		if err != nil {
 			return err
 		}
 		defer rows.Close()
-		now := s.now()
 		var cands []searchCandidate
 		best := 0.0
 		for rows.Next() {
 			var c searchCandidate
-			var updated, accessed int64
-			if err := rows.Scan(&c.id, &c.state.pinned, &updated, &accessed, &c.state.accessCount, &c.bm25); err != nil {
+			var sc Scope
+			var updated, accessed, credit int64
+			if err := rows.Scan(&c.id, &sc.Kind, &sc.ID, &c.state.pinned, &updated, &accessed, &c.state.accessCount, &credit, &c.bm25); err != nil {
 				return err
 			}
 			c.state.updatedAt, c.state.accessedAt = fromMillis(updated), optionalTime(accessed)
-			c.faded = s.retention.faded(c.state, now)
+			c.state.credit = time.Duration(credit) * time.Millisecond
+			act := acts[sc]
+			c.faded = s.retention.fadedAt(c.state, act, now)
 			if c.faded && !q.IncludeFaded {
 				continue
 			}
-			c.retention = s.retention.score(c.state, now)
+			c.retention = s.retention.scoreAt(c.state, act, now)
 			best = min(best, c.bm25)
 			cands = append(cands, c)
 		}
@@ -721,7 +816,7 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 		memories = make([]Memory, 0, len(cands))
 		for _, c := range cands {
 			m := loaded[c.id]
-			s.retention.assess(&m, now)
+			s.retention.assessWith(&m, acts[m.Scope], now)
 			memories = append(memories, m)
 		}
 		if len(terms) == 0 {
@@ -731,7 +826,7 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 			if m.Faded {
 				continue
 			}
-			if _, err := s.countReference(ctx, tx, m.ID, sess.ID, now, false); err != nil {
+			if _, err := s.countReference(ctx, tx, m.ID, sess.ID, now, acts[m.Scope].discount, false); err != nil {
 				return err
 			}
 		}
@@ -762,21 +857,26 @@ func (s *Store) deleteForgottenMemories(ctx context.Context, tx *sql.Tx, now tim
 	}
 	cutoff := millis(now.Add(-least))
 	rows, err := tx.QueryContext(ctx, `
-		SELECT id, updated_at, accessed_at, access_count FROM memories
-		WHERE pinned = 0 AND max(updated_at, accessed_at) <= ?`, cutoff)
+		SELECT m.id, m.updated_at, m.accessed_at, m.access_count, m.forgetting_credit,
+			coalesce(a.last_access, 0), coalesce(a.discount, 0)
+		FROM memories m
+		LEFT JOIN memory_scope_activity a ON a.scope = m.scope AND a.scope_id = m.scope_id
+		WHERE m.pinned = 0 AND max(m.updated_at, m.accessed_at) <= ?`, cutoff)
 	if err != nil {
 		return 0, err
 	}
 	var due []int64
 	for rows.Next() {
-		var id, updated, accessed int64
+		var id, updated, accessed, credit, lastMs, discMs int64
 		var st retentionState
-		if err := rows.Scan(&id, &updated, &accessed, &st.accessCount); err != nil {
+		if err := rows.Scan(&id, &updated, &accessed, &st.accessCount, &credit, &lastMs, &discMs); err != nil {
 			rows.Close()
 			return 0, err
 		}
 		st.updatedAt, st.accessedAt = fromMillis(updated), optionalTime(accessed)
-		if p.expired(st, now) {
+		st.credit = time.Duration(credit) * time.Millisecond
+		act := scopeActivity{lastAccess: optionalTime(lastMs), discount: time.Duration(discMs) * time.Millisecond}
+		if p.expiredAt(st, act, now) {
 			due = append(due, id)
 		}
 	}
@@ -823,11 +923,20 @@ func (s *Store) ListMemories(ctx context.Context, kind string) ([]Memory, error)
 				loaded[id] = m
 			}
 		}
+		acts := map[Scope]scopeActivity{}
 		now := s.now()
 		out = make([]Memory, 0, len(ids))
 		for _, id := range ids {
 			m := loaded[id]
-			s.retention.assess(&m, now)
+			act, ok := acts[m.Scope]
+			if !ok {
+				act, err = loadScopeActivity(ctx, tx, m.Scope)
+				if err != nil {
+					return err
+				}
+				acts[m.Scope] = act
+			}
+			s.retention.assessWith(&m, act, now)
 			out = append(out, m)
 		}
 		return nil
@@ -839,15 +948,19 @@ func (s *Store) ListMemories(ctx context.Context, kind string) ([]Memory, error)
 // a reference.
 func (s *Store) MemoryByID(ctx context.Context, id int64) (Memory, error) {
 	var m Memory
+	var act scopeActivity
 	err := s.readTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		m, err = loadMemory(ctx, tx, id)
+		if m, err = loadMemory(ctx, tx, id); err != nil {
+			return err
+		}
+		act, err = loadScopeActivity(ctx, tx, m.Scope)
 		return err
 	})
 	if err != nil {
 		return Memory{}, err
 	}
-	s.retention.assess(&m, s.now())
+	s.retention.assessWith(&m, act, s.now())
 	return m, nil
 }
 

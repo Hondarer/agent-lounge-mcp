@@ -1,8 +1,8 @@
 package store
 
 // The sessions a session can talk to are chosen on two axes: the scope, which is the range of
-// sessions (the sessions of one user, or the sessions of one repository unit), and the target
-// within that range (every other session, through the room, or one session).
+// sessions (the sessions of one user, one repository unit, or one branch of a repository unit),
+// and the target within that range (every other session, through the room, or one session).
 //
 // A scope is a kind together with an identifier that picks one range of that kind. A session
 // uses only the scopes it belongs to: the identifier is always decided from the session itself
@@ -20,6 +20,9 @@ const (
 	// ScopeRepository is the range of the sessions that declare one repository unit, whatever
 	// user they belong to. Its identifier is the unit.
 	ScopeRepository = "repository"
+	// ScopeBranch is the range of the sessions that declare one repository unit and one branch,
+	// whatever user they belong to. Its identifier is <repository>:<branch>.
+	ScopeBranch = "branch"
 )
 
 // Scope is a range of sessions: its kind and identifier.
@@ -29,7 +32,7 @@ type Scope struct {
 }
 
 // scopeKinds lists the kinds in the order they are reported.
-var scopeKinds = []string{ScopeUser, ScopeRepository}
+var scopeKinds = []string{ScopeUser, ScopeRepository, ScopeBranch}
 
 // scopeRule defines one kind of scope.
 type scopeRule struct {
@@ -57,6 +60,19 @@ var scopeRules = map[string]scopeRule{
 		unavailable: ErrNoRepository,
 		members:     func(id string) (string, []any) { return "s.repository = ?", []any{id} },
 		room:        func(_ Session, id string) (any, string) { return nil, id },
+	},
+	ScopeBranch: {
+		id: func(s Session) (string, bool) {
+			if s.Repository == "" || s.Branch == "" {
+				return "", false
+			}
+			return s.Repository + ":" + s.Branch, true
+		},
+		unavailable: ErrNoBranch,
+		members: func(id string) (string, []any) {
+			return "s.repository <> '' AND s.branch <> '' AND (s.repository || ':' || s.branch) = ?", []any{id}
+		},
+		room: func(_ Session, id string) (any, string) { return nil, id },
 	},
 }
 

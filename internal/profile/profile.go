@@ -3,10 +3,11 @@
 //
 // The work is split between the agent and the server. The agent runs fixed commands on its own
 // machine (id -un, hostname, git remote get-url origin, git rev-parse --show-toplevel, pwd,
-// echo $WSL_DISTRO_NAME) and passes their output as is. The server turns the values into one
-// form with the rules in this package, because the rules are fixed and need no knowledge of the
-// agent's machine. The package only processes strings: it never calls the operating system or
-// reads the file system, since the server cannot check paths on the agent's machine.
+// git branch --show-current, echo $WSL_DISTRO_NAME) and passes their output as is. The server
+// turns the values into one form with the rules in this package, because the rules are fixed
+// and need no knowledge of the agent's machine. The package only processes strings: it never
+// calls the operating system or reads the file system, since the server cannot check paths on
+// the agent's machine.
 //
 // Limits of the rules: symbolic links are not resolved; on WSL only the default mount point of
 // Windows drives (/mnt/<drive letter>) is recognized; a hostless origin (a local path or a
@@ -20,11 +21,15 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
 // MaxNameLen is the largest length of os_user and machine, in characters.
 const MaxNameLen = 128
+
+// MaxBranchLen is the largest length of a branch name, in characters.
+const MaxBranchLen = 255
 
 // ErrMachineRequired is returned by Repository when a folder without an origin is declared
 // without a machine: the same path on another machine would otherwise share the unit.
@@ -321,4 +326,39 @@ func Repository(origin, machine, folder string) (string, error) {
 	default:
 		return machine + ":" + folder, nil
 	}
+}
+
+// Branch normalizes a Git branch name: the last non-empty line is taken, trimmed and lowercased.
+// An empty result means no branch (for example detached HEAD or a non-Git folder).
+//
+// Characters forbidden in Git branch names (:, whitespace, control characters, ~, ^, ?, *, [
+// and \) are rejected, as is "head" (the output of git rev-parse --abbrev-ref HEAD on detached
+// HEAD). Rejecting ':' is also what guarantees that <repository>:<branch> uniquely identifies
+// the pair even when the repository unit itself contains ':' (such as host-a:c:\work\app).
+func Branch(raw string) (string, error) {
+	s := strings.ToLower(lastLine(raw))
+	if s == "" {
+		return "", nil
+	}
+	if n := utf8.RuneCountInString(s); n > MaxBranchLen {
+		return "", fmt.Errorf("branch is too long: %d characters, at most %d (pass the output of git branch --show-current, or an empty string when not on a branch)", n, MaxBranchLen)
+	}
+	if strings.ContainsFunc(s, isInvalidBranchRune) {
+		return "", fmt.Errorf("branch %q contains characters Git does not allow in a branch name (pass the output of git branch --show-current, or an empty string when not on a branch)", s)
+	}
+	if s == "head" {
+		return "", fmt.Errorf("branch %q is not a branch name (pass the output of git branch --show-current, or an empty string when not on a branch)", s)
+	}
+	return s, nil
+}
+
+func isInvalidBranchRune(r rune) bool {
+	if unicode.IsSpace(r) || unicode.IsControl(r) {
+		return true
+	}
+	switch r {
+	case ':', '~', '^', '?', '*', '[', '\\':
+		return true
+	}
+	return false
 }
