@@ -131,8 +131,8 @@ func runSession(ctx context.Context, args []string, stdout, stderr io.Writer) in
 }
 
 // sessionList prints a header line and one line per session, in address order, separated by
-// tabs: address (user/name), agent, last use (RFC 3339 in UTC), number of unread messages and
-// repository. An empty value is printed as "-".
+// tabs: address (user/name), agent, last use (RFC 3339 in UTC), number of unread messages,
+// repository and branch. An empty value is printed as "-".
 func sessionList(ctx context.Context, st *store.Store, user string, stdout io.Writer) error {
 	sessions, err := st.AllSessions(ctx, user)
 	if err != nil {
@@ -144,9 +144,9 @@ func sessionList(ctx context.Context, st *store.Store, user string, stdout io.Wr
 		}
 		return s
 	}
-	fmt.Fprintln(stdout, "ADDRESS\tAGENT\tLAST_USED\tUNREAD\tREPOSITORY")
+	fmt.Fprintln(stdout, "ADDRESS\tAGENT\tLAST_USED\tUNREAD\tREPOSITORY\tBRANCH")
 	for _, s := range sessions {
-		fmt.Fprintf(stdout, "%s/%s\t%s\t%s\t%d\t%s\n", s.UserName, s.Name, dash(s.Agent), s.LastSeenAt.Format(time.RFC3339), s.Unread, dash(s.Repository))
+		fmt.Fprintf(stdout, "%s/%s\t%s\t%s\t%d\t%s\t%s\n", s.UserName, s.Name, dash(s.Agent), s.LastSeenAt.Format(time.RFC3339), s.Unread, dash(s.Repository), dash(s.Branch))
 	}
 	return nil
 }
@@ -211,7 +211,7 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) int
 }
 
 func memoryUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
+	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository|branch] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
 	fmt.Fprintln(w, "                                                     list the memories with their state")
 	fmt.Fprintln(w, "       agent-lounge-mcp memory remove <ID> --yes [--db FILE]  delete the memory")
 	fmt.Fprintln(w, "The commands open the database file directly and work while a server uses it.")
@@ -243,7 +243,7 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	var scope *string
 	var yes *bool
 	if cmd == "list" {
-		scope = flags.String("scope", "", "list only the memories of this scope kind: user or repository")
+		scope = flags.String("scope", "", "list only the memories of this scope kind: user, repository or branch")
 		addMemoryRetentionFlags(flags, &cfg)
 	} else {
 		yes = flags.Bool("yes", false, "remove without asking: required")
@@ -263,7 +263,7 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			memoryUsage(stderr)
 			return exitUsage
 		case *scope != "" && !store.ValidScope(*scope):
-			fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --scope %q: use user or repository\n", *scope)
+			fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --scope %q: use user, repository or branch\n", *scope)
 			return exitUsage
 		}
 		if err := config.ValidateFadeThreshold(cfg.MemoryFadeThreshold); err != nil {

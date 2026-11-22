@@ -18,7 +18,8 @@ import (
 
 // Memories are short-lived pieces of knowledge that sessions share within a scope, as messages
 // are shared: the memories of scope user are shared by the sessions of one user, those of
-// scope repository by the sessions that declare one repository unit, whatever their user.
+// scope repository by the sessions that declare one repository unit, and those of scope branch
+// by the sessions that declare one repository unit and one branch, whatever their user.
 // Every session that can use a scope can read, update, pin and delete all of its memories.
 // A memory of a scope the session cannot use is reported as missing, so that a session does
 // not learn whether it exists.

@@ -38,8 +38,8 @@ type Limits struct {
 	MaxSessionsPerUser int
 	// MaxMemoryBytes is the largest memory body, in bytes of UTF-8.
 	MaxMemoryBytes int
-	// MaxMemoriesPerScope is the most memories one scope (one user, one repository unit) can
-	// hold, faded and pinned ones included. Creating a memory fails beyond it.
+	// MaxMemoriesPerScope is the most memories one scope (one user, one repository unit, or one
+	// branch) can hold, faded and pinned ones included. Creating a memory fails beyond it.
 	MaxMemoriesPerScope int
 }
 
@@ -76,9 +76,12 @@ var (
 	ErrSendToSelf    = errors.New("the destination is the sending session")
 	// ErrInvalidScope is returned for a scope that is not one of ScopeKinds.
 	ErrInvalidScope = errors.New("invalid scope")
-	// ErrNoRepository is returned for a message of scope repository from a session that
-	// declared no repository.
+	// ErrNoRepository is returned for a message or memory of scope repository from a session
+	// that declared no repository.
 	ErrNoRepository = errors.New("the sending session has no repository")
+	// ErrNoBranch is returned for a message or memory of scope branch from a session that
+	// declared no repository or no branch.
+	ErrNoBranch = errors.New("the sending session has no branch")
 	// ErrBodyTooLarge is returned for a body over Limits.MaxBodyBytes.
 	ErrBodyTooLarge = errors.New("the message body is too large")
 	// ErrInboxFull is returned for a message to a session that holds Limits.MaxUnread unread
@@ -112,6 +115,7 @@ type Profile struct {
 	Origin     string
 	Folder     string
 	Repository string
+	Branch     string
 }
 
 // Location is the place a session works in: the normalized origin and folder.
@@ -172,8 +176,12 @@ type JoinParams struct {
 	Agent   *string
 	OSUser  *string
 	Machine *string
-	// Location replaces the recorded origin and folder together when not nil.
+	// Location replaces the recorded origin and folder together when not nil. When Location is
+	// not nil and Branch is nil, the recorded branch is cleared so moving to another repository
+	// never carries the previous repository's branch.
 	Location *Location
+	// Branch replaces the recorded branch when not nil ("" clears it).
+	Branch *string
 }
 
 func millis(t time.Time) int64      { return t.UnixMilli() }
@@ -181,7 +189,7 @@ func fromMillis(ms int64) time.Time { return time.UnixMilli(ms).UTC() }
 
 // sessionColumns selects a Session from sessions s joined with users u; see scanSession.
 const sessionColumns = `s.id, s.user_id, u.name, s.name, s.agent, s.os_user, s.machine, s.origin, s.folder,
-	s.repository, s.last_seen_at`
+	s.repository, s.branch, s.last_seen_at`
 
 // sessionFrom is the FROM clause that goes with sessionColumns.
 const sessionFrom = ` FROM sessions s JOIN users u ON u.id = s.user_id `
@@ -192,7 +200,7 @@ func scanSession(r rowScanner) (Session, error) {
 	var sess Session
 	var seen int64
 	err := r.Scan(&sess.ID, &sess.UserID, &sess.UserName, &sess.Name, &sess.Agent, &sess.OSUser, &sess.Machine,
-		&sess.Origin, &sess.Folder, &sess.Repository, &seen)
+		&sess.Origin, &sess.Folder, &sess.Repository, &sess.Branch, &seen)
 	sess.LastSeenAt = fromMillis(seen)
 	return sess, err
 }
@@ -254,8 +262,8 @@ func (s *Store) JoinSession(ctx context.Context, p JoinParams) (sess Session, re
 		}
 		sess = Session{UserID: p.UserID, UserName: userName, Name: name, LastSeenAt: now.UTC().Truncate(time.Millisecond)}
 		err = tx.QueryRowContext(ctx,
-			"SELECT id, agent, os_user, machine, origin, folder FROM sessions WHERE user_id = ? AND name = ?", p.UserID, name).
-			Scan(&sess.ID, &sess.Agent, &sess.OSUser, &sess.Machine, &sess.Origin, &sess.Folder)
+			"SELECT id, agent, os_user, machine, origin, folder, branch FROM sessions WHERE user_id = ? AND name = ?", p.UserID, name).
+			Scan(&sess.ID, &sess.Agent, &sess.OSUser, &sess.Machine, &sess.Origin, &sess.Folder, &sess.Branch)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 		case err != nil:
@@ -268,15 +276,19 @@ func (s *Store) JoinSession(ctx context.Context, p JoinParams) (sess Session, re
 		setIf(&sess.Machine, p.Machine)
 		if p.Location != nil {
 			sess.Origin, sess.Folder = p.Location.Origin, p.Location.Folder
+			if p.Branch == nil {
+				sess.Branch = ""
+			}
 		}
+		setIf(&sess.Branch, p.Branch)
 		if sess.Repository, err = profile.Repository(sess.Origin, sess.Machine, sess.Folder); err != nil {
 			return err
 		}
 		if resumed {
 			_, err = tx.ExecContext(ctx, `
-				UPDATE sessions SET agent = ?, os_user = ?, machine = ?, origin = ?, folder = ?, repository = ?, last_seen_at = ?
+				UPDATE sessions SET agent = ?, os_user = ?, machine = ?, origin = ?, folder = ?, repository = ?, branch = ?, last_seen_at = ?
 				WHERE id = ?`,
-				sess.Agent, sess.OSUser, sess.Machine, sess.Origin, sess.Folder, sess.Repository, millis(now), sess.ID)
+				sess.Agent, sess.OSUser, sess.Machine, sess.Origin, sess.Folder, sess.Repository, sess.Branch, millis(now), sess.ID)
 			return err
 		}
 		var count int
@@ -287,9 +299,9 @@ func (s *Store) JoinSession(ctx context.Context, p JoinParams) (sess Session, re
 			return ErrTooManySessions
 		}
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO sessions (user_id, name, agent, os_user, machine, origin, folder, repository, created_at, last_seen_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			p.UserID, name, sess.Agent, sess.OSUser, sess.Machine, sess.Origin, sess.Folder, sess.Repository, millis(now), millis(now))
+			INSERT INTO sessions (user_id, name, agent, os_user, machine, origin, folder, repository, branch, created_at, last_seen_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			p.UserID, name, sess.Agent, sess.OSUser, sess.Machine, sess.Origin, sess.Folder, sess.Repository, sess.Branch, millis(now), millis(now))
 		if err != nil {
 			return err
 		}

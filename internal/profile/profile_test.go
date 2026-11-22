@@ -41,6 +41,49 @@ func TestMachine(t *testing.T) {
 	}
 }
 
+func TestBranch(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"main", "main"},
+		{"  Feature/Foo-Bar  \r\n", "feature/foo-bar"},
+		{"warning line\n  Release/1.0 \n\n", "release/1.0"},
+		{"", ""},
+		{"   \r\n\t ", ""},
+		{"feature/日本語", "feature/日本語"},
+		{"a@b", "a@b"},
+		{"a#b", "a#b"},
+		{strings.Repeat("a", MaxBranchLen), strings.Repeat("a", MaxBranchLen)},
+	} {
+		got, err := Branch(tc.in)
+		if err != nil || got != tc.want {
+			t.Errorf("Branch(%q) = %q, %v; want %q", tc.in, got, err, tc.want)
+		}
+	}
+	for _, in := range []string{
+		strings.Repeat("a", MaxBranchLen+1),
+		"a:b",
+		"a b",
+		"a\tb",
+		"a\x00b",
+		"a~1",
+		"a^2",
+		"a?b",
+		"a*b",
+		"a[b",
+		`a\b`,
+		"* main",
+		"HEAD",
+		"head",
+		"  HeAd \n",
+	} {
+		got, err := Branch(in)
+		if err == nil {
+			t.Errorf("Branch(%q) = %q, want an error", in, got)
+		} else if !strings.Contains(err.Error(), "git branch --show-current") {
+			t.Errorf("Branch(%q) error %q does not mention git branch --show-current", in, err.Error())
+		}
+	}
+}
+
 func TestOrigin(t *testing.T) {
 	for _, tc := range []struct{ in, want string }{
 		// The examples of the specification.

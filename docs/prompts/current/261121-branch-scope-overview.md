@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-22 21:55:00 JST
+最終更新日時: 2026-11-22 22:09:00 JST
 最終更新エージェント: agy / セッション ID: cf8c6742-ed01-40ae-981f-5fef110f9399
 稼働 OS: Linux (WSL)
 上流文書: `../past/261120-expiry-sandbox-verification-backlog.md` (転記元の残課題一覧)。移動または削除されている場合があります。
@@ -21,7 +21,7 @@
 
 検討用 Markdown の版: 2
 
-状態: 作業実施中 (第 2 ゲート通過済み)
+状態: 成果物の承認待ち (第 3 ゲート)
 
 ## 作業 WBS と進捗管理
 
@@ -46,23 +46,23 @@
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート: 作業着手の合意)。2026-11-22 21:54 JST に承認受領
     - ✅ 3.4. セッション用の一時フォルダーの複製での試作 (リポジトリは変えない)。Grok 4.7 (high) による試作 ([Q-016](261121-branch-scope-discussion.md#q-016-モデルごとの作業の割り当て) の「10:50 JST まで Grok を優先」に合わせ、承認を待つ間に行う)。コードとテストの試作は完了し、このセッションが点検した (`go vet`、`go test -race` が通る。案内文は 18,968 バイト。版 6 と版 7 のテーブルと索引の違いは、意図した制約と `sessions.branch` だけ)。文書の試作は、Grok の利用量が 10:46 に尽きて、変更のないまま終了した。結果をリポジトリに取り込むのは、第 2 ゲートの承認の後
-- 🔄 4. 承認された最終仕様に従った作業の実施
-    - 🔄 4.1. 作業ブランチ `feature/branch-scope` の作成と、作業前の記録の最初のコミット ([Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ)) ← **CURRENT**
-    - ⏸️ 4.2. スキーマの版 7 (`internal/store/schema/0007_branch.sql`)、`internal/store/` (スコープの規則、セッションのブランチ、`ErrNoBranch`、セッションの一覧)、`internal/profile/` (`Branch`) とテスト
-    - ⏸️ 4.3. `internal/tools/` (`lounge_join` の引数と出力と `hint`、`lounge_who` の出力、`chat.go`、`delivery.go`、`memory.go` の `scope` の説明文とエラーの文、`help.go` の本文と上限) とテスト
-    - ⏸️ 4.4. 管理コマンドと書き出し (`cmd/agent-lounge-mcp/admin.go`、`internal/export/`) とテスト
-    - ⏸️ 4.5. 機械的検証 (`go vet ./...`、`go test -race ./...`) と、実装のレビュー
-    - ⏸️ 4.6. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/agent-lounge-mcp-proposal.md`。該当する記述があれば `README.md`、`docs/README.md`、`docs/ja/interactive-verification.md`、`.agents/skills/` の `SKILL.md`) の更新
-    - ⏸️ 4.7. 正本ドキュメントおよびコード コメントへの永続的知見の反映 (最終仕様の 8 章)
-    - ⏸️ 4.8. 実機の確認 (WSL の側。最終仕様の 5.2 の a から c)
-    - ⏸️ 4.9. 実機の確認 (Windows の側のセッションに委譲。最終仕様の 5.3 の d から f)
-    - ⏸️ 4.10. 確認の記録 (`261121-branch-scope-validation.md`) の作成と、文書の「検証済みの範囲」への反映
-    - ⏸️ 4.11. 受入条件への適合確認 (全作業の完了確認)
-    - ⏸️ 4.12. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
-    - ⏸️ 4.13. 残課題一覧の再構築と整理
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)
+- ✅ 4. 承認された最終仕様に従った作業の実施
+    - ✅ 4.1. 作業ブランチ `feature/branch-scope` の作成と、作業前の記録の最初のコミット ([Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ))
+    - ✅ 4.2. スキーマの版 7 (`internal/store/schema/0007_branch.sql`)、`internal/store/` (スコープの規則、セッションのブランチ、`ErrNoBranch`、セッションの一覧)、`internal/profile/` (`Branch`) とテスト
+    - ✅ 4.3. `internal/tools/` (`lounge_join` の引数と出力と `hint`、`lounge_who` の出力、`chat.go`、`delivery.go`、`memory.go` の `scope` の説明文とエラーの文、`help.go` の本文と上限) とテスト
+    - ✅ 4.4. 管理コマンドと書き出し (`cmd/agent-lounge-mcp/admin.go`、`internal/export/`) とテスト
+    - ✅ 4.5. 機械的検証 (`go vet ./...`、`go test -race ./...`) と、実装のレビュー
+    - ✅ 4.6. 文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/agent-lounge-mcp-proposal.md`。該当する記述があれば `README.md`、`docs/README.md`、`docs/ja/interactive-verification.md`、`.agents/skills/` の `SKILL.md`) の更新
+    - ✅ 4.7. 正本ドキュメントおよびコード コメントへの永続的知見の反映 (最終仕様の 8 章)
+    - ✅ 4.8. 実機の確認 (WSL の側。必要最小限として実行ファイルでの `probe.sh`・`chat-probe.sh`・MCP 直接呼び出し・管理コマンドを確認。5 CLI 非対話確認は `BL-044` へ記録)
+    - ✅ 4.9. 実機の確認 (Windows の側。LADR-007 の更新方針に従い未実施分として `BL-044` へ記録)
+    - ✅ 4.10. 確認の記録 (`261121-branch-scope-validation.md`) の作成と、文書の「検証済みの範囲」への反映
+    - ✅ 4.11. 受入条件への適合確認 (全作業の完了確認)
+    - ✅ 4.12. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
+    - ✅ 4.13. 残課題一覧の再構築と整理
+- 🔄 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)。停止理由: 利用者の承認待ち ← **CURRENT**
     - ⏸️ 5.3. 承認の後の、`main` へのマージ、push、作業ブランチの削除 ([Q-015](261121-branch-scope-discussion.md#q-015-作業ブランチとマージ))
 
 ## 対象と参照資料
@@ -145,7 +145,17 @@
 | 2026-11-22 10:33 | 一時フォルダーでの試作 (コードとテスト) の完了 | Grok の試作が終わり、このセッションが複製の中で点検。`go vet ./...` と `go test -race ./...` が通り、案内文は 18,968 バイト (上限 19,000)。取り込みの前に直す点: 案内文の「After a merge」の文が 2 か所にある。10:34 から、同じ複製で文書の試作を Grok に指示 (10:50 までで打ち切り) |
 | 2026-11-22 10:46 | Grok の利用量の上限 | 文書の試作の途中で、Grok が「usage balance exhausted」(402) で終了。文書の変更はなし。以後の実装の担当は、agy (Sonnet 5.5)。承認の前の試作は、ここまでとする |
 | 2026-11-22 21:54 | 第 2 ゲートの通過と引き継ぎ | agy セッションへ引き継ぎ、最終仕様の承認を受領。本セッションが推進を担当し、実機確認は必要最小限として未実施分は残課題一覧 (`261121-branch-scope-backlog.md`) へ回す方針を確定 ([LADR-007](261121-branch-scope-lightadr.md#ladr-007-確認の範囲)、[LADR-009](261121-branch-scope-lightadr.md#ladr-009-作業の割り当て)) |
+| 2026-11-22 22:09 | 実装・文書更新・必要最小限の実機確認の完了、第 3 ゲート提示 | `feature/branch-scope` にてコード・スキーマ版 7・テスト・文書を更新。`go vet ./...`、`go test -race ./...` (案内文 18,864 バイト)、実行ファイルでの実機確認を通過。未実施の 5 CLI / Windows 実機確認を `BL-044` として残課題一覧へ整理し、成果物の承認を依頼 |
 
 ## 反映と検証の記録
 
-未着手。作業後の対応箇所、検証結果、未完了項目を記録します。
+- **対応箇所**:
+  - スキーマ・ストア・プロフィール: `internal/store/schema/0007_branch.sql`、`internal/store/scope.go`、`chat.go`、`admin.go`、`memory.go`、`internal/profile/profile.go`、および各テスト (`branch_test.go`、`profile_test.go` ほか)
+  - MCP ツール・案内文: `internal/tools/lounge.go`、`chat.go`、`delivery.go`、`memory.go`、`help.go`、`catalog_test.go`、`internal/server/branch_test.go`、`repository_test.go`
+  - 管理コマンド・書き出し: `cmd/agent-lounge-mcp/admin.go`、`admin_test.go`、`internal/export/export_test.go`
+  - 正本ドキュメント・スキル: `docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/agent-lounge-mcp-proposal.md`、`README.md`、`.agents/skills/agent-lounge-connect/SKILL.md`
+  - 確認の記録・残課題一覧: `docs/prompts/current/261121-branch-scope-validation.md`、`261121-branch-scope-backlog.md`
+- **検証結果**:
+  - `go vet ./...`、`go test -race ./...`: 全パッケージ PASS (`lounge_help` 本文 18,864 バイト / 上限 19,000 バイト)
+  - 実機確認 (Linux x86_64 WSL 2、`dist/agent-lounge-mcp`): `probe.sh`、`chat-probe.sh`、ブランチ申告 (`git branch --show-current`)、ブランチのルーム分離、ブランチメモリ、`git switch` 後の呼び直し、`session list`・`memory list --scope branch`・`export` を確認済み (`261121-branch-scope-validation.md`)
+- **未完了項目**: 5 つの CLI の非対話実機確認 (WSL) および Windows 側の実機確認は、第 2 ゲート承認時の方針に従い `261121-branch-scope-backlog.md` の `BL-044` へ移管し、文書の「検証済みの範囲」に未検証と明記済み。

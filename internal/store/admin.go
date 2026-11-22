@@ -51,7 +51,7 @@ func (s *Store) AllSessions(ctx context.Context, user string) ([]SessionSummary,
 			var sum SessionSummary
 			var seen int64
 			if err := rows.Scan(&sum.ID, &sum.UserID, &sum.UserName, &sum.Name, &sum.Agent, &sum.OSUser, &sum.Machine,
-				&sum.Origin, &sum.Folder, &sum.Repository, &seen, &sum.Unread); err != nil {
+				&sum.Origin, &sum.Folder, &sum.Repository, &sum.Branch, &seen, &sum.Unread); err != nil {
 				return err
 			}
 			sum.LastSeenAt = fromMillis(seen)

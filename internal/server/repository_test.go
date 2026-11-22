@@ -341,8 +341,8 @@ func TestHelpDescribesProfileAndRepository(t *testing.T) {
 		}
 	}
 	_, snippet, _ := strings.Cut(guide, "## Snippet for instruction files")
-	if !strings.Contains(snippet, "Call it again with the same name when the repository or folder you work in changes") {
-		t.Errorf("snippet does not tell to join again when the folder changes:\n%s", snippet)
+	if !strings.Contains(snippet, "Call it again with the same name when the repository, folder or branch you work in changes") {
+		t.Errorf("snippet does not tell to join again when the folder or branch changes:\n%s", snippet)
 	}
 	if !strings.Contains(cs.InitializeResult().Instructions, "profile") {
 		t.Error("instructions do not mention the profile")
@@ -373,7 +373,8 @@ func mapsEqual(a, b map[string]bool) bool {
 	return true
 }
 
-// A Linux path as folder gets the hint to check for WSL; a converted or Windows path does not.
+// A Linux path as folder gets the hint to check for WSL; a location without branch gets the
+// hint to declare branch when the session has a repository.
 func TestJoinHint(t *testing.T) {
 	s, _ := newServer(t)
 	cs := testutil.Connect(t, s.MCP, nil)
@@ -381,13 +382,18 @@ func TestJoinHint(t *testing.T) {
 		Hint string `json:"hint"`
 	}
 	j := testutil.Call[hinted](t, cs, "lounge_join", map[string]any{"name": "a", "machine": "m", "folder": "/home/u/app"})
-	if !strings.Contains(j.Hint, "WSL_DISTRO_NAME") {
-		t.Errorf("Linux path: hint %q", j.Hint)
+	if !strings.Contains(j.Hint, "WSL_DISTRO_NAME") || !strings.Contains(j.Hint, "git branch --show-current") {
+		t.Errorf("Linux path without branch: hint %q", j.Hint)
+	}
+	j = testutil.Call[hinted](t, cs, "lounge_join", map[string]any{"name": "a", "machine": "m", "folder": `C:\work`})
+	if strings.Contains(j.Hint, "WSL_DISTRO_NAME") || !strings.Contains(j.Hint, "git branch --show-current") {
+		t.Errorf("Windows path without branch: hint %q", j.Hint)
 	}
 	for _, args := range []map[string]any{
-		{"name": "a", "machine": "m", "folder": "/home/u/app", "wsl_distro": "Ubuntu"},
-		{"name": "a", "machine": "m", "folder": `C:\work`},
+		{"name": "a", "machine": "m", "folder": "/home/u/app", "wsl_distro": "Ubuntu", "branch": "main"},
+		{"name": "a", "machine": "m", "folder": `C:\work`, "branch": ""},
 		{"name": "a", "origin": "", "folder": ""},
+		{"name": "a"},
 	} {
 		if j := testutil.Call[hinted](t, cs, "lounge_join", args); j.Hint != "" {
 			t.Errorf("%v: hint %q", args, j.Hint)

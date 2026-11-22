@@ -108,3 +108,19 @@ func TestGuideSize(t *testing.T) {
 		t.Logf("%6d %s", len(sec), title)
 	}
 }
+
+func TestGuideBranch(t *testing.T) {
+	g := guide(config.Default())
+	for _, want := range []string{
+		"git branch --show-current",
+		"scope branch",
+		"<repository>:<branch>",
+		"git switch",
+		"merged",
+		"ignoring letter case",
+	} {
+		if !strings.Contains(g, want) {
+			t.Errorf("guide does not mention %q", want)
+		}
+	}
+}

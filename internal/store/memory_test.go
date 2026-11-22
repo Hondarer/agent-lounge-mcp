@@ -648,7 +648,7 @@ func TestMigrateVersion4(t *testing.T) {
 	}
 	dump := func() string {
 		return dumpRows(t, s, []string{
-			"SELECT id, name, token_hash, created_at FROM users ORDER BY id", "SELECT * FROM sessions ORDER BY id", "SELECT * FROM rooms ORDER BY id",
+			"SELECT id, name, token_hash, created_at FROM users ORDER BY id", "SELECT id, user_id, name, agent, created_at, last_seen_at, os_user, machine, origin, folder, repository FROM sessions ORDER BY id", "SELECT * FROM rooms ORDER BY id",
 			"SELECT * FROM messages ORDER BY id", "SELECT * FROM deliveries ORDER BY message_id",
 		})
 	}

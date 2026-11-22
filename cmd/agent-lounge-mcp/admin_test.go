@@ -78,12 +78,12 @@ func TestSessionCommands(t *testing.T) {
 
 	code, stdout, _ := session("list", "--db", db)
 	lines := strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")
-	if code != 0 || len(lines) != 3 || lines[0] != "ADDRESS\tAGENT\tLAST_USED\tUNREAD\tREPOSITORY" ||
-		!strings.HasPrefix(lines[1], "local/alice\tclaude\t") || !strings.HasSuffix(lines[1], "\t1\t-") ||
-		!strings.HasPrefix(lines[2], "local/bob\t-\t") || !strings.HasSuffix(lines[2], "\t1\t-") {
+	if code != 0 || len(lines) != 3 || lines[0] != "ADDRESS\tAGENT\tLAST_USED\tUNREAD\tREPOSITORY\tBRANCH" ||
+		!strings.HasPrefix(lines[1], "local/alice\tclaude\t") || !strings.HasSuffix(lines[1], "\t1\t-\t-") ||
+		!strings.HasPrefix(lines[2], "local/bob\t-\t") || !strings.HasSuffix(lines[2], "\t1\t-\t-") {
 		t.Errorf("list: %d %q", code, stdout)
 	}
-	if code, stdout, _ := session("list", "--user", "zed", "--db", db); code != 0 || stdout != "ADDRESS\tAGENT\tLAST_USED\tUNREAD\tREPOSITORY\n" {
+	if code, stdout, _ := session("list", "--user", "zed", "--db", db); code != 0 || stdout != "ADDRESS\tAGENT\tLAST_USED\tUNREAD\tREPOSITORY\tBRANCH\n" {
 		t.Errorf("list --user zed: %d %q", code, stdout)
 	}
 
@@ -325,6 +325,9 @@ func TestMemoryCommands(t *testing.T) {
 	if code, stdout, _ := memory("list", "--scope", "user", "--memory-half-life", "30d", "--db", db); code != 0 ||
 		!(strings.Contains(stdout, "\tuser\tlocal\tactive\t0.49\t") || strings.Contains(stdout, "\tuser\tlocal\tactive\t0.50\t")) || strings.Contains(stdout, "repository") {
 		t.Errorf("list --scope user --memory-half-life 30d: %d %q", code, stdout)
+	}
+	if code, stdout, _ := memory("list", "--scope", "branch", "--db", db); code != 0 || stdout != "ID\tSCOPE\tSCOPE_ID\tSTATE\tRETENTION\tUPDATED\tCREATED_BY\tTITLE\n" {
+		t.Errorf("list --scope branch: %d %q", code, stdout)
 	}
 
 	for _, tc := range []struct {

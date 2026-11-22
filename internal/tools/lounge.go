@@ -37,9 +37,9 @@ func registerLounge(r *Registry, d *Deps) {
 			"Other sessions address messages to this name. Names are unique within your user, which the token your client sends decides (the result returns it as user). " +
 			"Joining with a name used before continues that session of your user and its unread messages " +
 			"(if another connection is using the name, it loses the session). After a reconnect, join again with the same name. " +
-			"Pass your profile (os_user, machine, origin, folder, wsl_distro) as the output of the commands that lounge_help lists; " +
+			"Pass your profile (os_user, machine, origin, folder, wsl_distro, branch) as the output of the commands that lounge_help lists; " +
 			"the server normalizes the values, decides your repository, and returns them. " +
-			"When the repository or folder you work in changes, call it again with the same name. " +
+			"When the repository, folder or branch you work in changes, call it again with the same name. " +
 			"After joining, call chat_inbox when a result reports unread messages, after each step of your task that changes files, " +
 			"and before your final reply to the user: nothing notifies you of new messages. " +
 			"If you do not know how to use the lounge, call lounge_help first.",
@@ -50,7 +50,7 @@ func registerLounge(r *Registry, d *Deps) {
 		Name:  toolWho,
 		Title: "List sessions and rooms",
 		Description: "List the sessions you can reach: the sessions of your user, and the sessions of other users that declared your repository. " +
-			"For each: name, user, address, agent, OS user, machine, repository, the scopes you share with it (scope and id), whether connected now, last activity. " +
+			"For each: name, user, address, agent, OS user, machine, repository, branch, the scopes you share with it (scope and id), whether connected now, last activity. " +
 			"Also returns your scopes and the rooms. To send to a session, pass its address as the 'to' of chat_send with one of its scopes.",
 		Annotations: readOnly(),
 	}, d.loungeWho)
@@ -67,6 +67,7 @@ type JoinInput struct {
 	Origin    *string `json:"origin,omitempty" jsonschema:"URL of the Git origin of your working folder, as printed by git remote get-url origin, without credentials; empty when there is none. origin and folder are replaced together: omit origin, folder and wsl_distro to keep the recorded ones"`
 	Folder    *string `json:"folder,omitempty" jsonschema:"top of the Git working tree (git rev-parse --show-toplevel), or the working folder outside Git (pwd). origin and folder are replaced together"`
 	WSLDistro *string `json:"wsl_distro,omitempty" jsonschema:"on WSL (echo $WSL_DISTRO_NAME prints a name), that distribution name; omit elsewhere. Used only to convert folder, not stored"`
+	Branch    *string `json:"branch,omitempty" jsonschema:"Git branch name, as printed by git branch --show-current (empty when not on a branch or outside Git). Passing origin, folder or wsl_distro without branch clears the recorded branch; passing branch alone replaces only branch"`
 }
 
 // JoinOutput is the result of the lounge_join tool.
@@ -82,6 +83,7 @@ type JoinOutput struct {
 	Origin     string `json:"origin" jsonschema:"recorded origin, normalized to host/path (empty for none)"`
 	Folder     string `json:"folder" jsonschema:"recorded folder, normalized (empty for none)"`
 	Repository string `json:"repository" jsonschema:"your repository, decided by the server: the origin, else machine:folder, else empty (the repository space is not available)"`
+	Branch     string `json:"branch" jsonschema:"recorded Git branch name, normalized lowercase (empty for none)"`
 	// Hint is set when the declared values suggest a step of the usage guide was skipped.
 	Hint string `json:"hint,omitempty" jsonschema:"what to check about the declared profile, when something may be missing"`
 	unreadField
@@ -92,6 +94,11 @@ type JoinOutput struct {
 // origin and folder are one set: when origin, folder or wsl_distro is given, the location is
 // replaced, and a missing origin or folder counts as empty. When all three are omitted, the
 // recorded location is kept.
+//
+// When a call replaces the location and omits branch, store.JoinSession clears the recorded
+// branch: moving to another repository must not carry over the previous repository's branch
+// name and place the session in a same-named branch of the new repository. Passing branch
+// without location replaces only branch.
 func joinParams(userID int64, in JoinInput) (store.JoinParams, error) {
 	p := store.JoinParams{UserID: userID, Name: in.Name, Agent: in.Agent}
 	if in.Name != "" && !sessionNameRE.MatchString(in.Name) {
@@ -105,6 +112,9 @@ func joinParams(userID int64, in JoinInput) (store.JoinParams, error) {
 		return p, err
 	}
 	if p.Machine, err = normalized(in.Machine, profile.Machine); err != nil {
+		return p, err
+	}
+	if p.Branch, err = normalized(in.Branch, profile.Branch); err != nil {
 		return p, err
 	}
 	if in.Origin == nil && in.Folder == nil && in.WSLDistro == nil {
@@ -143,16 +153,24 @@ func joinParams(userID int64, in JoinInput) (store.JoinParams, error) {
 // wslHint asks an agent that declared a Linux path to check that it is not on WSL. The server
 // cannot tell plain Linux from WSL, and agents on WSL tend to take the plain Linux commands.
 const wslHint = "folder is a Linux or macOS path. If echo $WSL_DISTRO_NAME prints a name, you are on WSL: " +
-	"call " + toolJoin + " again with the same name, wsl_distro (that name), folder, origin, " +
+	"call " + toolJoin + " again with the same name, wsl_distro (that name), folder, origin, branch, " +
 	"os_user (cmd.exe /c \"echo %USERNAME%\") and machine (cmd.exe /c hostname), " +
 	"so that Windows and WSL sessions on one machine get the same values. If it prints nothing, ignore this hint."
 
+// branchHint asks an agent that declared a location without branch to pass git branch --show-current.
+const branchHint = "branch was not passed. If you are in a Git working tree, run git branch --show-current and call " +
+	toolJoin + " again with the same name and branch (that output, or an empty string when not on a branch) to use the branch scope."
+
 // joinHint returns the hint for the recorded profile, or "".
-func joinHint(sess store.Session) string {
+func joinHint(sess store.Session, locationGiven, branchGiven bool) string {
+	var hints []string
 	if strings.HasPrefix(sess.Folder, "/") {
-		return wslHint
+		hints = append(hints, wslHint)
 	}
-	return ""
+	if locationGiven && !branchGiven && sess.Repository != "" {
+		hints = append(hints, branchHint)
+	}
+	return strings.Join(hints, " ")
 }
 
 // normalized applies normalize to an optional value; nil stays nil (keep the recorded value).
@@ -191,8 +209,8 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	d.notify.wake(d.presence.bind(req.Session, sess)...)
 	return nil, JoinOutput{
 		Name: sess.Name, Agent: sess.Agent, User: sess.UserName, Resumed: resumed, Rooms: rooms,
-		OSUser: sess.OSUser, Machine: sess.Machine, Origin: sess.Origin, Folder: sess.Folder, Repository: sess.Repository,
-		Hint: joinHint(sess),
+		OSUser: sess.OSUser, Machine: sess.Machine, Origin: sess.Origin, Folder: sess.Folder, Repository: sess.Repository, Branch: sess.Branch,
+		Hint: joinHint(sess, p.Location != nil, in.Branch != nil),
 	}, nil
 }
 
@@ -201,8 +219,8 @@ type WhoInput struct{}
 
 // ScopeOutput is a scope in tool output: its kind and identifier.
 type ScopeOutput struct {
-	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user) or repository (the sessions of one repository, whatever their user)"`
-	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository"`
+	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user), repository (the sessions of one repository, whatever their user) or branch (the sessions of one repository and branch, whatever their user)"`
+	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository, repository:branch for branch"`
 }
 
 func scopesOutput(scopes []store.Scope) []ScopeOutput {
@@ -222,6 +240,7 @@ type WhoSession struct {
 	OSUser     string `json:"os_user" jsonschema:"OS user name the session declared"`
 	Machine    string `json:"machine" jsonschema:"machine name the session declared"`
 	Repository string `json:"repository" jsonschema:"repository of the session (empty for none)"`
+	Branch     string `json:"branch" jsonschema:"branch of the session (empty for none)"`
 	// Scopes are those in which the caller reaches the session.
 	Scopes     []ScopeOutput `json:"scopes" jsonschema:"scopes you share with the session, each with its id: pass one as the scope of chat_send to reach it"`
 	Connected  bool          `json:"connected" jsonschema:"true when a connection is joined as this session now"`
@@ -232,6 +251,7 @@ type WhoSession struct {
 // WhoOutput is the result of the lounge_who tool.
 type WhoOutput struct {
 	Repository string        `json:"repository" jsonschema:"your repository (empty for none)"`
+	Branch     string        `json:"branch" jsonschema:"your branch (empty for none)"`
 	Scopes     []ScopeOutput `json:"scopes" jsonschema:"scopes you can use, each with its id"`
 	Sessions   []WhoSession  `json:"sessions" jsonschema:"sessions you can reach, most recently active first"`
 	Truncated  bool          `json:"truncated" jsonschema:"true when more sessions exist than are listed"`
@@ -253,7 +273,7 @@ func (d *Deps) loungeWho(ctx context.Context, req *mcp.CallToolRequest, _ WhoInp
 		return nil, WhoOutput{}, err
 	}
 	out := WhoOutput{
-		Repository: viewer.Repository, Scopes: scopesOutput(store.ScopesOf(viewer)),
+		Repository: viewer.Repository, Branch: viewer.Branch, Scopes: scopesOutput(store.ScopesOf(viewer)),
 		Sessions: make([]WhoSession, 0, len(sessions)), Truncated: truncated, Rooms: rooms,
 	}
 	for _, s := range sessions {
@@ -265,6 +285,7 @@ func (d *Deps) loungeWho(ctx context.Context, req *mcp.CallToolRequest, _ WhoInp
 			OSUser:     s.OSUser,
 			Machine:    s.Machine,
 			Repository: s.Repository,
+			Branch:     s.Branch,
 			Scopes:     scopesOutput(store.SharedScopes(viewer, s)),
 			Connected:  d.presence.connected(s.ID),
 			You:        s.ID == me.ID,

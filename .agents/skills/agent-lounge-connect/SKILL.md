@@ -140,7 +140,7 @@ To have an agent learn the usage, ask it: "Check how to use agent-lounge, then j
 | `chat_ack` | Records that the caller finished handling messages it received (state `acked`) |
 | `chat_status` | Returns each recipient's delivery state and times for a message the caller sent |
 | `chat_history` | Returns the messages the caller sent or received, newest first, without changing their state; `unacked: true` lists the ones fetched but not acked |
-| `memory_put` | Creates a memory in a scope (`user` by default, or `repository`), or updates the fields given of an existing one (`id`) |
+| `memory_put` | Creates a memory in a scope (`user` by default, `repository` or `branch`), or updates the fields given of an existing one (`id`) |
 | `memory_search` | Finds the memories of the caller's scopes that contain every term (any part of a word, letters in any case, two-character Japanese terms too), or lists them; faded memories only with `include_faded` |
 | `memory_get` | Returns a whole memory by ID; counts as a reference and brings a faded memory back |
 | `memory_pin` | Pins a memory so that it never fades, or unpins it |
@@ -193,5 +193,8 @@ The `shared` space is not implemented.
 | What an idle agent in an interactive screen shows when a message arrives | Unverified | |
 | Other versions of the five agents | Unverified | |
 | Registration in VS Code | Unverified | |
+| Branch scope (`branch`): branch declaration and normalization, replacement rules and `hint`, branch-scoped chat and memory, `lounge_who`, `session list` `BRANCH` column, `memory list --scope branch`, export, and migration of a version 6 database | Verified | Automated test (`go test -race ./...`), Linux x86_64 (WSL 2) |
+| Branch scope in the `linux-amd64` executable (`curl` and admin commands: joining with `git branch --show-current`, branch room isolation, branch memory, rejoining after `git switch`, `session list`, `memory list --scope branch`, `export`) | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| Branch declaration, branch-room round trip, and rejoining after switching branches in the five agents (WSL and Windows) | Unverified | |
 
 Table: Verified scope
