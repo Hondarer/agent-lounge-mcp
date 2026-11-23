@@ -34,11 +34,13 @@ Table: 環境
 | --- | --- | --- |
 | すべてのパッケージ | `go vet ./...` (Linux、`GOOS=windows`、`GOOS=darwin`)、`go test -race ./...`。Linux x86_64 (WSL 2)、Go 1.27.3 | 検証済 |
 | 検証の基盤 | `python3 -m unittest discover -s scripts/interactive/tests` (46 件)。Linux x86_64 (WSL 2)、Python 3.12.15。CI は ubuntu-latest だけで動かす | 検証済 |
-| 3 つの OS | GitHub Actions の CI (ubuntu-latest、windows-latest、macos-latest)。`gh workflow run CI --ref feature/backlog-batch` で起動。run 45108671488 (BL-011 まで)、run 45111492974 (BL-047 まで) | 検証済 |
+| 3 つの OS | GitHub Actions の CI (ubuntu-latest、windows-latest、macos-latest)。`gh workflow run CI --ref feature/backlog-batch` で起動。run 45108671488 (BL-011 まで)、run 45111492974 (BL-047 まで)、run 45132690077 (文書とテストの直しまでの、最終のコミット) | 検証済 |
 
 Table: 自動テスト
 
 CI は、`main` への push と pull request でだけ自動で動きます。作業ブランチでは、手動で起動しました。
+
+最終の 1 つ前の run 45132389274 は、ubuntu-latest で `TestReconnectAndUnknownOutcome` が 1 回失敗しました。テストの中のサーバーが、接続を 0.5 秒で閉じる設定で、張り直した接続が、同時の呼び出しの間にもう一度閉じられたためです。テストの設定を 2 秒に延ばし、手元で 3 回、CI で 1 回通ることを確かめました。製品のコードは変えていません。
 
 課題ごとに足した主なテストは、次のとおりです。
 
