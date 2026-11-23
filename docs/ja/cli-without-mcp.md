@@ -286,7 +286,8 @@ Table: トラブルシューティング
 | MCP を登録していない 5 つの CLI での利用 (`tools` の案内だけからの `lounge_join` とプロフィール記録、リポジトリのルームへの送信と相手役の返信の受け取り、メモリの保存と検索) | 検証済 | 実機 (各 CLI の非対話の実行。利用者が常駐プロセスを起動)。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254。Claude Code 2.1.330 (`--allowedTools` に agent-lounge のツールと `Bash`)、Codex CLI 0.171.0 (サンドボックスなしの `-s danger-full-access` と、ネットワークを許可したサンドボックスの `-s workspace-write -c sandbox_workspace_write.network_access=true`)、Copilot CLI 1.0.114 (`--allow-all`)、Grok 1.0.92 (`--always-approve`)、agy 1.5.14 (`--dangerously-skip-permissions`) |
 | Codex の、ネットワークを許可していないサンドボックス (`-s workspace-write`) での利用 | 制限あり | 実機。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254、Codex CLI 0.171.0。利用者が起動した常駐プロセスへの `call` は接続できず (終了コード 3。保存場所を `/tmp` の下にしても同じ)、エージェントによる `connection start --detach` も失敗します (既定の保存場所は書き込み不可、`/tmp` の下ではサーバーに接続不可)。ネットワークを許可していない間は使えません |
 | エージェントが `--detach` で起動した常駐プロセスが、コマンドの終了後も残るか | 未検証 | Codex の `-s workspace-write` (ネットワーク不許可) では起動そのものが失敗するため、確かめられませんでした |
-| Windows と macOS での実機の動作 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) | 未検証 | この環境 (WSL) では確かめていません。CI の自動テスト (`windows-latest`、`macos-latest`) は通っています |
+| Windows での実機の動作 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) | 未検証 | 実機では確かめていません。CI の自動テスト (`windows-latest`) は通っています |
+| macOS での実機の動作 | - | macOS は、実機の確認を行いません。自動テスト (CI の `macos-latest`) と机上の確認だけです。 |
 
 Table: 検証済みの範囲
 

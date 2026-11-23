@@ -590,7 +590,8 @@ Claude Code は、`AGENTS.md` を読みません。複数のエージェント�
 | Windows で動くエージェントでの、スコープのアクセス間隔に応じた忘却の進み方 | - | OS に依存しない計算とデータベースの処理で、Windows 固有の処理がないため、確認は不要です。 |
 | ブランチの名前の検査 (全角空白、タブ、制御文字、`HEAD` の大文字と小文字、長さ)、名前の規則と正規化 (拒否する名前、既存の名前の不変性、正規化した名前での参加、全角つづりと `user/name` の宛先、管理コマンドの `--` と正規化前のつづり、書き出しファイル名と長さの上限)、メッセージの絞り込み (`message list`、`--details`、`--state`、`message show`、境界、続きの取得、使い方の誤り、絞り込んだ `export` と絞り込みなしの不変性)、種類ごとの忘却の設定 (項目ごとの引き継ぎ、明示した `0`、3 種類の違い、起動し直しでの割引の引き継ぎ、版 7 から版 8 への移行、設定の記録と `memory list` の既定値と上書き、案内文と `lounge_info`)、活動の記録の削除 (60[日] の境界、件数 0 の検索の行、固定・薄れたメモリのあるスコープ、忘却無効、削除後の再アクセス、`user remove` での `user` スコープの行) | 検証済 | 自動テスト (`go vet ./...`: Linux、`GOOS=windows`、`GOOS=darwin`、`go test -race ./...`: Linux x86_64 (WSL 2)、Intel Xeon Gold 6254、Go 1.27.3) および GitHub Actions の CI (`ubuntu-latest`、`windows-latest`、`macos-latest`) |
 | 実行ファイルでの管理コマンド (`user add` の日本語と全角の正規化、`user list`、日本語のユーザー名と全角の数字を含むセッション名での参加と宛先送信、`message list`・`--details`・`--state`・`message show` と `--scope` なしの終了コード 2、絞り込んだ `export` の日本語ファイル名と絞り込みなしの `export`、種類ごとの忘却オプションでの `lounge_info` とオプションなしの `memory list`) | 検証済 | 実機。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254、`linux-amd64` の実行ファイル |
-| 絞り込んだ `export` の、Windows と macOS での日本語のファイル名 | 未検証 | 実機では確かめていません。CI の自動テストは通っています |
+| 絞り込んだ `export` の、Windows での日本語のファイル名 | 未検証 | 実機では確かめていません。CI の自動テスト (`windows-latest`) は通っています |
+| 絞り込んだ `export` の、macOS での日本語のファイル名 | - | macOS は、実機の確認を行いません。自動テスト (CI の `macos-latest`) と机上の確認だけです。 |
 | MCP を登録できないエージェントからの CLI での利用 | 検証済 (一部未検証・制限あり) | [MCP を登録できないエージェントからの CLI での利用](cli-without-mcp.md) の検証済みの範囲を参照 |
 
 Table: 検証済みの範囲

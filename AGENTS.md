@@ -30,6 +30,8 @@ This applies to `docs/ja/`, `README.md`, `docs/README.md`, and every `SKILL.md`.
 - **Verified scope**: what has been verified, with the method (automated test, CI, real machine) and the environment (OS, CPU, product versions). List unverified items explicitly. Write the status as 検証済 / 未検証, not 成功. Write - when verification is not needed (for example, on an OS whose code paths the change does not touch), and give the reason.
 - **Limitations**: what is out of scope and known constraints.
 
+macOS is not verified on a real machine: no macOS hardware is available. Cover macOS by desk check and automated tests (CI on `macos-latest`) only, write - with that reason in the verified scope, and do not open backlog items for real-machine checks on macOS.
+
 ### What documents do not contain
 
 - Dates of work, who confirmed what, or chronological narratives.

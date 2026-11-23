@@ -1,8 +1,8 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 残課題一覧 (backlog)
-最終更新日時: 2026-11-23 17:40:00 JST
-最終更新エージェント: agy (gemini-4-hydrogen-high) / claude code のセッション session_01KJc53ReNCYHwdPaqjNwsEV からの依頼
+最終更新日時: 2026-11-23 18:40:00 JST
+最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261123-backlog-batch-overview.md` (全体管理文書)、`261123-backlog-batch-discussion.md` (検討用 Markdown)、`261123-backlog-batch-lightadr.md` (簡易 ADR)、`261123-backlog-batch-design.md` (最終仕様)。転記元: `../past/261121-branch-scope-backlog.md`、`../past/261122-cli-without-mcp-backlog.md` (前の案件の残課題一覧)。いずれも未作成の場合や、削除されている場合があります。
 下流文書: なし (この案件の最終仕様は `261123-backlog-batch-design.md`、確認の記録は `261123-backlog-batch-validation.md`。未作成の場合があります)。
@@ -34,7 +34,7 @@
 | BL-004 | `shared` の空間と `scope` 引数 | 過去 backlog からの転記 | 中 | 未着手 |
 | BL-009 | ルームの作成と参加の操作 | 過去 backlog からの転記 | 低 | 未着手 |
 | BL-013 | 英語の文書の作成 (`docs/en/`、`README.md`、GitHub の概要) | 過去 backlog からの転記 | 中 | 未着手 |
-| BL-014 | 日本語の名前と書き出しのファイル名の、Windows と macOS での実機確認 | 過去 backlog からの転記 | 低 | 一部対応 (規則と WSL の確認を対応。Windows の側の実機の確認が残る) |
+| BL-014 | 日本語の名前と書き出しのファイル名の、Windows での実機確認 | 過去 backlog からの転記 | 低 | 一部対応 (規則と WSL の確認を対応。Windows の側の実機の確認が残る) |
 | BL-028 | Windows の側で起動したサーバーへの、WSL からの接続 | 過去 backlog からの転記 | 低 | 未着手 |
 | BL-030 | 未検証の構成 (物理的に別のマシンからの接続) | 過去 backlog からの転記 | 中 (物理的に別のマシンからの接続とリバース プロキシ経由の通信が未検証) | 未着手 |
 | BL-031 | トークンの運用の機能 (権限の区分、接続元の制限、リポジトリの単位への参加の許可) | 過去 backlog からの転記 | 中 | 一部対応 ((1) を対応。(2)、(3)、(6) が残る) |
@@ -44,7 +44,7 @@
 | BL-040 | agy が、閉じられた MCP の接続の後に、ツールを呼べなくなる | 過去 backlog からの転記 | 中 (1 時間使わなかった agy は、起動し直すまでツールを呼べない場合がある) | 未着手 (1.5.14 でも再現) |
 | BL-042 | Windows の Codex で、出力の途中に作業中の表示が画面にない | 過去 backlog からの転記 | 低 (検証の基盤が、Codex の作業中を見落とす) | 未着手 |
 | BL-044 | ブランチのスコープの Windows 側での実機確認 | 過去 backlog からの転記 | 中 (Windows の大文字・小文字の動作と PowerShell での申告が未検証) | 一部対応 (WSL の側を対応。Windows の側が残る) |
-| BL-047 | MCP を使わない CLI の方式の、Windows と macOS での実機確認および Codex サンドボックスの確認 | 過去 backlog からの転記 | 中 (Windows と macOS の実機動作が未検証) | 一部対応 (実装と WSL の確認を対応。Windows と macOS の実機の確認が残る) |
+| BL-047 | MCP を使わない CLI の方式の、Windows での実機確認および Codex サンドボックスの確認 | 過去 backlog からの転記 | 中 (Windows の実機動作が未検証) | 一部対応 (実装と WSL の確認を対応。Windows の実機の確認が残る) |
 
 ## BL-004 `shared` の空間と `scope` 引数
 
@@ -115,27 +115,27 @@
 - **恒久対応案**: `docs/ja/reference.md` と `docs/ja/user-guide.md` を訳して `docs/en/` に置き、`README.md` と `docs/README.md` を併記にします。あわせて、`AGENTS.md` の「`docs/en/` はまだ存在しない」という記述を更新します。GitHub の概要は、文面の承認を受けた後、Claude Code が `gh repo edit --description` で設定します (Q-017)。
 - **参考情報**: Q-013、Q-017、Q-019、Q-020。
 
-## BL-014 日本語の名前と書き出しのファイル名の、Windows と macOS での実機確認
+## BL-014 日本語の名前と書き出しのファイル名の、Windows での実機確認
 
 ### 概要と問題点
 
-- **現状の事象**: セッション名とユーザー名の規則 (RFC 8265 による検査と正規化) および書き出し (`export`) のファイル名の規則 (`export.SafeName` の Unicode 文字保持と 120 バイト上限) は実装済みで、CI の 3 つの OS での自動テストと、WSL 上の 5 つの CLI・管理コマンドでの実機確認を終えています (`261123-backlog-batch-design.md` の 4 章、`261123-backlog-batch-validation.md` の 1・2.1・2.5 章)。しかし、(1) Windows の側の CLI での日本語の名前の受け渡しの実機確認と、(2) 絞り込んだ書き出し (`export`) で生成される日本語のファイル名の、Windows と macOS での実機確認が未実施です (`261123-backlog-batch-validation.md` の 3 章)。
-- **本来あるべき姿**: Windows の側の CLI でも日本語のセッション名やユーザー名を正しく受け渡して参加・送信・管理できること、および絞り込んだ `export` の日本語のファイル名が Windows と macOS の実機でも問題なく作成・参照できることが確認されています。
+- **現状の事象**: セッション名とユーザー名の規則 (RFC 8265 による検査と正規化) および書き出し (`export`) のファイル名の規則 (`export.SafeName` の Unicode 文字保持と 120 バイト上限) は実装済みで、CI の 3 つの OS での自動テストと、WSL 上の 5 つの CLI・管理コマンドでの実機確認を終えています (`261123-backlog-batch-design.md` の 4 章、`261123-backlog-batch-validation.md` の 1・2.1・2.5 章)。しかし、(1) Windows の側の CLI での日本語の名前の受け渡しの実機確認と、(2) 絞り込んだ書き出し (`export`) で生成される日本語のファイル名の、Windows での実機確認が未実施です (`261123-backlog-batch-validation.md` の 3 章)。
+- **本来あるべき姿**: Windows の側の CLI でも日本語のセッション名やユーザー名を正しく受け渡して参加・送信・管理できること、および絞り込んだ `export` の日本語のファイル名が Windows の実機でも問題なく作成・参照できることが確認されています。
 
 ### 経緯と見送り理由
 
 - **摘出契機**: 案件 `backlog-batch` の方針決定および検証 (`261123-backlog-batch-lightadr.md` の LADR-001、`261123-backlog-batch-validation.md` の 3 章。2026-11-23)。元の課題は、初回案件の最終仕様の承認時に見送りました。
-- **今回の見送り理由**: WSL の環境からは、Windows の側の CLI や、Windows と macOS の実機での動作確認を実施できないため、規則の実装、CI の 3 つの OS の自動テスト、および WSL での実機確認までを完了して残しました。
-- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-expiry-sandbox-verification-backlog.md` の同じ課題 ID から、案件 `branch-scope` の残課題一覧 (この文書) へ転記しました (2026-11-21)。 案件 `backlog-batch` (`261123-backlog-batch-overview.md`) で、対策の検討を始めました (2026-11-23。検討用 Markdown `261123-backlog-batch-discussion.md` の Q-018、Q-019)。Windows の側の実機の確認は、その案件の範囲外です。 `261121-branch-scope-backlog.md` の同じ課題 ID から、案件 `backlog-batch` の残課題一覧 (この文書) へ転記しました (2026-11-23)。 最終仕様 (`261123-backlog-batch-design.md` の 4 章) を作成しました (2026-11-23)。承認の後に着手します。 案件 `backlog-batch` で、セッション名とユーザー名の規則および書き出しのファイル名の規則を実装し、自動テスト (CI の 3 つの OS を含む) と WSL の 5 つの CLI・管理コマンドでの実機確認を完了しました (2026-11-23。確認の記録 `261123-backlog-batch-validation.md`)。Windows の側の CLI での日本語の名前の受け渡しの実機確認と、絞り込んだ書き出しの日本語のファイル名の Windows と macOS での実機確認が残ります。
+- **今回の見送り理由**: WSL の環境からは、Windows の側の CLI や、Windows の実機での動作確認を実施できないため、規則の実装、CI の 3 つの OS の自動テスト、および WSL での実機確認までを完了して残しました。
+- **継続作業での経緯と対処**: `261117-chat-connectivity-backlog.md` の同じ課題 ID から転記しました。この案件 (`chat-autonomy`) では対策しません (検討用 Markdown の Q-001)。`261117-chat-autonomy-backlog.md` の同じ課題 ID から、案件 `repository-space` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 この案件 (`repository-space`) では対策しません (検討用 Markdown の Q-001)。 `261117-repository-space-backlog.md` の同じ課題 ID から、案件 `multi-user-access` の残課題一覧 (この文書) へ転記しました (2026-11-17)。 `261117-multi-user-access-backlog.md` の同じ課題 ID から、案件 `chat-completion` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-chat-completion-backlog.md` の同じ課題 ID から、案件 `memory` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-memory-backlog.md` の同じ課題 ID から、案件 `interactive-verification` の残課題一覧 (この文書) へ転記しました (2026-11-18)。 `261118-interactive-verification-backlog.md` の同じ課題 ID から、案件 `connection-guidance` の残課題一覧 (この文書) へ転記しました (2026-11-19)。 `261119-connection-guidance-backlog.md` の同じ課題 ID から、案件 `small-fixes` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-small-fixes-backlog.md` の同じ課題 ID から、案件 `expiry-sandbox-verification` の残課題一覧 (この文書) へ転記しました (2026-11-20)。 `261120-expiry-sandbox-verification-backlog.md` の同じ課題 ID から、案件 `branch-scope` の残課題一覧 (この文書) へ転記しました (2026-11-21)。 案件 `backlog-batch` (`261123-backlog-batch-overview.md`) で、対策の検討を始めました (2026-11-23。検討用 Markdown `261123-backlog-batch-discussion.md` の Q-018、Q-019)。Windows の側の実機の確認は、その案件の範囲外です。 `261121-branch-scope-backlog.md` の同じ課題 ID から、案件 `backlog-batch` の残課題一覧 (この文書) へ転記しました (2026-11-23)。 最終仕様 (`261123-backlog-batch-design.md` の 4 章) を作成しました (2026-11-23)。承認の後に着手します。 案件 `backlog-batch` で、セッション名とユーザー名の規則および書き出しのファイル名の規則を実装し、自動テスト (CI の 3 つの OS を含む) と WSL の 5 つの CLI・管理コマンドでの実機確認を完了しました (2026-11-23。確認の記録 `261123-backlog-batch-validation.md`)。Windows の側の CLI での日本語の名前の受け渡しの実機確認と、絞り込んだ書き出しの日本語のファイル名の Windows での実機確認が残ります。 macOS の実機の確認は、機材がないため行わず、机上の確認と自動テストだけにすると決めたため (利用者の恒久の決定。2026-11-23。簡易 ADR の LADR-012)、この項目から除きました。
 
 ### 影響範囲とリスク
 
 - **影響対象**: `docs/ja/user-guide.md` の「検証済みの範囲」、`internal/tools/lounge.go`、`internal/export/export.go`、`cmd/agent-lounge-mcp/`。
-- **放置した場合のリスク**: Windows の側の CLI や端末の文字コード・引数の扱い、または Windows と macOS の実機のファイル システム上での日本語ファイル名の扱いに不都合があっても、気付けません。
+- **放置した場合のリスク**: Windows の側の CLI や端末の文字コード・引数の扱い、または Windows の実機のファイル システム上での日本語ファイル名の扱いに不都合があっても、気付けません。
 
 ### 推奨される対応策
 
-- **恒久対応案**: Windows の実機で CLI から日本語のセッション名・ユーザー名を使った参加・送信を実行して受け渡しを確かめ、あわせて Windows と macOS の実機で日本語のユーザーや空間を指定した絞り込み `export` を実行してファイル名と内容を確認し、結果を `docs/ja/user-guide.md` の「検証済みの範囲」に反映します。
+- **恒久対応案**: Windows の実機で CLI から日本語のセッション名・ユーザー名を使った参加・送信を実行して受け渡しを確かめ、あわせて Windows の実機で日本語のユーザーや空間を指定した絞り込み `export` を実行してファイル名と内容を確認し、結果を `docs/ja/user-guide.md` の「検証済みの範囲」に反映します。
 - **参考情報**: `261123-backlog-batch-design.md` の 4 章、`261123-backlog-batch-validation.md` の 2.1・2.5・3 章。
 
 ## BL-028 Windows の側で起動したサーバーへの、WSL からの接続
@@ -347,25 +347,25 @@
 - **恒久対応案**: 最終仕様 (`../past/261121-branch-scope-design.md`) の 5.3 (Windows 側の d〜f) を実行し、結果を `docs/ja/user-guide.md` などの「検証済みの範囲」に反映します。案内文で申告が漏れる CLI があれば、`internal/tools/help.go` の表現を改善します。
 - **参考情報**: `../past/261121-branch-scope-design.md` の 5.3、`261123-backlog-batch-validation.md` の 2.1・3 章。
 
-## BL-047 MCP を使わない CLI の方式の、Windows と macOS での実機確認および Codex サンドボックスの確認
+## BL-047 MCP を使わない CLI の方式の、Windows での実機確認および Codex サンドボックスの確認
 
 ### 概要と問題点
 
-- **現状の事象**: MCP を直接使わないエージェントのための CLI の方式 (`connection start|status|list|stop`、`tools`、`call`) は実装を完了し、CI の 3 つの OS の自動テストおよび WSL での 5 つの CLI と手動確認で検証済みです (`261123-backlog-batch-design.md` の 7 章、`261123-backlog-batch-validation.md` の 1・2.3・2.4・2.6 章)。残っているのは、(1) Windows と macOS での実機の確認 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) と、(2) Codex のサンドボックス (`workspace-write`) でエージェントが `--detach` で起動した常駐プロセスがコマンドの後に残るかの確認 (ネットワークを許可していないサンドボックスでは、起動そのものが失敗するため、確かめられませんでした) です。
-- **本来あるべき姿**: Windows と macOS の実機でも常駐プロセス、保存場所の権限 (Windows は本人だけの保護された DACL、macOS は 0700)、プロフィールの収集、切り離した起動が正しく動くこと、および Codex のサンドボックスでの `--detach` 起動時のプロセス残存の有無が実機で確認され、文書に検証済みとして記載されています。
+- **現状の事象**: MCP を直接使わないエージェントのための CLI の方式 (`connection start|status|list|stop`、`tools`、`call`) は実装を完了し、CI の 3 つの OS の自動テストおよび WSL での 5 つの CLI と手動確認で検証済みです (`261123-backlog-batch-design.md` の 7 章、`261123-backlog-batch-validation.md` の 1・2.3・2.4・2.6 章)。残っているのは、(1) Windows での実機の確認 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) と、(2) Codex のサンドボックス (`workspace-write`) でエージェントが `--detach` で起動した常駐プロセスがコマンドの後に残るかの確認 (ネットワークを許可していないサンドボックスでは、起動そのものが失敗するため、確かめられませんでした) です。
+- **本来あるべき姿**: Windows の実機でも常駐プロセス、保存場所の権限 (本人だけの保護された DACL)、プロフィールの収集、切り離した起動が正しく動くこと、および Codex のサンドボックスでの `--detach` 起動時のプロセス残存の有無が実機で確認され、文書に検証済みとして記載されています。
 
 ### 経緯と見送り理由
 
 - **摘出契機**: 案件 `backlog-batch` における実装と検証 (`261123-backlog-batch-design.md` の 7.10・9.2、`261123-backlog-batch-validation.md` の 2.4・3 章。2026-11-23)。元の要望は、2026-11-22 に新規起票しました。
-- **今回の見送り理由**: WSL の環境からは Windows と macOS の実機確認を実施できないためです。また、ネットワークを許可していない Codex のサンドボックス (`workspace-write`) では、既定の保存場所はログを書けず (`read-only file system`)、`/tmp` の下ではサーバーに接続できないため、`connection start --detach` の起動そのものが失敗し、コマンドの後に常駐プロセスが残るかを確かめられませんでした。
-- **継続作業での経緯と対処**: この残課題一覧を新規に作成して追加しました (2026-11-22)。 案件 `backlog-batch` (`261123-backlog-batch-overview.md`) で、対策の検討を始めました (2026-11-23。検討用 Markdown `261123-backlog-batch-discussion.md` の Q-020 から Q-031、Q-036)。推奨される対応策のコマンドの例 (`session start` など) は、既存の管理コマンド `session list`、`session remove` と名前が重なるため、名前を検討しています (Q-020)。 `261122-cli-without-mcp-backlog.md` の同じ課題 ID から、案件 `backlog-batch` の残課題一覧 (この文書) へ転記しました (2026-11-23)。 最終仕様 (`261123-backlog-batch-design.md` の 7 章) を作成しました (2026-11-23)。承認の後に着手します。 案件 `backlog-batch` で、CLI の方式 (`connection`、`tools`、`call`、スキルの文書、利用者向け文書) を実装し、CI の 3 つの OS の自動テストと WSL での 5 つの CLI・手動確認を完了しました (2026-11-23。確認の記録 `261123-backlog-batch-validation.md`)。Windows と macOS での実機の確認 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) と、Codex のサンドボックスでエージェントが `--detach` で起動した常駐プロセスがコマンドの後に残るかの確認が残ります。
+- **今回の見送り理由**: WSL の環境からは Windows の実機確認を実施できないためです。また、ネットワークを許可していない Codex のサンドボックス (`workspace-write`) では、既定の保存場所はログを書けず (`read-only file system`)、`/tmp` の下ではサーバーに接続できないため、`connection start --detach` の起動そのものが失敗し、コマンドの後に常駐プロセスが残るかを確かめられませんでした。
+- **継続作業での経緯と対処**: この残課題一覧を新規に作成して追加しました (2026-11-22)。 案件 `backlog-batch` (`261123-backlog-batch-overview.md`) で、対策の検討を始めました (2026-11-23。検討用 Markdown `261123-backlog-batch-discussion.md` の Q-020 から Q-031、Q-036)。推奨される対応策のコマンドの例 (`session start` など) は、既存の管理コマンド `session list`、`session remove` と名前が重なるため、名前を検討しています (Q-020)。 `261122-cli-without-mcp-backlog.md` の同じ課題 ID から、案件 `backlog-batch` の残課題一覧 (この文書) へ転記しました (2026-11-23)。 最終仕様 (`261123-backlog-batch-design.md` の 7 章) を作成しました (2026-11-23)。承認の後に着手します。 案件 `backlog-batch` で、CLI の方式 (`connection`、`tools`、`call`、スキルの文書、利用者向け文書) を実装し、CI の 3 つの OS の自動テストと WSL での 5 つの CLI・手動確認を完了しました (2026-11-23。確認の記録 `261123-backlog-batch-validation.md`)。Windows での実機の確認 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) と、Codex のサンドボックスでエージェントが `--detach` で起動した常駐プロセスがコマンドの後に残るかの確認が残ります。 macOS の実機の確認は、機材がないため行わず、机上の確認と自動テストだけにすると決めたため (利用者の恒久の決定。2026-11-23。簡易 ADR の LADR-012)、この項目から除きました。
 
 ### 影響範囲とリスク
 
 - **影響対象**: `internal/loungecli/`、`internal/ownerdir/`、`cmd/agent-lounge-mcp/`、`docs/ja/cli-without-mcp.md`、`docs/ja/user-guide.md` の「検証済みの範囲」。
-- **放置した場合のリスク**: Windows の本人だけの保護された DACL や Unix ドメイン ソケットの扱い、macOS の一時フォルダーの権限やプロセス切り離し、Windows・macOS でのプロフィール収集に実機固有の問題がある場合、気付けません。また、Codex のサンドボックス (ネットワークを許可した構成など) でエージェント自身が `--detach` を実行したときに、コマンド終了後も常駐プロセスが残るかどうかが不明なままになります。
+- **放置した場合のリスク**: Windows の本人だけの保護された DACL や Unix ドメイン ソケットの扱い、Windows でのプロフィール収集に実機固有の問題がある場合、気付けません。また、Codex のサンドボックス (ネットワークを許可した構成など) でエージェント自身が `--detach` を実行したときに、コマンド終了後も常駐プロセスが残るかどうかが不明なままになります。
 
 ### 推奨される対応策
 
-- **恒久対応案**: Windows と macOS の実機で `connection start` (前面と `--detach`)、保存場所の権限、CLI による操作 (`tools`、`call --as NAME lounge_join` のプロフィールの収集、`chat_send`、`chat_inbox`、`connection status`、`connection stop`) を確認し、結果を `docs/ja/cli-without-mcp.md` と `docs/ja/user-guide.md` の「検証済みの範囲」に反映します。あわせて、Codex のサンドボックス (ネットワークを許可した設定) などでエージェントが `connection start --detach` を実行したときに、コマンドの後に常駐プロセスが残るかを実機で確認します。
+- **恒久対応案**: Windows の実機で `connection start` (前面と `--detach`)、保存場所の権限、CLI による操作 (`tools`、`call --as NAME lounge_join` のプロフィールの収集、`chat_send`、`chat_inbox`、`connection status`、`connection stop`) を確認し、結果を `docs/ja/cli-without-mcp.md` と `docs/ja/user-guide.md` の「検証済みの範囲」に反映します。あわせて、Codex のサンドボックス (ネットワークを許可した設定) などでエージェントが `connection start --detach` を実行したときに、コマンドの後に常駐プロセスが残るかを実機で確認します。
 - **参考情報**: `261123-backlog-batch-design.md` の 7 章・9.2、`261123-backlog-batch-validation.md` の 2.3・2.4・2.6・3 章、`docs/ja/cli-without-mcp.md`。
