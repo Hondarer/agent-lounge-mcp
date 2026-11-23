@@ -48,7 +48,7 @@ Never write a token in the conversation, repository files, or command-line argum
 On success, `--detach` prints the daemon state as JSON and returns. If connecting fails or the token is rejected (401), it exits with status 1.
 
 > [!NOTE]
-> **Shells that kill child processes on command exit:** If the working agent runs in a sandbox or shell that terminates all child processes when a command finishes, a daemon started by that agent with `--detach` will exit immediately after the command. In that environment, the user must start `connection start` (with or without `--detach`) from their own terminal outside the sandbox.
+> **Starting the daemon in sandboxed environments:** Codex's `workspace-write` sandbox blocks Unix domain socket connections as well while network access is disabled, so `call` cannot connect to the daemon (exit 3) and `connection start` by the agent fails. In that sandbox, have the user start the daemon in their own terminal and enable network access for Codex (`-c sandbox_workspace_write.network_access=true`, or `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`). Whether a daemon started with `--detach` by an agent survives command exit in shells or sandboxes that terminate child processes is unverified.
 
 ### Multiple servers or users
 
@@ -98,7 +98,7 @@ For a foreground daemon, press Ctrl+C or send `SIGTERM`. Stopping closes all ups
 
 | Symptom | Check and action |
 | --- | --- |
-| `cannot connect to daemon "NAME"` (exit 3) | Run `agent-lounge-mcp connection list`. Start the daemon with `connection start`, or verify `--connection` / `AGENT_LOUNGE_CONNECTION`. If the agent started `--detach` inside a sandbox that kills child processes, have the user start the daemon in their own terminal. |
+| `cannot connect to daemon "NAME"` (exit 3) | Run `agent-lounge-mcp connection list`. Start the daemon with `connection start`, or verify `--connection` / `AGENT_LOUNGE_CONNECTION`. In Codex's `workspace-write` sandbox, Unix domain socket connections are blocked while network access is disabled: have the user start the daemon in their own terminal and allow network access (`-c sandbox_workspace_write.network_access=true`, or `network_access = true` under `[sandbox_workspace_write]` in `~/.codex/config.toml`). |
 | `the token is invalid; restart the daemon with a new token` (exit 3) | The token was rotated, expired, or removed. Stop the daemon with `connection stop` and start it again with a valid token. |
 | Daemon failed to start or exited unexpectedly | Check the connection status (`agent-lounge-mcp connection status [--name NAME]`) and the log file `NAME.log` in the connection directory (`$XDG_RUNTIME_DIR/agent-lounge-mcp/connections`, `/tmp/agent-lounge-mcp-UID/connections`, or `%LOCALAPPDATA%\agent-lounge-mcp\connections`, or `$AGENT_LOUNGE_CONNECTION_DIR`). |
 | `socket path is too long` | Set `AGENT_LOUNGE_CONNECTION_DIR` to a shorter private directory. |

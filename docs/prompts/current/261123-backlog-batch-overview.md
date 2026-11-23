@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-23 14:10:00 JST
+最終更新日時: 2026-11-23 18:00:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `../past/261121-branch-scope-backlog.md`、`../past/261122-cli-without-mcp-backlog.md` (対策元の残課題一覧。全件を `261123-backlog-batch-backlog.md` に転記済み)。移動または削除されている場合があります。
@@ -21,7 +21,7 @@
 
 検討用 Markdown の版: 3
 
-状態: 作業中 (第 2 ゲート通過)
+状態: 成果物の承認待ち (第 3 ゲート)
 
 ## 作業 WBS と進捗管理
 
@@ -50,7 +50,7 @@
     - ✅ 3.1. `261123-backlog-batch-design.md` の作成 (知見の反映計画を含む)。残課題一覧の、対策する項目の状態を「対応中」に更新
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認 (確認項目への回答から一意に決まらない細部は、最終仕様の 15 章にまとめ、第 2 ゲートで確認を受ける)
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート: 作業着手の合意)。2026-11-23 10:30 JST に承認受領。あわせて、難易度の低い作業を Grok に依頼する指示を受けた ([LADR-003](261123-backlog-batch-lightadr.md#ladr-003-記録の扱いと作業の進め方))
-- 🔄 4. 承認された最終仕様に従った作業の実施 (順は、最終仕様の 12.1。実装の依頼先は、難易度の低い BL-046、BL-045、BL-011 を Grok、BL-014、BL-034、BL-047、BL-035 の (17) を Codex とする。難易度の区分は、Claude Code の判断)
+- ✅ 4. 承認された最終仕様に従った作業の実施 (順は、最終仕様の 12.1。実装の依頼先は、難易度の低い BL-046、BL-045、BL-011 を Grok、BL-014、BL-034、BL-047、BL-035 の (17) を Codex とする。難易度の区分は、Claude Code の判断)
     - ✅ 4.1. 作業ブランチ `feature/backlog-batch` の作成と、作業前の記録の最初のコミット (`56fa246`)
     - ✅ 4.2. (コミット `3e31fe9`。Grok が実装、Claude Code が点検) BL-046 (最終仕様の 2 章。`internal/profile/` とテスト)
     - ✅ 4.3. (コミット `f3e5425`。Grok が実装、Claude Code が点検) BL-045 (3 章。`internal/store/` の定期の処理と `user remove`、テスト)
@@ -60,14 +60,14 @@
     - ✅ 4.7. BL-047 (コミット `fe59fbb`。Codex が実装。点検で、`call` の出力をツールの構造化された結果だけにし、オプションをツール名の後にも書けるようにし、`tools` の案内文を書き直した)
     - ✅ 4.8. (コミット `ace7065`。Codex が実装。点検で、静止の判定を英数字の出力に戻し、再応答の条件に英数字の出力を加えた。最終仕様の 8 章に反映) BL-035 の (17) (8 章。`scripts/interactive/harness/agents.py` とテスト)
     - ✅ 4.9. 各課題の点検と、GitHub への push、CI の結果の確認 (CI は `main` への push と pull request でだけ自動で動くため、`gh workflow run CI --ref feature/backlog-batch` で起動。run 45111492974 が、BL-047 までのコミットで、3 つの OS とも成功)
-    - 🔄 4.10. 実機の確認 (9.2。WSL)。a から d: 5 つの CLI が 1 回目で通過。e: agy 1.5.14 でも直っていない (1 回目の指示は 6 回とも失敗、2 回目は 5 回成功)。f: Claude Code、Copilot CLI、Grok、agy が 1 回目で通過。Codex は、サンドボックスなしで参加、送信、メモリは通過 (返信の受信は、確認用スクリプトの相手役が古い未読に返信した不備で未確認。やり直しが要る)。g: Codex の `workspace-write` では、既定の保存場所 (`/run/user/<UID>`) のソケットに接続できず、`--detach` の起動もログを書けずに失敗した。保存場所を `/tmp` の下にした場合 (環境変数 `AGENT_LOUNGE_CONNECTION_DIR`) も、`call` は常駐プロセスに接続できず (終了コード 3)、エージェントによる `connection start --detach` は「サーバーに接続できない」で失敗した (一時フォルダーの `g2.sh`、結果は `g2.out`)。環境変数がサンドボックスの中のシェルに渡っていたかは未確認で、原因 (サンドボックスがソケットへの接続を止めているのか) の切り分けが残る。h: 管理コマンドは通過。結果のファイルは、セッションの一時フォルダーの `verify-mcp-results.json`、`verify-cli-results.json`、`v2/results.json` ← **CURRENT**
-    - 🔄 4.11. 利用者向けの文書の更新 (11 章)。agy が、実装済みの課題の `docs/ja/` への反映と、`docs/ja/cli-without-mcp.md`、スキルの文書 (`agent-lounge-cli`) の執筆を終え、Claude Code が抜き取りで点検した。残り: `cli-without-mcp.md` の「検証済みの範囲」(仮の 1 行のまま) と、サンドボックスの CLI の記述、`user-guide.md` と `interactive-verification.md` の「検証済みの範囲」への 9.2 の結果の反映、agy の版の 1.5.14 への更新、全体の照合
-    - ⏸️ 4.12. 正本ドキュメントおよびコード コメントへの永続的知見の反映 (14 章)、確認の記録 (`261123-backlog-batch-validation.md`) の作成、文書の「検証済みの範囲」への反映
-    - ⏸️ 4.13. 全体のレビュー、受入条件 (13 章) への適合確認、簡易 ADR の最終確認
-    - ⏸️ 4.14. 残課題一覧 (`261123-backlog-batch-backlog.md`) の再構築と整理
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)
+    - ✅ 4.10. 実機の確認 (9.2 の a から h。WSL)。結果は、確認の記録 (`261123-backlog-batch-validation.md`) の 2 章。a から d と f と h は検証済み。e (agy 1.5.14) は直っておらず、BL-040 に残す。g は、ネットワークを許可していない Codex のサンドボックスでは使えないことを確かめ、制限と対処を文書に書いた
+    - ✅ 4.11. 利用者向けの文書の更新 (11 章)、取り下げの反映 (10 章)、スキルの文書 (`agent-lounge-cli`)。agy (gemini-4-hydrogen-high) が編集し、Claude Code が、最終仕様、実装、確認の記録と照合した
+    - ✅ 4.12. コード コメントと正本ドキュメントへの知見の反映 (14 章)、確認の記録 (`261123-backlog-batch-validation.md`) の作成、文書の「検証済みの範囲」への反映
+    - ✅ 4.13. 全体の点検 (課題ごとの差分の点検、手動の確認、仕様との照合)、受入条件 (13 章) への適合確認、簡易 ADR の最終確認。点検で直した点は、確認の記録の 4 章
+    - ✅ 4.14. 残課題一覧 (`261123-backlog-batch-backlog.md`) の再構築と整理 (対応済みの BL-011、BL-034、BL-045、BL-046 と、取り下げた部分を除いた。残りは 14 件)
+- 🚫 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - 🚫 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)。利用者の承認待ち ← **CURRENT**
 
 ## 対象と参照資料
 
@@ -188,7 +188,25 @@
 | 2026-11-23 12:20 | 作業の再開 | BL-011 を Grok に依頼。作業ブランチを GitHub に push |
 | 2026-11-23 12:30 | 担当の指示 | 利用者が、文章の推敲と編集を agy (gemini-4-hydrogen-high) に依頼するよう指示 ([LADR-003](261123-backlog-batch-lightadr.md#ladr-003-記録の扱いと作業の進め方)) |
 | 2026-11-23 14:10 | 作業の中断 | 7 つの課題の実装をコミットして push 済み (CI は 3 つの OS で成功)。文書の下書きをコミット。利用量の上限で中断。残りは、実機の確認 f (Codex) と g の仕上げ、文書の「検証済みの範囲」、確認の記録、残課題一覧の整理、全体のレビュー、第 3 ゲート |
+| 2026-11-23 16:25 | 作業の再開 | 実機の確認 f (Codex) と g をやり直し、Copilot CLI の対話の画面を確認 |
+| 2026-11-23 18:00 | 作業の完了と、成果物の提示 | 文書、確認の記録、残課題一覧の整理を終え、成果物の承認を依頼 |
 
 ## 反映と検証の記録
 
-未着手。作業後の対応箇所、検証結果、未完了項目を記録します。
+| 対象 | 対応箇所 | 検証 |
+| --- | --- | --- |
+| BL-046 | `internal/profile/` (`3e31fe9`) | 自動テスト、実機 (a) |
+| BL-045 | `internal/store/` (`f3e5425`) | 自動テスト |
+| BL-014 | `internal/names/` ほか (`d424768`) | 自動テスト、実機 (d、h) |
+| BL-011 | `cmd/agent-lounge-mcp/`、`internal/store/` (`4f51cd7`) | 自動テスト、実機 (h) |
+| BL-034 | `internal/config/`、`internal/store/`、スキーマの版 8 (`7fef6ba`) | 自動テスト、実機 (h) |
+| BL-047 | `internal/connection/`、`internal/loungecli/`、`internal/ownerdir/` (`fe59fbb`) | 自動テスト、CI の 3 つの OS、手動の確認、実機 (f、g) |
+| BL-035 の (17) | `scripts/interactive/harness/agents.py` (`ace7065`) | 自動テスト、Copilot CLI の対話の画面 |
+| BL-044 の WSL の側 | コードの変更なし | 実機 (a から c) |
+| BL-040 | コードの変更なし (agy 1.5.14 でも再現) | 実機 (e) |
+| 取り下げ (BL-033 の (2)、BL-031 の (4)(5)、BL-030 の HTTPS) | 残課題一覧から除いた。利用ガイドに、CLI の方式ではトークンを設定ファイルに保存しないことを足した | - |
+| 文書 | `docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md` (新規)、`docs/ja/interactive-verification.md`、`README.md`、`docs/README.md`、`docs/agent-lounge-mcp-proposal.md`、`.agents/skills/agent-lounge-cli/SKILL.md` (新規)、`.agents/skills/agent-lounge-connect/SKILL.md` | 最終仕様、実装、確認の記録との照合 |
+
+Table: 反映と検証
+
+検証の詳細は、確認の記録 (`261123-backlog-batch-validation.md`) にあります。未完了の項目は、残課題一覧 (`261123-backlog-batch-backlog.md`) の 14 件です。最終仕様から、点検の中で変えた点は、確認の記録の 4 章にあり、最終仕様にも反映してあります。

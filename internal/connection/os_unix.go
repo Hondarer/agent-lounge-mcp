@@ -37,7 +37,7 @@ func defaultDir() (string, error) {
 }
 
 // startDetached starts the command from newCmd in a session of its own, without a controlling
-// terminal, so that it outlives the shell that ran session start --detach.
+// terminal, so that it outlives the shell that ran connection start --detach.
 func startDetached(newCmd func() *exec.Cmd) (*exec.Cmd, error) {
 	cmd := newCmd()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
