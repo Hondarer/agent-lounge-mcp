@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 確認の記録 (validation)
-最終更新日時: 2026-11-23 17:10:00 JST
+最終更新日時: 2026-11-23 19:40:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261123-backlog-batch-overview.md` (全体管理文書)、`261123-backlog-batch-design.md` (最終仕様)、`261123-backlog-batch-lightadr.md` (簡易 ADR)。
@@ -34,13 +34,13 @@ Table: 環境
 | --- | --- | --- |
 | すべてのパッケージ | `go vet ./...` (Linux、`GOOS=windows`、`GOOS=darwin`)、`go test -race ./...`。Linux x86_64 (WSL 2)、Go 1.27.3 | 検証済 |
 | 検証の基盤 | `python3 -m unittest discover -s scripts/interactive/tests` (46 件)。Linux x86_64 (WSL 2)、Python 3.12.15。CI は ubuntu-latest だけで動かす | 検証済 |
-| 3 つの OS | GitHub Actions の CI (ubuntu-latest、windows-latest、macos-latest)。`gh workflow run CI --ref feature/backlog-batch` で起動。run 45108671488 (BL-011 まで)、run 45111492974 (BL-047 まで)、run 45132690077 (文書とテストの直しまでの、最終のコミット) | 検証済 |
+| 3 つの OS | GitHub Actions の CI (ubuntu-latest、windows-latest、macos-latest)。`gh workflow run CI --ref feature/backlog-batch` で起動。run 45108671488 (BL-011 まで)、run 45111492974 (BL-047 まで)、run 45132690077 (文書とテストの直しまで)、run 45152277217 (同時の呼び出しの競合の直しまでの、最終のコミット) | 検証済 |
 
 Table: 自動テスト
 
 CI は、`main` への push と pull request でだけ自動で動きます。作業ブランチでは、手動で起動しました。
 
-最終の 1 つ前の run 45132389274 は、ubuntu-latest で `TestReconnectAndUnknownOutcome` が 1 回失敗しました。テストの中のサーバーが、接続を 0.5 秒で閉じる設定で、張り直した接続が、同時の呼び出しの間にもう一度閉じられたためです。テストの設定を 2 秒に延ばし、手元で 3 回、CI で 1 回通ることを確かめました。製品のコードは変えていません。
+`TestReconnectAndUnknownOutcome` (閉じられた接続の後の、同時の 4 つの呼び出し) は、CI で 2 回失敗しました (run 45132389274 の ubuntu-latest、`main` へのマージの後の run 45150510164 の windows-latest)。1 回目の失敗の後、テストの中のサーバーが接続を閉じるまでの時間 (0.5 秒) が短いことが原因と判断して、2 秒に延ばしましたが、この判断は誤りでした。手元で 15 回続けて実行すると 1 回失敗し、製品のコードの競合と分かりました。ほかの呼び出しが、失効した接続を閉じて張り直している間に、閉じられた接続を使った呼び出しが、要求を送らないまま「サーバーに接続できない」(終了コード 3) で失敗していました。接続が入れ替わっていた場合に、新しい接続でやり直すように直し (`internal/connection/upstream.go`)、手元で 60 回続けて通ること、CI (run 45152277217) の 3 つの OS で通ることを確かめました。
 
 課題ごとに足した主なテストは、次のとおりです。
 
@@ -180,6 +180,7 @@ macOS の実機の確認は、行いません (機材がないため。利用者
 | --- | --- |
 | BL-035 の (17) | 静止の判定を、すべての出力ではなく、英字と数字の出力に戻した。再応答の条件に、応答の後に英字か数字の出力があることを加えた (記号だけの作業中の表示が画面の外の部分を変える、既存のテストが失敗したため)。最終仕様の 8 章に反映した |
 | BL-014 | 空の `name` を、省略と同じ扱い (サーバーが名前を決める) に戻した。宛先のエラーの文に、宛先の形と `lounge_who` の案内を戻した。書き出しのファイル名に、120 バイトの上限を足した (64 文字の日本語の名前が、ファイル名の長さの上限を超えるため)。最終仕様の 4.3 に反映した |
+| BL-047 (成果物の承認の後) | 同時の呼び出しが、張り直しの最中に失敗することがある競合を直した (上の「1. 自動テスト」) |
 | BL-047 | `call` の出力を、ツールの構造化された結果 (テキストだけのツールは、そのテキスト) にした。オプションを、ツール名の後にも書けるようにした。`tools` の案内文を書き直した。最終仕様の 7 章に反映した |
 
 Table: 点検で直した点

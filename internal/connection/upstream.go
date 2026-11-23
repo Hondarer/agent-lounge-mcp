@@ -159,6 +159,13 @@ func (p *participant) forget(s *mcp.ClientSession) {
 	}
 }
 
+// replaced reports whether s is no longer the session of the participant.
+func (p *participant) replaced(s *mcp.ClientSession) bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.session != s
+}
+
 func (p *participant) remember(args json.RawMessage, result *mcp.CallToolResult) {
 	var joined struct{ Name string }
 	b, err := json.Marshal(result.StructuredContent)
@@ -204,7 +211,9 @@ func (p *participant) call(ctx context.Context, u *upstream, req Request) Reply 
 		p.joinMu.Lock()
 		defer p.joinMu.Unlock()
 	}
-	for attempt := 0; attempt < 2; attempt++ {
+	// Two attempts on a connection of its own, and one more for a request that was not sent
+	// because a concurrent call closed the session under it.
+	for attempt := 0; attempt < 3; attempt++ {
 		s, reply := p.get(ctx, u)
 		if s == nil {
 			return reply
@@ -230,6 +239,12 @@ func (p *participant) call(ctx context.Context, u *upstream, req Request) Reply 
 			continue
 		}
 		if !observed.gotConn.Load() {
+			// Another call of this participant found the connection gone first and closed
+			// this session while it reconnected: the request here failed on the closed
+			// session without being sent. Run it on the session that replaced it.
+			if p.replaced(s) {
+				continue
+			}
 			p.forget(s)
 			_, reply := p.get(ctx, u)
 			if reply.Code != 0 {
