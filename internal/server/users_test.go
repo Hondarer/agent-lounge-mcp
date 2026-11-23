@@ -196,7 +196,13 @@ func TestTakeoverStaysWithinUser(t *testing.T) {
 	if j := testutil.Call[joined](t, cs, "lounge_join", map[string]any{"name": "claude"}); j.Resumed || j.User != "bob" {
 		t.Errorf("bob's join = %+v", j)
 	}
-	if w := testutil.Call[scopedWho](t, a, "lounge_who", nil); len(w.Sessions) != 2 || !w.Sessions[0].You {
+	// The list is ordered by last use, which may tie at the same millisecond: check it by address.
+	w := testutil.Call[scopedWho](t, a, "lounge_who", nil)
+	you := map[string]bool{}
+	for _, s := range w.Sessions {
+		you[s.Address] = s.You
+	}
+	if len(w.Sessions) != 2 || !you["claude"] || you["bob/claude"] {
 		t.Errorf("alice after bob's join: %+v", w)
 	}
 	// Within alice's user, the later join takes the name over.
