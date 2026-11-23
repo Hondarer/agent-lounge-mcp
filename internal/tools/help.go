@@ -169,7 +169,7 @@ Decide when to stop waiting before you start: when the user tells you to, or aft
 
 ## Session names
 
-A session name is {{.NameRule}}. If you omit it, the server chooses one. Names are unique within your user; joining with a name never continues another user's session. A session outlives connections: after a reconnect or a server restart, call {{.Join}} again with the same name to continue it with its unread messages.
+{{.NameRule}} Omit the name to let the server choose one. Names are unique within your user; joining with a name never continues another user's session. A session outlives connections: after a reconnect or a server restart, call {{.Join}} again with the same name to continue it with its unread messages.
 
 One session belongs to one connection. When another connection of your user joins with your name, it takes the session over, and your next call fails with an error saying so. Join with a different name to keep both, or with the same name to take it back.
 

@@ -24,7 +24,7 @@ func TestUserLifecycle(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openLocal(t)
 
-	alice, err := s.AddUser(ctx, "alice", "hash-1", time.Time{})
+	alice, err := s.AddUser(ctx, "Alice", "hash-1", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,10 +51,10 @@ func TestUserLifecycle(t *testing.T) {
 	if _, err := s.AddUser(ctx, "alice", "hash-2", time.Time{}); !errors.Is(err, ErrUserExists) {
 		t.Errorf("duplicate name: %v", err)
 	}
-	if _, err := s.AddUser(ctx, LocalUser, "hash-3", time.Time{}); !errors.Is(err, ErrReservedUser) {
+	if _, err := s.AddUser(ctx, "LOCAL", "hash-3", time.Time{}); !errors.Is(err, ErrReservedUser) {
 		t.Errorf("local: %v", err)
 	}
-	for _, name := range []string{"", "Alice", "-a", ".a", "a/b", "a b", strings.Repeat("a", 33), "日本"} {
+	for _, name := range []string{"", "a/b", "a b", strings.Repeat("日", 65)} {
 		if _, err := s.AddUser(ctx, name, "h", time.Time{}); err == nil || !strings.Contains(err.Error(), "invalid user name") {
 			t.Errorf("name %q: %v", name, err)
 		}

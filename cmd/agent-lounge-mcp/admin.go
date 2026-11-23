@@ -14,6 +14,7 @@ import (
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
 	"github.com/hondarer/agent-lounge-mcp/internal/export"
+	"github.com/hondarer/agent-lounge-mcp/internal/names"
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
 
@@ -24,6 +25,7 @@ func sessionUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp session list [--user NAME] [--db FILE]          list the sessions")
 	fmt.Fprintln(w, "       agent-lounge-mcp session remove <user>/<name> --yes [--db FILE]  delete the session, its messages and deliveries")
 	fmt.Fprintln(w, "The commands open the database file directly and work while a server uses it.")
+	fmt.Fprintln(w, "Put options before -- to pass an address starting with a hyphen.")
 	fmt.Fprintln(w, "A connection joined as a removed session gets an error at its next tool call and can join again.")
 }
 
@@ -98,6 +100,22 @@ func runSession(ctx context.Context, args []string, stdout, stderr io.Writer) in
 			sessionUsage(stderr)
 			return exitUsage
 		}
+	}
+	if cmd == "list" {
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "user" {
+				*user, err = names.User(*user)
+			}
+		})
+	} else {
+		owner, err = names.User(owner)
+		if err == nil {
+			name, err = names.Session(name)
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
+		return exitFail
 	}
 	st, code := openExisting(ctx, *db, stderr)
 	if st == nil {

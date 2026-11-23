@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"regexp"
 	"time"
+
+	loungenames "github.com/hondarer/agent-lounge-mcp/internal/names"
 )
 
 // User is a user of the lounge: the owner of sessions, identified by a token (or, for the user
@@ -78,43 +79,36 @@ func nullMillis(t time.Time) sql.NullInt64 {
 }
 
 // UserNameRule describes the form of a user name.
-const UserNameRule = "1 to 32 characters from a-z 0-9 . _ -, starting with a letter or digit"
+const UserNameRule = loungenames.UserRule
 
-// userNameRE is the form of a user name. It has no '/', so a user name and a session name
-// joined by '/' (an address of another user's session) split unambiguously.
-var userNameRE = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
-
-// ValidateUserName checks the form of a user name for adding a user. The reserved name local
-// fails with ErrReservedUser.
+// ValidateUserName checks whether name can be used for a managed user.
 func ValidateUserName(name string) error {
-	if !userNameRE.MatchString(name) {
-		return fmt.Errorf("invalid user name %q: use %s", name, UserNameRule)
-	}
-	if name == LocalUser {
-		return ErrReservedUser
-	}
-	return nil
+	_, err := NormalizeManagedUser(name)
+	return err
 }
 
-// checkManagedUser rejects the names that the user subcommands cannot act on.
-func checkManagedUser(name string) error {
+// NormalizeManagedUser normalizes a user name and rejects the reserved local account.
+func NormalizeManagedUser(name string) (string, error) {
+	name, err := loungenames.User(name)
+	if err != nil {
+		return "", err
+	}
 	if name == LocalUser {
-		return ErrReservedUser
+		return "", ErrReservedUser
 	}
-	if !userNameRE.MatchString(name) {
-		return fmt.Errorf("invalid user name %q: use %s", name, UserNameRule)
-	}
-	return nil
+	return name, nil
 }
 
 // AddUser creates a user with the hash of its token (see package auth) and the lounge room of
 // its space. The token expires at expiresAt; the zero time means that it does not expire.
 func (s *Store) AddUser(ctx context.Context, name, tokenHash string, expiresAt time.Time) (User, error) {
-	if err := ValidateUserName(name); err != nil {
+	normalized, err := NormalizeManagedUser(name)
+	if err != nil {
 		return User{}, err
 	}
+	name = normalized
 	var u User
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var n int
 		if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM users WHERE name = ?", name).Scan(&n); err != nil {
 			return err
@@ -147,9 +141,11 @@ func (s *Store) AddUser(ctx context.Context, name, tokenHash string, expiresAt t
 // the user's sessions and messages stay. The new token expires at expiresAt (the zero time for
 // no expiry): the expiry of the previous token is not carried over.
 func (s *Store) RotateToken(ctx context.Context, name, tokenHash string, expiresAt time.Time) error {
-	if err := checkManagedUser(name); err != nil {
+	normalized, err := NormalizeManagedUser(name)
+	if err != nil {
 		return fmt.Errorf("rotate the token of %q: %w", name, err)
 	}
+	name = normalized
 	res, err := s.db.ExecContext(ctx, "UPDATE users SET token_hash = ?, token_expires_at = ? WHERE name = ?",
 		tokenHash, nullMillis(expiresAt), name)
 	if err != nil {
@@ -207,9 +203,11 @@ func (s *Store) TokenStatus(ctx context.Context, userID int64, tokenHash string)
 // expiry) and keeps the token. A token whose expiry has passed is accepted again once the new
 // expiry is later than the current time.
 func (s *Store) SetTokenExpiry(ctx context.Context, name string, expiresAt time.Time) error {
-	if err := checkManagedUser(name); err != nil {
+	normalized, err := NormalizeManagedUser(name)
+	if err != nil {
 		return fmt.Errorf("change the token expiry of %q: %w", name, err)
 	}
+	name = normalized
 	res, err := s.db.ExecContext(ctx, "UPDATE users SET token_expires_at = ? WHERE name = ?", nullMillis(expiresAt), name)
 	if err != nil {
 		return fmt.Errorf("change the token expiry of %q: %w", name, err)
@@ -277,11 +275,13 @@ func (s *Store) TokenUserCount(ctx context.Context) (int, error) {
 
 // CountUserData counts what RemoveUser would delete.
 func (s *Store) CountUserData(ctx context.Context, name string) (UserData, error) {
-	if err := checkManagedUser(name); err != nil {
+	normalized, err := NormalizeManagedUser(name)
+	if err != nil {
 		return UserData{}, fmt.Errorf("user %q: %w", name, err)
 	}
+	name = normalized
 	var data UserData
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
 		data, err = countUserData(ctx, tx, name)
 		return err
@@ -315,11 +315,13 @@ func countUserData(ctx context.Context, tx *sql.Tx, name string) (UserData, erro
 // their next request, since the token no longer matches any user. Repository and branch
 // activity rows are shared and stay.
 func (s *Store) RemoveUser(ctx context.Context, name string) (UserData, error) {
-	if err := checkManagedUser(name); err != nil {
+	normalized, err := NormalizeManagedUser(name)
+	if err != nil {
 		return UserData{}, fmt.Errorf("remove user %q: %w", name, err)
 	}
+	name = normalized
 	var data UserData
-	err := s.tx(ctx, func(tx *sql.Tx) error {
+	err = s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
 		if data, err = countUserData(ctx, tx, name); err != nil {
 			return err

@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -405,5 +407,68 @@ func TestPlural(t *testing.T) {
 	cfg.MemoryHalfLife = 0
 	if got := describeMemoryPolicy(cfg); !strings.Contains(got, "disabled") {
 		t.Errorf("describeMemoryPolicy without forgetting = %q", got)
+	}
+}
+
+func TestAdminNormalizesNamesAndEndsOptions(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "lounge.db")
+	if code, _, stderr := user("add", "ＡＬＩＣＥ", "--db", db); code != 0 || !strings.Contains(stderr, "user alice") {
+		t.Fatalf("user add: %d %s", code, stderr)
+	}
+	if code, _, stderr := user("add", "--db", db, "--", "-x"); code != 0 {
+		t.Fatalf("user add -- -x: %d %s", code, stderr)
+	}
+	if code, _, stderr := user("add", "LOCAL", "--db", db); code != 1 || !strings.Contains(stderr, "reserved") {
+		t.Fatalf("user add LOCAL: %d %s", code, stderr)
+	}
+
+	ctx := context.Background()
+	st, err := store.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	users, err := st.ListUsers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range users {
+		if u.Name == "alice" || u.Name == "-x" {
+			if _, _, err := st.JoinSession(ctx, store.JoinParams{UserID: u.ID, Name: "レビュー担当2"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if code, stdout, stderr := session("list", "--user", "Ａlice", "--db", db); code != 0 ||
+		!strings.Contains(stdout, "alice/レビュー担当2") || strings.Contains(stdout, "-x/") {
+		t.Fatalf("session list: %d %q %s", code, stdout, stderr)
+	}
+	for _, owner := range []struct{ input, normalized string }{{"ＡＬＩＣＥ", "alice"}, {"-X", "-x"}} {
+		if code, stdout, stderr := session("remove", "--yes", "--db", db, "--", owner.input+"/レビュー担当２"); code != 0 ||
+			!strings.Contains(stdout, "removed session "+owner.normalized+"/レビュー担当2") {
+			t.Fatalf("session remove: %d %q %s", code, stdout, stderr)
+		}
+	}
+	for _, args := range [][]string{
+		{"rotate", "Ａlice", "--db", db},
+		{"expiry", "--db", db, "--never", "--", "-X"},
+		{"remove", "Ａlice", "--yes", "--db", db},
+	} {
+		if code, _, stderr := user(args...); code != 0 {
+			t.Errorf("user %s: %d %s", args[0], code, stderr)
+		}
+	}
+	if code, _, _ := user("remove", "--db", db, "--", "-x", "--yes"); code != 2 {
+		t.Errorf("user remove parsed --yes after --: code %d", code)
+	}
+}
+
+func TestInterleavedOptionsConsumeDelimiterAsValue(t *testing.T) {
+	flags := flag.NewFlagSet("test", flag.ContinueOnError)
+	value := flags.String("value", "", "")
+	pos, err := parseInterleaved(flags, []string{"first", "--value", "--", "second", "--", "-third"})
+	if err != nil || *value != "--" || !slices.Equal(pos, []string{"first", "second", "-third"}) {
+		t.Fatalf("parse = %v, %v, value %q", pos, err, *value)
 	}
 }

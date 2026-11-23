@@ -3,6 +3,8 @@ package tools
 import (
 	"fmt"
 	"strings"
+
+	"github.com/hondarer/agent-lounge-mcp/internal/names"
 )
 
 // Addresses name sessions in tool input and output (to, address, reply_to, recipients,
@@ -28,12 +30,24 @@ func address(viewer, owner, name string) string {
 // the session name it refers to. viewer/name is the same as name.
 func parseAddress(viewer, to string) (user, name string, err error) {
 	user, name, qualified := strings.Cut(to, "/")
-	if !qualified {
-		return viewer, to, nil
+	if qualified {
+		user, err = names.User(user)
+		if err != nil {
+			return "", "", addressError(to, err)
+		}
+	} else {
+		user, name = viewer, to
 	}
-	if user == "" || !sessionNameRE.MatchString(name) {
-		return "", "", fmt.Errorf("invalid to %q: use a session name for a session of your user, or user/name for a session of another user "+
-			"(the address in %s)", to, toolWho)
+	name, err = names.Session(name)
+	if err != nil {
+		return "", "", addressError(to, err)
 	}
 	return user, name, nil
+}
+
+// addressError tells the agent the two forms of an address and where to find one, with the
+// rule the name broke.
+func addressError(to string, err error) error {
+	return fmt.Errorf("invalid to %q: use a session name for a session of your user, or user/name for a session of another user "+
+		"(the address in %s): %w", to, toolWho, err)
 }
