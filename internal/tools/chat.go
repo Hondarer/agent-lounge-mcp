@@ -10,6 +10,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
+	"github.com/hondarer/agent-lounge-mcp/internal/names"
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
 
@@ -53,7 +54,7 @@ func registerChat(r *Registry, d *Deps) {
 // SendInput defines arguments for the chat_send tool.
 type SendInput struct {
 	To   string `json:"to,omitempty" jsonschema:"address of the session to send to: its name for a session of your user, user/name for a session of another user (see the address in lounge_who). Give either to or room"`
-	Room string `json:"room,omitempty" jsonschema:"room to post to; the only room is lounge. Give either to or room"`
+	Room string `json:"room,omitempty" jsonschema:"room of the scope to post to: lounge (every other session of the scope) or a room created with chat_room (its members; posting joins you). Give either to or room"`
 	Body string `json:"body" jsonschema:"message text"`
 	// Scope is one of store.ScopeKinds; empty means user.
 	Scope string `json:"scope,omitempty" jsonschema:"range of sessions: user (default; the sessions of your user), repository (the sessions that declared your repository, whatever their user), branch (the sessions that declared your repository and branch, whatever their user) or shared (every session of every user). Required as repository, branch or shared to reach a session of another user"`
@@ -82,13 +83,18 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 	case in.To != "" && in.Room != "":
 		return nil, SendOutput{}, errors.New("give either to (a session address) or room, not both")
 	case in.To == "" && in.Room == "":
-		return nil, SendOutput{}, errors.New("give a destination: to (a session address from lounge_who) or room (lounge)")
+		return nil, SendOutput{}, errors.New("give a destination: to (a session address from lounge_who) or room (lounge, or a room from chat_room)")
 	case in.Body == "":
 		return nil, SendOutput{}, errors.New("body must not be empty")
 	case len(in.Body) > d.Cfg.MaxBodyBytes:
 		return nil, SendOutput{}, fmt.Errorf("body is too large: %d bytes, at most %d bytes (UTF-8). Split it into several messages", len(in.Body), d.Cfg.MaxBodyBytes)
 	}
-	target := store.Target{Room: in.Room}
+	target := store.Target{}
+	if in.Room != "" {
+		if target.Room, err = names.Room(in.Room); err != nil {
+			return nil, SendOutput{}, err
+		}
+	}
 	if in.To != "" {
 		if target.User, target.Name, err = parseAddress(me.UserName, in.To); err != nil {
 			return nil, SendOutput{}, err
@@ -120,7 +126,7 @@ func (d *Deps) chatSend(ctx context.Context, req *mcp.CallToolRequest, in SendIn
 			"and branch (the output of git branch --show-current), then send again. Scope %s is not available when not on a branch (detached HEAD)",
 			store.ScopeBranch, toolJoin, store.ScopeBranch)
 	case errors.Is(err, store.ErrNoSuchRoom):
-		return nil, SendOutput{}, fmt.Errorf("no room named %q: the only room is %s", in.Room, store.LoungeRoom)
+		return nil, SendOutput{}, noRoomError(target.Room, scope)
 	case err != nil:
 		return nil, SendOutput{}, err
 	}

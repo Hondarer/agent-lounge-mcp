@@ -43,8 +43,8 @@ func TestUserLifecycle(t *testing.T) {
 		t.Error("the local user's marker was taken as a token hash")
 	}
 	// The user's space has its lounge room.
-	if rooms, err := s.ListRooms(ctx, alice.ID); err != nil || !slices.Equal(rooms, []string{LoungeRoom}) {
-		t.Errorf("rooms = %v, %v", rooms, err)
+	if rooms := userRooms(t, s, alice.ID); !slices.Equal(rooms, []string{LoungeRoom}) {
+		t.Errorf("rooms = %v", rooms)
 	}
 
 	// Names: taken, reserved, invalid.

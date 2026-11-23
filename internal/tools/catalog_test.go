@@ -8,7 +8,7 @@ import (
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
 )
 
-var finalToolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history",
+var finalToolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history", "chat_room",
 	"memory_put", "memory_search", "memory_get", "memory_pin", "memory_forget", "lounge_info"}
 
 func TestFinalToolNames(t *testing.T) {

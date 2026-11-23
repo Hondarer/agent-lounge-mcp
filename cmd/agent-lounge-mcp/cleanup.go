@@ -65,6 +65,9 @@ func describeCleanup(r store.CleanupResult) string {
 	if r.Memories > 0 {
 		parts = append(parts, plural(r.Memories, "forgotten memory", "forgotten memories")+" deleted")
 	}
+	if r.Rooms > 0 {
+		parts = append(parts, plural(r.Rooms, "unused room", "unused rooms")+" deleted")
+	}
 	return "cleanup: " + strings.Join(parts, "; ")
 }
 

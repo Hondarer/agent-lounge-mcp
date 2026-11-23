@@ -243,13 +243,14 @@ func TestHelpDescribesUsersAndScopes(t *testing.T) {
 	guide := guideOf(t, cs)
 	for _, want := range []string{
 		"## Scopes and targets", "## Users", "user/name", "reply_to", "scope_id", "never inferred",
-		"65536 bytes", "1000 unread", "500 sessions", "401", "authenticated by their token", "other users",
+		"65536 bytes", "1000 unread", "500 sessions", "401", "decided by the token", "other users",
+		"shared: every session", "chat_room action create", "100 rooms besides lounge",
 	} {
 		if !strings.Contains(guide, want) {
 			t.Errorf("guide does not mention %q", want)
 		}
 	}
-	for _, stale := range []string{"on this machine", "No authentication", "## Repository space", "same_repository"} {
+	for _, stale := range []string{"on this machine", "No authentication", "## Repository space", "same_repository", "Rooms cannot be created", "not the room messages sent before"} {
 		if strings.Contains(guide, stale) || strings.Contains(cs.InitializeResult().Instructions, stale) {
 			t.Errorf("guide or instructions still say %q", stale)
 		}

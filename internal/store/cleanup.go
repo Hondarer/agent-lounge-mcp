@@ -30,6 +30,8 @@ type CleanupResult struct {
 	Sessions, SessionMessages, SessionDeliveries int
 	// Memories are the memories deleted by the forgetting model (the memory's scope-kind retention policy).
 	Memories int
+	// Rooms are the created rooms deleted because they had no member and no message.
+	Rooms int
 }
 
 // Empty reports whether the cleanup did nothing.
@@ -37,7 +39,7 @@ func (r CleanupResult) Empty() bool {
 	return r == CleanupResult{}
 }
 
-// Cleanup runs the four steps of the periodic cleanup, in this order, with the store's clock:
+// Cleanup runs the five steps of the periodic cleanup, in this order, with the store's clock:
 //
 //  1. Expire: a delivery queued longer than ExpireAfter becomes expired. Only queued
 //     deliveries expire: a delivered one stays delivered until it is acked (see delivery.go).
@@ -55,6 +57,9 @@ func (r CleanupResult) Empty() bool {
 //     ReferenceWindow are dropped. The same transaction deletes a memory_scope_activity row
 //     whose scope has no memory and whose last access is older than scopeActivityIdle.
 //     Pinned and faded memories count as memories.
+//  5. Delete rooms: a created room (any room but LoungeRoom) with no member and no message is
+//     deleted, so that its name can be used again (see rooms.go). It runs last, after the steps
+//     that delete messages and sessions, which may leave a room empty.
 //
 // Each step is its own transaction. When a step fails, Cleanup returns what the earlier steps
 // did with the error; the caller tries again at its next run.
@@ -139,6 +144,15 @@ func (s *Store) Cleanup(ctx context.Context, p CleanupPolicy) (CleanupResult, er
 	if err != nil {
 		r.Memories = 0
 		return r, fmt.Errorf("delete forgotten memories: %w", err)
+	}
+	err = s.tx(ctx, func(tx *sql.Tx) error {
+		var err error
+		r.Rooms, err = deleteUnusedRooms(ctx, tx)
+		return err
+	})
+	if err != nil {
+		r.Rooms = 0
+		return r, fmt.Errorf("delete unused rooms: %w", err)
 	}
 	return r, nil
 }

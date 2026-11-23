@@ -57,3 +57,19 @@ func TestExistingNamesAreUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// Room names fold case and width like user names, so that agents writing the same name meet in
+// one room.
+func TestRoom(t *testing.T) {
+	for in, want := range map[string]string{"Release": "release", "ＲＥＶＩＥＷ": "review", "レビュー": "レビュー", "lounge": "lounge"} {
+		got, err := Room(in)
+		if err != nil || got != want {
+			t.Errorf("Room(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{"", "a b", "a/b", strings.Repeat("x", 65)} {
+		if _, err := Room(in); err == nil || !strings.Contains(err.Error(), "room name") {
+			t.Errorf("Room(%q) error = %v, want a room name error", in, err)
+		}
+	}
+}

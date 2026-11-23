@@ -90,7 +90,7 @@ func runLoungeCLI(command string, args []string) int {
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--allowed-host NAME]... [--db FILE] [--inbox-wait-max DURATION]")
 	fmt.Fprintln(w, "           [--expire-after DURATION] [--retain-for DURATION] [--session-idle DURATION] [--cleanup-interval DURATION]")
-	fmt.Fprintln(w, "           [--max-body-bytes N] [--max-unread N] [--max-sessions-per-user N]")
+	fmt.Fprintln(w, "           [--max-body-bytes N] [--max-unread N] [--max-sessions-per-user N] [--max-rooms-per-scope N]")
 	fmt.Fprintln(w, "           [--memory-half-life DURATION] [--memory-fade-threshold X] [--memory-grace DURATION]")
 	for _, kind := range store.ScopeKinds() {
 		fmt.Fprintf(w, "           [--memory-%[1]s-half-life DURATION] [--memory-%[1]s-fade-threshold X] [--memory-%[1]s-grace DURATION]\n", kind)
@@ -137,6 +137,8 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		fmt.Sprintf("largest message body in bytes of UTF-8 (1 to %d)", config.MaxMaxBodyBytes))
 	fs.IntVar(&cfg.MaxUnread, "max-unread", cfg.MaxUnread, "most unread messages one session can hold (1 or more)")
 	fs.IntVar(&cfg.MaxSessionsPerUser, "max-sessions-per-user", cfg.MaxSessionsPerUser, "most sessions one user can have (1 or more)")
+	fs.IntVar(&cfg.MaxRoomsPerScope, "max-rooms-per-scope", cfg.MaxRoomsPerScope,
+		"most rooms one scope can have besides lounge (1 or more); lowering it deletes no room")
 	applyRetentionFlags := addMemoryRetentionFlags(fs, &cfg, true)
 	fs.Var(config.DurationValue{D: &cfg.MemoryGrace}, "memory-grace",
 		"time after a memory faded after which the cleanup deletes it (0: never)")

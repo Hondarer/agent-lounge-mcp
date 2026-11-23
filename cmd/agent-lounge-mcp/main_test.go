@@ -185,7 +185,7 @@ func TestServe(t *testing.T) {
 
 	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
 	out := testutil.Call[tools.InfoOutput](t, cs, "lounge_info", nil)
-	if out.SchemaVersion != 9 || len(out.MemoryRetention) != 4 || out.MemoryRetention[store.ScopeBranch].HalfLife != "0s" {
+	if out.SchemaVersion != 10 || len(out.MemoryRetention) != 4 || out.MemoryRetention[store.ScopeBranch].HalfLife != "0s" {
 		t.Fatalf("got %+v", out)
 	}
 

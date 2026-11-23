@@ -28,7 +28,7 @@ func guideOf(t *testing.T, cs *mcp.ClientSession) string {
 	return testutil.Text(res)
 }
 
-var toolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history",
+var toolNames = []string{"lounge_help", "lounge_join", "lounge_who", "chat_send", "chat_inbox", "chat_ack", "chat_status", "chat_history", "chat_room",
 	"memory_put", "memory_search", "memory_get", "memory_pin", "memory_forget", "lounge_info"}
 
 func TestHelpBeforeJoining(t *testing.T) {
