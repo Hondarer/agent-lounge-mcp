@@ -253,7 +253,8 @@ func TestHistory(t *testing.T) {
 	fetch(t, s, alice)
 	fetch(t, s, bob)
 	must(sendTo(s, bob, ScopeUser, LocalUser, "alice", "b->a queued"))
-	// dave joins after the room message: it does not see it.
+	// dave joins after the room message: it reads it all the same (rooms are shared in their
+	// scope), but not the messages between other sessions.
 	dave := join(t, s, local, "dave")
 
 	// alice: what she sent and what was delivered to her, newest first, not the queued one.
@@ -268,7 +269,7 @@ func TestHistory(t *testing.T) {
 	if got, _ := history(t, s, carol, HistoryQuery{}); !slices.Equal(got, []string{"c->b", "c room"}) {
 		t.Errorf("carol: %v", got)
 	}
-	if got, _ := history(t, s, dave, HistoryQuery{}); len(got) != 0 {
+	if got, _ := history(t, s, dave, HistoryQuery{}); !slices.Equal(got, []string{"c room"}) {
 		t.Errorf("dave: %v", got)
 	}
 
@@ -414,5 +415,57 @@ func TestSetLimits(t *testing.T) {
 	}
 	if list, _, _ := s.ListSessions(ctx, local, 10); len(list) != 2 {
 		t.Errorf("sessions = %d", len(list))
+	}
+}
+
+// History returns the messages of the rooms of the session's scopes, member or not, but not the
+// messages queued for it, the messages between other sessions, or the rooms of scopes it left.
+func TestHistoryOfRooms(t *testing.T) {
+	ctx := context.Background()
+	s, local := openLocal(t)
+	bob := addUser(t, s, "bob")
+	repo := &Location{Origin: "github.com/org/app"}
+	a := joinWith(t, s, JoinParams{UserID: local, Name: "a", Location: repo})
+	b := joinWith(t, s, JoinParams{UserID: bob.ID, Name: "b", Location: repo})
+	if _, err := s.CreateRoom(ctx, a.ID, ScopeRepository, "review"); err != nil {
+		t.Fatal(err)
+	}
+	must := func(_ Sent, err error) {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	must(sendRoom(s, a, ScopeRepository, "review", "review 1"))
+	must(sendTo(s, a, ScopeRepository, "bob", "b", "a->b"))
+	must(sendRoom(s, a, ScopeRepository, LoungeRoom, "lounge 1"))
+	// c joins later, without joining the room.
+	c := joinWith(t, s, JoinParams{UserID: local, Name: "c", Location: repo})
+
+	got, _ := history(t, s, c, HistoryQuery{})
+	if !slices.Equal(got, []string{"lounge 1", "review 1"}) {
+		t.Errorf("c: %v", got)
+	}
+	msgs, _, err := s.History(ctx, c.ID, HistoryQuery{Limit: 10})
+	if err != nil || len(msgs) != 2 || !msgs[0].Others || msgs[0].Sent || msgs[0].State != "" {
+		t.Errorf("c messages = %+v, %v", msgs, err)
+	}
+	if got, _ := history(t, s, c, HistoryQuery{Room: "review"}); !slices.Equal(got, []string{"review 1"}) {
+		t.Errorf("c review: %v", got)
+	}
+	// b has the lounge message queued: it is not returned until it is fetched.
+	if got, _ := history(t, s, b, HistoryQuery{Scope: ScopeRepository}); !slices.Equal(got, []string{"review 1"}) {
+		t.Errorf("b before fetching: %v", got)
+	}
+	if _, err := s.FetchInbox(ctx, b.ID, 10); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := history(t, s, b, HistoryQuery{Scope: ScopeRepository}); !slices.Equal(got, []string{"lounge 1", "a->b", "review 1"}) {
+		t.Errorf("b after fetching: %v", got)
+	}
+	// c leaves the repository: the rooms of the repository are no longer its.
+	joinWith(t, s, JoinParams{UserID: local, Name: "c", Location: &Location{Origin: "github.com/org/other"}})
+	if got, _ := history(t, s, c, HistoryQuery{}); len(got) != 0 {
+		t.Errorf("c after leaving: %v", got)
 	}
 }

@@ -188,7 +188,7 @@ func TestChatHistory(t *testing.T) {
 		"limit":               {"limit": -1},
 		"before":              {"before": -1},
 		"invalid":             {"with": "/x"},
-		`no room named "other": the only room is lounge`: {"room": "other"},
+		`no room named "other" in any of your scopes`: {"room": "other"},
 	} {
 		if msg := testutil.CallErr(t, bob, "chat_history", want); !strings.Contains(msg, args) {
 			t.Errorf("%v: %s", want, msg)
@@ -315,5 +315,25 @@ func TestConfiguredLimits(t *testing.T) {
 		if !strings.Contains(g, want) {
 			t.Errorf("guide does not contain %q", want)
 		}
+	}
+}
+
+// chat_history returns the messages of a room the session did not join, posted before it came,
+// as direction room without reply_to and state.
+func TestHistoryOfRoomNotJoined(t *testing.T) {
+	base, sess := tokenServer(t, config.Default())
+	aliceToken, bobToken := newUser(t, sess, "alice"), newUser(t, sess, "bob")
+	origin := "https://github.com/owner/app.git"
+	a := joinAs(t, base, aliceToken, map[string]any{"name": "claude", "origin": origin})
+	testutil.Call[roomOut](t, a, "chat_room", map[string]any{"action": "create", "scope": "repository", "room": "release"})
+	testutil.Call[scopedSent](t, a, "chat_send", map[string]any{"room": "release", "scope": "repository", "body": "before"})
+
+	b := joinAs(t, base, bobToken, map[string]any{"name": "codex", "origin": origin})
+	h := testutil.Call[historyOut](t, b, "chat_history", map[string]any{"room": "Release", "scope": "repository"})
+	if len(h.Messages) != 1 || h.Messages[0].Direction != "room" || h.Messages[0].Body != "before" || h.Messages[0].ReplyTo != "" || h.Messages[0].State != "" {
+		t.Errorf("history of bob = %+v", h)
+	}
+	if msg := testutil.CallErr(t, b, "chat_history", map[string]any{"room": "missing", "scope": "repository"}); !strings.Contains(msg, `no room named "missing" in scope repository`) {
+		t.Errorf("missing room: %q", msg)
 	}
 }

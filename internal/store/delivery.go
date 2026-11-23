@@ -213,8 +213,12 @@ type HistoryQuery struct {
 // HistoryMessage is a message as History returns it.
 type HistoryMessage struct {
 	InboxMessage
-	// Sent reports that the session sent the message; otherwise it was delivered to it.
+	// Sent reports that the session sent the message.
 	Sent bool
+	// Others reports a room message the session neither sent nor received: a message of a room
+	// of one of its scopes, posted before it entered the range or to a room it did not join.
+	// A message that is neither Sent nor Others was delivered to the session.
+	Others bool
 	// ToUser and ToName are the recipient of a message addressed to a session; empty for a
 	// room message.
 	ToUser, ToName string
@@ -225,17 +229,30 @@ type HistoryMessage struct {
 // History returns the messages of the session sessionID, newest first, up to q.Limit, and
 // whether older ones remain. It changes nothing.
 //
-// The session reads only what it took part in: the messages it sent, and the messages
-// delivered to it (delivered, acked or expired). This keeps a session from widening, by
-// declaring values, the range of past conversations it can read: a session that joins a
-// scope later does not read the room messages sent before it joined. Queued messages are not
-// returned: they are read with FetchInbox, which records that they were delivered.
+// The session reads the messages it sent, the messages delivered to it (delivered, acked or
+// expired), and every message of the rooms of the scopes it can use now, whether it is a member
+// or not and whether it was in the range when the message was sent: information on the server
+// is shared among the sessions of a scope, and room membership only decides what becomes unread.
+// Messages addressed to other sessions are not returned. Messages queued for the session are
+// not returned: they are read with FetchInbox, which records that they were delivered.
 //
 // A WithUser and WithName that name no session give an empty list, the same as a session
 // without messages, so that the result does not tell whether another user's session exists.
 func (s *Store) History(ctx context.Context, sessionID int64, q HistoryQuery) (msgs []HistoryMessage, more bool, err error) {
 	msgs = []HistoryMessage{}
 	err = s.readTx(ctx, func(tx *sql.Tx) error {
+		sess, err := loadSession(ctx, tx, sessionID)
+		if err != nil {
+			return err
+		}
+		// The rooms of the scopes the session can use now.
+		var roomConds []string
+		var roomArgs []any
+		for _, sc := range ScopesOf(sess) {
+			userID, repository := roomColumns(sess, sc)
+			roomConds = append(roomConds, "(r2.scope = ? AND coalesce(r2.user_id, 0) = coalesce(?, 0) AND r2.repository = ?)")
+			roomArgs = append(roomArgs, sc.Kind, userID, repository)
+		}
 		var peer int64
 		if q.WithName != "" {
 			err := tx.QueryRowContext(ctx, "SELECT s.id"+sessionFrom+"WHERE u.name = ? AND s.name = ?", q.WithUser, q.WithName).Scan(&peer)
@@ -251,8 +268,11 @@ func (s *Store) History(ctx context.Context, sessionID int64, q HistoryQuery) (m
 			before = 1<<63 - 1
 		}
 		var conds []string
-		// The arguments of the CTE and of the join with the session's deliveries come first.
-		args := []any{sessionID, before, sessionID, before, sessionID}
+		// The arguments of the CTE, of the select list and of the join with the session's
+		// deliveries come first, in the order of the query text.
+		args := []any{sessionID, before, sessionID, before, before}
+		args = append(args, roomArgs...)
+		args = append(args, sessionID, sessionID, sessionID)
 		if q.Scope != "" {
 			conds = append(conds, "m.scope = ?")
 			args = append(args, q.Scope)
@@ -276,12 +296,18 @@ func (s *Store) History(ctx context.Context, sessionID int64, q HistoryQuery) (m
 		rows, err := tx.QueryContext(ctx, `
 			WITH mine(id) AS (
 				SELECT id FROM messages WHERE sender_session_id = ? AND id < ?
-				UNION ALL
+				UNION
 				SELECT message_id FROM deliveries
 				WHERE recipient_session_id = ? AND message_id < ? AND state IN ('delivered', 'acked', 'expired')
+				UNION
+				SELECT m2.id FROM messages m2 JOIN rooms r2 ON r2.id = m2.room_id
+				WHERE m2.id < ? AND (`+strings.Join(roomConds, " OR ")+`)
+					AND NOT EXISTS (SELECT 1 FROM deliveries q
+						WHERE q.message_id = m2.id AND q.recipient_session_id = ? AND q.state = 'queued')
 			)
 			SELECT m.id, u.name, s.name, m.sender_agent, m.sender_os_user, m.sender_machine, m.scope, m.scope_id,
-				coalesce(r.name, ''), m.body, m.sent_at, coalesce(tu.name, ''), coalesce(ts.name, ''), coalesce(d.state, '')
+				coalesce(r.name, ''), m.body, m.sent_at, coalesce(tu.name, ''), coalesce(ts.name, ''), coalesce(d.state, ''),
+				m.sender_session_id = ?
 			FROM mine
 			JOIN messages m ON m.id = mine.id
 			JOIN sessions s ON s.id = m.sender_session_id
@@ -300,11 +326,11 @@ func (s *Store) History(ctx context.Context, sessionID int64, q HistoryQuery) (m
 			var m HistoryMessage
 			var sentAt int64
 			if err := rows.Scan(&m.MessageID, &m.FromUser, &m.From, &m.FromAgent, &m.FromOSUser, &m.FromMachine,
-				&m.Scope.Kind, &m.Scope.ID, &m.Room, &m.Body, &sentAt, &m.ToUser, &m.ToName, &m.State); err != nil {
+				&m.Scope.Kind, &m.Scope.ID, &m.Room, &m.Body, &sentAt, &m.ToUser, &m.ToName, &m.State, &m.Sent); err != nil {
 				return err
 			}
 			m.SentAt = fromMillis(sentAt)
-			m.Sent = m.State == ""
+			m.Others = !m.Sent && m.State == ""
 			msgs = append(msgs, m)
 		}
 		return rows.Err()
