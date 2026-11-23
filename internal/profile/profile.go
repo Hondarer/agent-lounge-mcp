@@ -328,32 +328,57 @@ func Repository(origin, machine, folder string) (string, error) {
 	}
 }
 
-// Branch normalizes a Git branch name: the last non-empty line is taken, trimmed and lowercased.
-// An empty result means no branch (for example detached HEAD or a non-Git folder).
+// Branch normalizes a Git branch name from the output of git branch --show-current.
 //
-// Characters forbidden in Git branch names (:, whitespace, control characters, ~, ^, ?, *, [
-// and \) are rejected, as is "head" (the output of git rev-parse --abbrev-ref HEAD on detached
-// HEAD). Rejecting ':' is also what guarantees that <repository>:<branch> uniquely identifies
-// the pair even when the repository unit itself contains ':' (such as host-a:c:\work\app).
+// The name is the last line, split on newline and carriage return, that is non-empty after
+// leading and trailing ASCII space and tab are removed. An empty result means no branch (for
+// example detached HEAD, where that command prints nothing, or a non-Git folder).
+//
+// Only ASCII space (U+0020) and tab are trimmed, and only an ASCII space is rejected inside
+// the name. Unicode whitespace, such as U+3000, stays part of the name: Git allows it in a
+// branch name.
+//
+// The exact name HEAD, before lowercasing, is rejected. head and Head are accepted and become
+// head. The name is then lowercased. A name longer than MaxBranchLen characters is rejected,
+// as is a name that contains an ASCII space, a control character, or one of : ~ ^ ? * [ \.
+// Rejecting ':' keeps <repository>:<branch> a unique identifier even when the repository unit
+// itself contains ':' (such as host-a:c:\work\app).
 func Branch(raw string) (string, error) {
-	s := strings.ToLower(lastLine(raw))
+	s := branchLine(raw)
 	if s == "" {
 		return "", nil
 	}
+	if s == "HEAD" {
+		return "", fmt.Errorf("branch %q is not a branch name (pass the output of git branch --show-current, or an empty string when not on a branch)", s)
+	}
+	s = strings.ToLower(s)
 	if n := utf8.RuneCountInString(s); n > MaxBranchLen {
 		return "", fmt.Errorf("branch is too long: %d characters, at most %d (pass the output of git branch --show-current, or an empty string when not on a branch)", n, MaxBranchLen)
 	}
 	if strings.ContainsFunc(s, isInvalidBranchRune) {
 		return "", fmt.Errorf("branch %q contains characters Git does not allow in a branch name (pass the output of git branch --show-current, or an empty string when not on a branch)", s)
 	}
-	if s == "head" {
-		return "", fmt.Errorf("branch %q is not a branch name (pass the output of git branch --show-current, or an empty string when not on a branch)", s)
-	}
 	return s, nil
 }
 
+// branchLine returns the last line of s, split on '\n' and '\r', that is non-empty after
+// trimming leading and trailing ASCII space and tab. Unicode whitespace stays in the line.
+// Branch uses this instead of lastLine, which trims every Unicode space for the other fields.
+func branchLine(s string) string {
+	lines := strings.FieldsFunc(s, func(r rune) bool { return r == '\n' || r == '\r' })
+	for i := len(lines) - 1; i >= 0; i-- {
+		if l := strings.Trim(lines[i], " \t"); l != "" {
+			return l
+		}
+	}
+	return ""
+}
+
+// isInvalidBranchRune reports whether r cannot occur in a branch name. An ASCII space and a
+// control character are rejected. Unicode whitespace is kept, because Git allows it in a
+// branch name.
 func isInvalidBranchRune(r rune) bool {
-	if unicode.IsSpace(r) || unicode.IsControl(r) {
+	if r == ' ' || unicode.IsControl(r) {
 		return true
 	}
 	switch r {
