@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 最終仕様 (design)
-最終更新日時: 2026-11-24 06:53:00 JST
+最終更新日時: 2026-11-24 07:12:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261124-shared-space-rooms-overview.md` (全体管理文書)、`261124-shared-space-rooms-discussion.md` (検討用 Markdown)、`261124-shared-space-rooms-lightadr.md` (簡易 ADR)。いずれも削除されている場合があります。
@@ -203,7 +203,10 @@ Table: rooms の要素
 
 ### 6.9. スキーマ
 
-新しいスクリプト `internal/store/schema/0009_room_members.sql` を加えます。既存のスクリプトは変えません。
+新しいスクリプトを 2 つ加えます。既存のスクリプトは変えません。
+
+- `internal/store/schema/0009_shared_scope.sql`: `memory_retention` の `scope` の CHECK 制約に `shared` を加えます (表を作り直します)。他の表 (`rooms`、`messages`、`memories`、`memory_scope_activity`) の CHECK 制約は、すでに `shared` を許しています。
+- `internal/store/schema/0010_room_members.sql`: ルームの参加の記録の表を加えます。
 
 ```sql
 CREATE TABLE room_members (
@@ -265,7 +268,7 @@ Table: chat_history で読める範囲
 | `shared` のメモリ | 作成、他のユーザーによる検索・更新・削除、ユーザーの削除で残ること、忘却の上書きのオプション |
 | ルーム | 作成と自動の参加、同じ名前の作成、参加と退出、参加者だけに届くこと、範囲を出たセッションに届かず戻ると届くこと、投稿での自動の参加、ないルームへの投稿のエラー、`lounge` の退出のエラー、名前の正規化 (大文字と小文字)、上限、定期の処理での削除 |
 | 読み返し | 参加の前と、参加していないルームのメッセージを読めること、自分宛ての未読を返さないこと、他のセッションの間のセッション宛てを返さないこと、使えなくなったスコープのルームの、自分が送受信していないメッセージを返さないこと |
-| スキーマ | 版 8 のデータベースからの移行 |
+| スキーマ | 版 8 以前のデータベースからの移行 |
 | 書き出し | `shared` のフォルダーとファイルの名前 |
 | ツールの一覧と案内 | ツールが 15 個であること、案内の大きさ |
 
