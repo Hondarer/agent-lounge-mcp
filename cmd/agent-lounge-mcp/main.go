@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
+	"github.com/hondarer/agent-lounge-mcp/internal/loungecli"
 	"github.com/hondarer/agent-lounge-mcp/internal/server"
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 	"github.com/hondarer/agent-lounge-mcp/internal/version"
@@ -57,6 +58,8 @@ func main() {
 		if err := serve(ctx, force, cfg, nil); err != nil {
 			log.Fatal(err)
 		}
+	case "connection", "tools", "call":
+		os.Exit(runLoungeCLI(os.Args[1], os.Args[2:]))
 	case "user":
 		os.Exit(runUser(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "session":
@@ -78,6 +81,12 @@ func main() {
 	}
 }
 
+func runLoungeCLI(command string, args []string) int {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return loungecli.Run(ctx, command, args, os.Stdin, os.Stdout, os.Stderr)
+}
+
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--allowed-host NAME]... [--db FILE] [--inbox-wait-max DURATION]")
 	fmt.Fprintln(w, "           [--expire-after DURATION] [--retain-for DURATION] [--session-idle DURATION] [--cleanup-interval DURATION]")
@@ -93,6 +102,7 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "       agent-lounge-mcp memory list|remove ...           (list and remove memories; see agent-lounge-mcp memory -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp message list|show ...          (list and show messages; see agent-lounge-mcp message -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp export [filters] --out DIR [--format markdown] [--db FILE]  (write messages and memories as Markdown files)")
+	fmt.Fprint(w, loungecli.Usage)
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
