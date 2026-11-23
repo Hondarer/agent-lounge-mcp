@@ -140,7 +140,7 @@ A memory is knowledge other sessions can use for a while, such as how to fix an 
 - Scope. A memory belongs to one scope: {{.ScopeUser}} (the default), {{.ScopeRepo}} (every session of your repository, of any user), or {{.ScopeBranch}} (every session of your repository and branch, of any user). Save knowledge needed after a branch is merged in {{.ScopeRepo}} or in the repository's documents. A memory's scope cannot change.
 - Before you save, search: when a memory already says the same thing, update it by passing its id to {{.MemPut}} with the fields to replace (body, title, tags; tags: [] removes the tags, title: "" the title). Every session of a scope can update, pin and delete its memories; created_by and updated_by tell who wrote them.
 - Searching. {{.MemSearch}} with query returns the memories whose title, body or tags contain every term (separated by spaces; any part of a word matches, in any letter case; every other character is literal). Without query it lists memories; without scope it searches all your scopes; tags keeps memories with all the tags. Results come best first; each has scope, scope_id, created_by, updated_by and up to {{.SearchBody}} characters of the body (truncated: true when cut: call {{.MemGet}} for all). It returns up to {{.SearchDefault}} memories (limit, at most {{.SearchMax}}); more: true means more matched: add terms or tags.
-- Forgetting. {{if .MemHalfLife}}A memory's retention score (retention) is 1 when it was just saved, updated or used, falling by half every {{.MemHalfLife}} without use, and more slowly the more it was used. When it falls below {{.MemThreshold}}, the memory fades (faded: true): searches leave it out unless you pass include_faded: true. In an active scope a memory never used fades about {{.FadeNever}} days after it was last touched, one used once after about {{.FadeOnce}} days. {{if .MemGrace}}A faded memory is deleted {{.MemGrace}} after it faded.{{else}}Faded memories are not deleted on this server.{{end}} Scopes with no memory access for {{.MemHalfLife}} forget at 1/3 the pace (up to about 3x longer: unused fades after about {{.FadeQuietNever}} days{{if .MemGrace}}, deleted after about {{.DeleteQuietNever}} days{{end}}). Reading a faded memory with {{.MemGet}} brings it back.{{else}}Memories do not fade on this server: they stay until they are deleted.{{end}}
+- Forgetting. {{if .RetentionByKind}}Values by scope are half-life, fade threshold and deletion grace ({{.RetentionByKind}}). A zero half-life disables fading. A zero grace keeps faded memories. References lengthen half-life. After a quiet gap reaches the half-life, forgetting continues at 1/3 pace. Searches omit faded memories unless include_faded is true. {{.MemGet}} brings them back.{{else if .MemHalfLife}}A memory's retention score (retention) is 1 when it was just saved, updated or used, falling by half every {{.MemHalfLife}} without use, and more slowly the more it was used. When it falls below {{.MemThreshold}}, the memory fades (faded: true): searches leave it out unless you pass include_faded: true. In an active scope a memory never used fades about {{.FadeNever}} days after it was last touched, one used once after about {{.FadeOnce}} days. {{if .MemGrace}}A faded memory is deleted {{.MemGrace}} after it faded.{{else}}Faded memories are not deleted on this server.{{end}} Scopes with no memory access for {{.MemHalfLife}} forget at 1/3 the pace (up to about 3x longer: unused fades after about {{.FadeQuietNever}} days{{if .MemGrace}}, deleted after about {{.DeleteQuietNever}} days{{end}}). Reading a faded memory with {{.MemGet}} brings it back.{{else}}Memories do not fade on this server: they stay until they are deleted.{{end}}
 - Use. {{.MemGet}}, and the first {{.Counted}} results of a search with query, count as a use (access_count, accessed_at), at most once a day per session and memory; reading a faded memory with {{.MemGet}} always counts. To keep a memory regardless, pin it with {{.MemPin}}; unpin with pinned: false.
 - Delete a wrong or outdated memory with {{.MemForget}}: it is deleted for every session of its scope.
 
@@ -248,6 +248,7 @@ type guideValues struct {
 	// Forgetting: MemHalfLife is "" when forgetting is disabled, MemGrace "" when faded
 	// memories are kept. FadeNever and FadeOnce are the days until a memory used never and
 	// once fades.
+	RetentionByKind       string
 	MemHalfLife, MemGrace string
 	MemThreshold          float64
 	FadeNever, FadeOnce   int
@@ -272,11 +273,17 @@ func period(d time.Duration) string {
 func guide(cfg config.Config) string {
 	var memHalfLife string
 	var fadeNever, fadeOnce, fadeQuietNever, deleteQuietNever int
-	if d, ok := cfg.Retention().FadesAfter(0); ok {
-		d1, _ := cfg.Retention().FadesAfter(1)
-		dq, _ := cfg.Retention().FadesAfterQuiet(0)
-		memHalfLife, fadeNever, fadeOnce, fadeQuietNever = config.FormatDuration(cfg.MemoryHalfLife), days(d), days(d1), days(dq)
-		if ddq, ok := cfg.Retention().DeletesAfterQuiet(0); ok {
+	policies := cfg.RetentionPolicies()
+	p, uniform := policies.Uniform()
+	var retentionByKind string
+	if !uniform {
+		retentionByKind = config.FormatRetentionByKind(policies)
+	}
+	if d, ok := p.FadesAfter(0); uniform && ok {
+		d1, _ := p.FadesAfter(1)
+		dq, _ := p.FadesAfterQuiet(0)
+		memHalfLife, fadeNever, fadeOnce, fadeQuietNever = config.FormatDuration(p.HalfLife), days(d), days(d1), days(dq)
+		if ddq, ok := p.DeletesAfterQuiet(0); ok {
 			deleteQuietNever = days(ddq)
 		}
 	}
@@ -306,7 +313,7 @@ func guide(cfg config.Config) string {
 		SearchDefault: defaultSearchLimit, SearchMax: maxSearchLimit, SearchBody: searchBodyRunes, Counted: store.SearchCountedResults,
 		MaxMemoryBytes: cfg.MaxMemoryBytes, MaxMemories: cfg.MaxMemoriesPerScope, MaxTitle: store.MaxMemoryTitleRunes,
 		MaxTags: store.MaxMemoryTags, MaxTagRunes: store.MaxMemoryTagRunes, MaxTerms: store.MaxQueryTerms, MaxQuery: store.MaxQueryRunes,
-		MemHalfLife: memHalfLife, MemGrace: period(cfg.MemoryGrace), MemThreshold: cfg.MemoryFadeThreshold,
+		RetentionByKind: retentionByKind, MemHalfLife: memHalfLife, MemGrace: period(p.Grace), MemThreshold: p.Threshold,
 		FadeNever: fadeNever, FadeOnce: fadeOnce, FadeQuietNever: fadeQuietNever, DeleteQuietNever: deleteQuietNever,
 	})
 	if err != nil {

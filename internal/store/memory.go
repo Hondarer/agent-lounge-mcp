@@ -237,7 +237,7 @@ func (s *Store) touchScopeActivity(ctx context.Context, tx *sql.Tx, sc Scope, no
 		return scopeActivity{}, err
 	}
 	cur := scopeActivity{lastAccess: fromMillis(lastMs), discount: time.Duration(discMs) * time.Millisecond}
-	openMs := s.retention.openDiscount(cur, nowT).Milliseconds()
+	openMs := s.Retention(sc.Kind).openDiscount(cur, nowT).Milliseconds()
 	newDiscMs := discMs + openMs
 	newLastMs := max(lastMs, nowMs)
 	if _, err := tx.ExecContext(ctx,
@@ -429,7 +429,7 @@ func (s *Store) CreateMemory(ctx context.Context, sessionID int64, kind string, 
 		if err != nil {
 			return err
 		}
-		s.retention.assessWith(&m, act, now)
+		s.Retention(m.Scope.Kind).assessWith(&m, act, now)
 		return writeMemoryIndex(ctx, tx, m)
 	})
 	if err != nil {
@@ -493,7 +493,7 @@ func (s *Store) UpdateMemory(ctx context.Context, sessionID, id int64, in Memory
 			WHERE id = ?`, m.Title, m.Body, millis(now), m.UpdatedBy.User, m.UpdatedBy.Session, m.UpdatedBy.Agent, act.discount.Milliseconds(), m.ID); err != nil {
 			return err
 		}
-		s.retention.assessWith(&m, act, now)
+		s.Retention(m.Scope.Kind).assessWith(&m, act, now)
 		return writeMemoryIndex(ctx, tx, m)
 	})
 	if err != nil {
@@ -520,7 +520,8 @@ func (s *Store) GetMemory(ctx context.Context, sessionID, id int64) (Memory, err
 		if err != nil {
 			return err
 		}
-		counted, err := s.countReference(ctx, tx, m.ID, sess.ID, now, act.discount, s.retention.fadedAt(m.state(), act, now))
+		p := s.Retention(m.Scope.Kind)
+		counted, err := s.countReference(ctx, tx, m.ID, sess.ID, now, act.discount, p.fadedAt(m.state(), act, now))
 		if err != nil {
 			return err
 		}
@@ -529,7 +530,7 @@ func (s *Store) GetMemory(ctx context.Context, sessionID, id int64) (Memory, err
 			m.AccessedAt = fromMillis(millis(now))
 			m.forgettingCredit = act.discount
 		}
-		s.retention.assessWith(&m, act, now)
+		p.assessWith(&m, act, now)
 		return nil
 	})
 	if err != nil {
@@ -600,7 +601,7 @@ func (s *Store) PinMemory(ctx context.Context, sessionID, id int64, pinned bool)
 				return err
 			}
 		}
-		s.retention.assessWith(&m, act, now)
+		s.Retention(m.Scope.Kind).assessWith(&m, act, now)
 		return nil
 	})
 	if err != nil {
@@ -772,11 +773,12 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 			c.state.updatedAt, c.state.accessedAt = fromMillis(updated), optionalTime(accessed)
 			c.state.credit = time.Duration(credit) * time.Millisecond
 			act := acts[sc]
-			c.faded = s.retention.fadedAt(c.state, act, now)
+			p := s.Retention(sc.Kind)
+			c.faded = p.fadedAt(c.state, act, now)
 			if c.faded && !q.IncludeFaded {
 				continue
 			}
-			c.retention = s.retention.scoreAt(c.state, act, now)
+			c.retention = p.scoreAt(c.state, act, now)
 			best = min(best, c.bm25)
 			cands = append(cands, c)
 		}
@@ -816,7 +818,7 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 		memories = make([]Memory, 0, len(cands))
 		for _, c := range cands {
 			m := loaded[c.id]
-			s.retention.assessWith(&m, acts[m.Scope], now)
+			s.Retention(m.Scope.Kind).assessWith(&m, acts[m.Scope], now)
 			memories = append(memories, m)
 		}
 		if len(terms) == 0 {
@@ -866,19 +868,25 @@ func (s *Store) deleteForgottenMemories(ctx context.Context, tx *sql.Tx, now tim
 	if _, err := tx.ExecContext(ctx, "DELETE FROM memory_refs WHERE counted_at <= ?", millis(now.Add(-ReferenceWindow))); err != nil {
 		return 0, err
 	}
-	p := s.retention
-	if !p.forgets() || p.Grace <= 0 {
-		return 0, nil
+	// A memory never referenced fades soonest. Use the shortest deletion time as a
+	// wall-clock bound, then check each candidate with its own policy and discount. The
+	// common policy also covers any legacy rows with a kind outside the current scopes.
+	var least time.Duration
+	for _, kind := range append(ScopeKinds(), "") {
+		p := s.Retention(kind)
+		if !p.forgets() || p.Grace <= 0 {
+			continue
+		}
+		if d := p.fadeAfter(0) + p.Grace; d > 0 && (least == 0 || d < least) {
+			least = d
+		}
 	}
-	// A memory never referenced fades soonest: HalfLife × log2(1/Threshold) after it was last
-	// touched. A memory touched more recently than that plus the grace period cannot be due.
-	least := p.fadeAfter(0) + p.Grace
-	if least < 0 {
-		return 0, nil // the sum overflows: no memory can be due before the year 2262
+	if least == 0 {
+		return 0, nil
 	}
 	cutoff := millis(now.Add(-least))
 	rows, err := tx.QueryContext(ctx, `
-		SELECT m.id, m.updated_at, m.accessed_at, m.access_count, m.forgetting_credit,
+		SELECT m.id, m.scope, m.updated_at, m.accessed_at, m.access_count, m.forgetting_credit,
 			coalesce(a.last_access, 0), coalesce(a.discount, 0)
 		FROM memories m
 		LEFT JOIN memory_scope_activity a ON a.scope = m.scope AND a.scope_id = m.scope_id
@@ -890,14 +898,15 @@ func (s *Store) deleteForgottenMemories(ctx context.Context, tx *sql.Tx, now tim
 	for rows.Next() {
 		var id, updated, accessed, credit, lastMs, discMs int64
 		var st retentionState
-		if err := rows.Scan(&id, &updated, &accessed, &st.accessCount, &credit, &lastMs, &discMs); err != nil {
+		var kind string
+		if err := rows.Scan(&id, &kind, &updated, &accessed, &st.accessCount, &credit, &lastMs, &discMs); err != nil {
 			rows.Close()
 			return 0, err
 		}
 		st.updatedAt, st.accessedAt = fromMillis(updated), optionalTime(accessed)
 		st.credit = time.Duration(credit) * time.Millisecond
 		act := scopeActivity{lastAccess: optionalTime(lastMs), discount: time.Duration(discMs) * time.Millisecond}
-		if p.expiredAt(st, act, now) {
+		if s.Retention(kind).expiredAt(st, act, now) {
 			due = append(due, id)
 		}
 	}
@@ -909,7 +918,7 @@ func (s *Store) deleteForgottenMemories(ctx context.Context, tx *sql.Tx, now tim
 }
 
 // ListMemories returns every memory, or those of one scope kind, in the order scope, scope
-// identifier, ID, with the retention under the store's RetentionPolicy. It is for the
+// identifier, ID, with retention under each scope kind's policy. It is for the
 // administration commands, which see every user's memories. scopeID, when not nil, also
 // keeps only that scope identifier; an empty kind with a scope ID is not used by the command,
 // which requires --scope together with --scope-id.
@@ -970,7 +979,7 @@ func (s *Store) ListMemories(ctx context.Context, kind string, scopeID *string) 
 				}
 				acts[m.Scope] = act
 			}
-			s.retention.assessWith(&m, act, now)
+			s.Retention(m.Scope.Kind).assessWith(&m, act, now)
 			out = append(out, m)
 		}
 		return nil
@@ -994,7 +1003,7 @@ func (s *Store) MemoryByID(ctx context.Context, id int64) (Memory, error) {
 	if err != nil {
 		return Memory{}, err
 	}
-	s.retention.assessWith(&m, act, s.now())
+	s.Retention(m.Scope.Kind).assessWith(&m, act, s.now())
 	return m, nil
 }
 

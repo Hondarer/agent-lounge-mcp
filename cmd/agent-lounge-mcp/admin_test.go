@@ -472,3 +472,53 @@ func TestInterleavedOptionsConsumeDelimiterAsValue(t *testing.T) {
 		t.Fatalf("parse = %v, %v, value %q", pos, err, *value)
 	}
 }
+
+func TestMemoryListRecordedRetention(t *testing.T) {
+	ctx := context.Background()
+	db := filepath.Join(t.TempDir(), "lounge.db")
+	seedMemories(t, db, time.Now().Add(-60*config.Day))
+	check := func(user, repo string, flags ...string) {
+		t.Helper()
+		args := append([]string{"list", "--db", db}, flags...)
+		code, out, stderr := memory(args...)
+		if code != 0 || !strings.Contains(out, "\tuser\tlocal\t"+user+"\t") ||
+			!strings.Contains(out, "\trepository\tgithub.com/org/a\t"+repo+"\t") {
+			t.Errorf("%v: exit %d, output %q, error %q, want user %s and repository %s", flags, code, out, stderr, user, repo)
+		}
+	}
+	check("faded", "faded")
+	check("active", "faded", "--memory-user-half-life", "0")
+
+	st, err := store.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	policies := store.RetentionPolicies{Common: store.DefaultRetention(), ByKind: map[string]store.RetentionPolicy{
+		store.ScopeUser:       {HalfLife: 30 * config.Day, Threshold: 0.2},
+		store.ScopeRepository: {HalfLife: 30 * config.Day, Threshold: 0.5},
+	}}
+	if err := st.RecordRetention(ctx, policies); err != nil {
+		t.Fatal(err)
+	}
+	check("active", "faded")
+	check("faded", "faded", "--memory-fade-threshold", "0.6")
+	check("faded", "active", "--memory-fade-threshold", "0.6", "--memory-repository-fade-threshold", "0.3")
+	check("active", "faded", "--memory-half-life", "1d", "--memory-user-half-life", "0")
+	check("active", "faded")
+
+	recorded, err := st.RecordedRetention(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range store.ScopeKinds() {
+		if recorded.For(kind) != policies.For(kind) {
+			t.Errorf("list changed %s record: %+v", kind, recorded.For(kind))
+		}
+	}
+	for _, args := range [][]string{{"--memory-branch-grace", "0"}, {"--memory-branch-fade-threshold", "1"}, {"--memory-branch-half-life", "-1d"}} {
+		if code, _, stderr := memory(append([]string{"list", "--db", db}, args...)...); code != exitUsage || !strings.Contains(stderr, args[0][1:]) {
+			t.Errorf("%v: exit %d, error %q", args, code, stderr)
+		}
+	}
+}

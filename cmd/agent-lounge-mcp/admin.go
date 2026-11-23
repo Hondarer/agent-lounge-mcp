@@ -252,10 +252,12 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 func memoryUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository|branch] [--scope-id ID] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
-	fmt.Fprintln(w, "                                                     list the memories with their state")
+	for _, kind := range store.ScopeKinds() {
+		fmt.Fprintf(w, "           [--memory-%[1]s-half-life DURATION] [--memory-%[1]s-fade-threshold X]\n", kind)
+	}
 	fmt.Fprintln(w, "       agent-lounge-mcp memory remove <ID> --yes [--db FILE]  delete the memory")
 	fmt.Fprintln(w, "The commands open the database file directly and work while a server uses it.")
-	fmt.Fprintln(w, "memory list computes the state with --memory-half-life and --memory-fade-threshold: pass the values the server uses.")
+	fmt.Fprintln(w, "memory list uses the last recorded server settings, or built-in defaults when none are recorded. Common options override those defaults. Per-kind options take precedence.")
 	fmt.Fprintln(w, "--scope-id needs --scope.")
 }
 
@@ -283,10 +285,11 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	cfg := config.Default()
 	var scope, scopeID *string
 	var yes *bool
+	var applyRetentionFlags func()
 	if cmd == "list" {
 		scope = flags.String("scope", "", "list only the memories of this scope kind: user, repository or branch")
 		scopeID = flags.String("scope-id", "", "with --scope, list only the memories of this scope identifier")
-		addMemoryRetentionFlags(flags, &cfg)
+		applyRetentionFlags = addMemoryRetentionFlags(flags, &cfg, false)
 	} else {
 		yes = flags.Bool("yes", false, "remove without asking: required")
 	}
@@ -299,10 +302,16 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	}
 	var id int64
 	var scopeIDSet bool
+	var common config.RetentionOverride
 	if cmd == "list" {
 		flags.Visit(func(f *flag.Flag) {
-			if f.Name == "scope-id" {
+			switch f.Name {
+			case "scope-id":
 				scopeIDSet = true
+			case "memory-half-life":
+				common.HalfLife = &cfg.MemoryHalfLife
+			case "memory-fade-threshold":
+				common.Threshold = &cfg.MemoryFadeThreshold
 			}
 		})
 		switch {
@@ -319,6 +328,11 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			return exitUsage
 		}
 		if err := config.ValidateFadeThreshold(cfg.MemoryFadeThreshold); err != nil {
+			fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
+			return exitUsage
+		}
+		applyRetentionFlags()
+		if err := cfg.ValidateRetentionOverrides(); err != nil {
 			fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
 			return exitUsage
 		}
@@ -339,7 +353,16 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	defer st.Close()
 
 	if cmd == "list" {
-		st.SetRetention(cfg.Retention())
+		policies, readErr := st.RecordedRetention(ctx)
+		if readErr != nil {
+			fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", readErr)
+			return exitFail
+		}
+		for _, kind := range store.ScopeKinds() {
+			policies.ByKind[kind] = cfg.MemoryRetentionByKind[kind].Apply(common.Apply(policies.For(kind)))
+		}
+		policies.Common = common.Apply(policies.Common)
+		st.SetRetentionPolicies(policies)
 		var idFilter *string
 		if scopeIDSet {
 			idFilter = scopeID

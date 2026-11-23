@@ -20,8 +20,9 @@ type Store struct {
 	now func() time.Time
 	// limits bound new messages, sessions and memories (SetLimits).
 	limits Limits
-	// retention is the forgetting model of memories (SetRetention).
-	retention RetentionPolicy
+	// retention and retentionByKind hold the common and per-kind forgetting policies.
+	retention       RetentionPolicy
+	retentionByKind map[string]RetentionPolicy
 }
 
 // SetClock replaces the clock that stamps the times the store records and that the cleanup

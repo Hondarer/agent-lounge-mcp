@@ -22,6 +22,7 @@ import (
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
 	"github.com/hondarer/agent-lounge-mcp/internal/server"
+	"github.com/hondarer/agent-lounge-mcp/internal/store"
 	"github.com/hondarer/agent-lounge-mcp/internal/testutil"
 	"github.com/hondarer/agent-lounge-mcp/internal/tools"
 )
@@ -108,6 +109,41 @@ func TestParseServeFlags(t *testing.T) {
 	}
 }
 
+func TestServeRetentionOptions(t *testing.T) {
+	common := []string{"--memory-half-life", "5d", "--memory-fade-threshold", "0.3", "--memory-grace", "8d"}
+	cfg, err := parse(common...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fallback := store.RetentionPolicy{HalfLife: 5 * config.Day, Threshold: 0.3, Grace: 8 * config.Day}
+	if p, uniform := cfg.RetentionPolicies().Uniform(); !uniform || p != fallback {
+		t.Fatalf("common options = %+v, uniform %t, want %+v", p, uniform, fallback)
+	}
+
+	cfg, err = parse(append(common, "--memory-user-half-life", "0",
+		"--memory-repository-fade-threshold", "0.4", "--memory-branch-grace", "0")...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for kind, want := range map[string]store.RetentionPolicy{
+		store.ScopeUser:       {Threshold: 0.3, Grace: 8 * config.Day},
+		store.ScopeRepository: {HalfLife: 5 * config.Day, Threshold: 0.4, Grace: 8 * config.Day},
+		store.ScopeBranch:     {HalfLife: 5 * config.Day, Threshold: 0.3},
+	} {
+		if p := cfg.RetentionPolicies().For(kind); p != want {
+			t.Errorf("%s = %+v, want %+v", kind, p, want)
+		}
+	}
+	for _, kind := range store.ScopeKinds() {
+		for item, value := range map[string]string{"half-life": "-1d", "grace": "bad", "fade-threshold": "NaN"} {
+			option := "--memory-" + kind + "-" + item
+			if _, err := parse(option, value); err == nil || !strings.Contains(err.Error(), option[1:]) {
+				t.Errorf("%s %s: error = %v", option, value, err)
+			}
+		}
+	}
+}
+
 // Starts the server as the serve subcommand does, calls a tool over HTTP and stops it.
 func TestServe(t *testing.T) {
 	logged := &syncBuffer{}
@@ -119,7 +155,11 @@ func TestServe(t *testing.T) {
 	cfg.DBPath = filepath.Join(t.TempDir(), "lounge.db")
 	cfg.ShutdownTimeout = 100 * time.Millisecond
 
+	zero := time.Duration(0)
+	cfg.MemoryRetentionByKind = map[string]config.RetentionOverride{store.ScopeBranch: {HalfLife: &zero}}
+
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	ready := make(chan net.Addr, 1)
 	done := make(chan error, 1)
 	go func() { done <- serve(ctx, nil, cfg, ready) }()
@@ -131,11 +171,19 @@ func TestServe(t *testing.T) {
 		t.Fatalf("serve stopped early: %v", err)
 	}
 
+	st, err := store.Open(ctx, cfg.DBPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policies, err := st.RecordedRetention(ctx)
+	st.Close()
+	if err != nil || len(policies.ByKind) != 3 || policies.For(store.ScopeBranch).HalfLife != 0 {
+		t.Fatalf("serve recorded %+v, %v", policies, err)
+	}
+
 	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
-	out := testutil.Call[struct {
-		SchemaVersion int `json:"schema_version"`
-	}](t, cs, "lounge_info", nil)
-	if out.SchemaVersion < 1 {
+	out := testutil.Call[tools.InfoOutput](t, cs, "lounge_info", nil)
+	if out.SchemaVersion != 8 || len(out.MemoryRetention) != 3 || out.MemoryRetention[store.ScopeBranch].HalfLife != "0s" {
 		t.Fatalf("got %+v", out)
 	}
 
