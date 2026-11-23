@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -18,8 +19,9 @@ import (
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
 
-// The session, memory and export subcommands open the database file directly, as the user subcommand
-// does, and work while a server uses it. They use the exit codes of the user subcommand.
+// The session, memory, message and export subcommands open the database file directly, as the user
+// subcommand does, and work while a server uses it. They use the exit codes of the user subcommand.
+// Each read is one transaction, so the rows are the database at one moment.
 
 func sessionUsage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp session list [--user NAME] [--db FILE]          list the sessions")
@@ -174,10 +176,14 @@ func describeSessionData(d store.SessionData) string {
 }
 
 func exportUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp export --out DIR [--format markdown] [--db FILE]")
-	fmt.Fprintf(w, "Writes every message and memory of the database, of every user, as Markdown files: under DIR/%s one file per conversation,\n", export.ChatDir)
-	fmt.Fprintf(w, "under DIR/%s one file per scope of memories.\n", export.MemoryDir)
+	fmt.Fprintln(w, "usage: agent-lounge-mcp export [--user NAME] [--scope KIND [--scope-id ID]] [--since TIME] [--until TIME] --out DIR [--format markdown] [--db FILE]")
+	fmt.Fprintf(w, "Writes messages and memories of the database as Markdown files: under DIR/%s one file per conversation,\n", export.ChatDir)
+	fmt.Fprintf(w, "under DIR/%s one file per scope of memories. Without a filter, every message and memory is written.\n", export.MemoryDir)
+	fmt.Fprintln(w, "With a filter, only the files that contain a selected record are written.")
 	fmt.Fprintln(w, "Files of the same name are overwritten; other files are left alone. It works while a server uses the database.")
+	fmt.Fprintln(w, "--user, --scope, --scope-id, --since and --until mean the same as for message list. For a memory, --user matches")
+	fmt.Fprintln(w, "a user scope with that identifier or a memory that user created, and --since and --until use the time it was updated.")
+	fmt.Fprintln(w, "--scope-id needs --scope. Put options before -- to pass a name starting with a hyphen.")
 }
 
 // runExport runs the export subcommand with its arguments (after "export") and returns the
@@ -192,6 +198,7 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	db := flags.String("db", config.Default().DBPath, "SQLite database file")
 	out := flags.String("out", "", "directory to write into (created when missing): required")
 	format := flags.String("format", "markdown", "file format: markdown (the only one)")
+	user, scope, scopeID, since, until := addFilterFlags(flags)
 	pos, err := parseInterleaved(flags, args)
 	switch {
 	case errors.Is(err, flag.ErrHelp):
@@ -210,30 +217,46 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --format %q: the only format is markdown\n", *format)
 		return exitUsage
 	}
+	filter, err := filterFromFlags(flags, *user, *scope, *scopeID, *since, *until)
+	if err != nil {
+		return reportFilter(stderr, exportUsage, err)
+	}
 	st, code := openExisting(ctx, *db, stderr)
 	if st == nil {
 		return code
 	}
 	defer st.Close()
-	sum, err := export.WriteMarkdown(*out, func(onMessage func(store.ExportMessage) error, onMemory func(store.Memory) error) error {
+	// No filter runs Export itself, which is the unfiltered read.
+	read := func(onMessage func(store.ExportMessage) error, onMemory func(store.Memory) error) error {
 		return st.Export(ctx, onMessage, onMemory)
-	})
+	}
+	if !filter.IsZero() {
+		read = func(onMessage func(store.ExportMessage) error, onMemory func(store.Memory) error) error {
+			return st.ExportSelected(ctx, filter, onMessage, onMemory)
+		}
+	}
+	sum, err := export.WriteMarkdown(*out, read)
 	if err != nil {
 		fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
 		return exitFail
 	}
 	fmt.Fprintf(stdout, "exported %s and %s to %s in %s\n", plural(sum.Messages, "message", "messages"),
 		plural(sum.Memories, "memory", "memories"), plural(sum.Files, "file", "files"), *out)
-	fmt.Fprintln(stderr, "The files contain the messages and memories of every user of the database: keep them where only the people who may read them can.")
+	if filter.IsZero() {
+		fmt.Fprintln(stderr, "The files contain the messages and memories of every user of the database: keep them where only the people who may read them can.")
+	} else {
+		fmt.Fprintln(stderr, "The files contain only the messages and memories that match the filter: keep them where only the people who may read them can.")
+	}
 	return exitOK
 }
 
 func memoryUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository|branch] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
+	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository|branch] [--scope-id ID] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
 	fmt.Fprintln(w, "                                                     list the memories with their state")
 	fmt.Fprintln(w, "       agent-lounge-mcp memory remove <ID> --yes [--db FILE]  delete the memory")
 	fmt.Fprintln(w, "The commands open the database file directly and work while a server uses it.")
 	fmt.Fprintln(w, "memory list computes the state with --memory-half-life and --memory-fade-threshold: pass the values the server uses.")
+	fmt.Fprintln(w, "--scope-id needs --scope.")
 }
 
 // runMemory runs the memory subcommand with its arguments (after "memory") and returns the
@@ -258,10 +281,11 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	flags.SetOutput(stderr)
 	db := flags.String("db", config.Default().DBPath, "SQLite database file")
 	cfg := config.Default()
-	var scope *string
+	var scope, scopeID *string
 	var yes *bool
 	if cmd == "list" {
 		scope = flags.String("scope", "", "list only the memories of this scope kind: user, repository or branch")
+		scopeID = flags.String("scope-id", "", "with --scope, list only the memories of this scope identifier")
 		addMemoryRetentionFlags(flags, &cfg)
 	} else {
 		yes = flags.Bool("yes", false, "remove without asking: required")
@@ -274,7 +298,13 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 		return exitUsage // the flag package printed the error and the usage
 	}
 	var id int64
+	var scopeIDSet bool
 	if cmd == "list" {
+		flags.Visit(func(f *flag.Flag) {
+			if f.Name == "scope-id" {
+				scopeIDSet = true
+			}
+		})
 		switch {
 		case len(pos) != 0:
 			fmt.Fprintln(stderr, "agent-lounge-mcp: memory list takes no argument")
@@ -282,6 +312,10 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			return exitUsage
 		case *scope != "" && !store.ValidScope(*scope):
 			fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --scope %q: use user, repository or branch\n", *scope)
+			return exitUsage
+		case scopeIDSet && *scope == "":
+			fmt.Fprintln(stderr, "agent-lounge-mcp: --scope-id needs --scope")
+			memoryUsage(stderr)
 			return exitUsage
 		}
 		if err := config.ValidateFadeThreshold(cfg.MemoryFadeThreshold); err != nil {
@@ -306,7 +340,11 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 
 	if cmd == "list" {
 		st.SetRetention(cfg.Retention())
-		err = memoryList(ctx, st, *scope, stdout)
+		var idFilter *string
+		if scopeIDSet {
+			idFilter = scopeID
+		}
+		err = memoryList(ctx, st, *scope, idFilter, stdout)
 	} else {
 		if !*yes {
 			m, err := st.MemoryByID(ctx, id)
@@ -350,8 +388,8 @@ func memoryLabel(m store.Memory) string {
 // memoryList prints a header line and one line per memory, in the order scope, scope ID, ID,
 // separated by tabs: ID, scope kind, scope ID, state (pinned, active or faded), retention
 // score, last update (RFC 3339 in UTC), creator (user/session) and title.
-func memoryList(ctx context.Context, st *store.Store, scope string, stdout io.Writer) error {
-	ms, err := st.ListMemories(ctx, scope)
+func memoryList(ctx context.Context, st *store.Store, scope string, scopeID *string, stdout io.Writer) error {
+	ms, err := st.ListMemories(ctx, scope, scopeID)
 	if err != nil {
 		return err
 	}
@@ -368,4 +406,279 @@ func memoryList(ctx context.Context, st *store.Store, scope string, stdout io.Wr
 			m.UpdatedAt.Format(time.RFC3339), m.CreatedBy.User, m.CreatedBy.Session, memoryLabel(m))
 	}
 	return nil
+}
+
+func messageUsage(w io.Writer) {
+	fmt.Fprintln(w, "usage: agent-lounge-mcp message list [--user NAME] [--scope KIND [--scope-id ID]] [--since TIME] [--until TIME]")
+	fmt.Fprintln(w, "                                     [--state queued|delivered|acked|expired] [--details] [--limit N] [--before-id ID] [--db FILE]")
+	fmt.Fprintln(w, "       agent-lounge-mcp message show <ID> [--db FILE]")
+	fmt.Fprintln(w, "The commands open the database file directly and work while a server uses it.")
+	fmt.Fprintln(w, "message list prints one message per line, newest first (ID descending), without the body. --limit defaults to 100.")
+	fmt.Fprintln(w, "--before-id keeps the messages whose ID is smaller. --details adds one indented line per recipient")
+	fmt.Fprintln(w, "(user/name, state, and the time it entered that state).")
+	fmt.Fprintln(w, "--state keeps the messages that have at least one delivery in that state.")
+	fmt.Fprintln(w, "--since and --until are RFC 3339. --since is inclusive and --until is exclusive; both use the time the message was sent.")
+	fmt.Fprintln(w, "--user matches the stored name of the sender, the direct recipient or a delivery recipient, including a user that was removed.")
+	fmt.Fprintln(w, "--scope-id needs --scope. Put options before -- to pass a name starting with a hyphen.")
+}
+
+// usageErr is a malformed command line (exit code 2). An invalid user name is not one:
+// the other commands report that as a failure (exit code 1).
+type usageErr string
+
+func (e usageErr) Error() string { return string(e) }
+
+func addFilterFlags(fs *flag.FlagSet) (user, scope, scopeID, since, until *string) {
+	user = fs.String("user", "", "select records stored with this user name")
+	scope = fs.String("scope", "", "select records of this scope kind: user, repository or branch")
+	scopeID = fs.String("scope-id", "", "with --scope, select records of this scope identifier")
+	since = fs.String("since", "", "inclusive RFC 3339 lower bound of the time range")
+	until = fs.String("until", "", "exclusive RFC 3339 upper bound of the time range")
+	return
+}
+
+func filterFromFlags(fs *flag.FlagSet, user, scope, scopeID, since, until string) (store.RecordFilter, error) {
+	var f store.RecordFilter
+	var userSet, scopeIDSet, sinceSet, untilSet bool
+	fs.Visit(func(fl *flag.Flag) {
+		switch fl.Name {
+		case "user":
+			userSet = true
+		case "scope-id":
+			scopeIDSet = true
+		case "since":
+			sinceSet = true
+		case "until":
+			untilSet = true
+		}
+	})
+	if userSet {
+		name, err := names.User(user)
+		if err != nil {
+			return store.RecordFilter{}, err
+		}
+		f.User = name
+	}
+	if scope != "" && !store.ValidScope(scope) {
+		return store.RecordFilter{}, usageErr(fmt.Sprintf("unknown --scope %q: use user, repository or branch", scope))
+	}
+	f.Scope = scope
+	if scopeIDSet && scope == "" {
+		return store.RecordFilter{}, usageErr("--scope-id needs --scope")
+	}
+	if scopeIDSet {
+		f.HasScopeID = true
+		f.ScopeID = scopeID
+	}
+	var err error
+	if sinceSet {
+		if f.Since, err = parseFilterTime("since", since); err != nil {
+			return store.RecordFilter{}, err
+		}
+	}
+	if untilSet {
+		if f.Until, err = parseFilterTime("until", until); err != nil {
+			return store.RecordFilter{}, err
+		}
+	}
+	return f, nil
+}
+
+func parseFilterTime(flagName, value string) (time.Time, error) {
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, usageErr(fmt.Sprintf("invalid --%s %q: use RFC 3339, such as 2026-11-23T08:10:00Z", flagName, value))
+	}
+	return t, nil
+}
+
+func reportFilter(stderr io.Writer, usage func(io.Writer), err error) int {
+	fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
+	var u usageErr
+	if errors.As(err, &u) {
+		usage(stderr)
+		return exitUsage
+	}
+	return exitFail
+}
+
+// runMessage runs the message subcommand with its arguments (after "message") and returns
+// the exit code.
+func runMessage(ctx context.Context, args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		messageUsage(stderr)
+		return exitUsage
+	}
+	cmd, args := args[0], args[1:]
+	switch cmd {
+	case "help", "-h", "-help", "--help":
+		messageUsage(stdout)
+		return exitOK
+	case "list", "show":
+	default:
+		fmt.Fprintf(stderr, "agent-lounge-mcp: unknown message command %q\n", cmd)
+		messageUsage(stderr)
+		return exitUsage
+	}
+	flags := flag.NewFlagSet("agent-lounge-mcp message "+cmd, flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	flags.Usage = func() {
+		messageUsage(stderr)
+		flags.PrintDefaults()
+	}
+	db := flags.String("db", config.Default().DBPath, "SQLite database file")
+	var user, scope, scopeID, since, until, state *string
+	var details *bool
+	var limit *int
+	var before *int64
+	if cmd == "list" {
+		user, scope, scopeID, since, until = addFilterFlags(flags)
+		state = flags.String("state", "", "keep messages with a delivery in this state: queued, delivered, acked or expired")
+		details = flags.Bool("details", false, "print one line per recipient under each message")
+		limit = flags.Int("limit", 100, "most messages to print")
+		before = flags.Int64("before-id", 0, "print only messages whose ID is smaller than this")
+	}
+	pos, err := parseInterleaved(flags, args)
+	switch {
+	case errors.Is(err, flag.ErrHelp):
+		return exitOK
+	case err != nil:
+		return exitUsage
+	}
+	var id int64
+	var filter store.RecordFilter
+	var beforeID int64
+	if cmd == "list" {
+		if len(pos) != 0 {
+			fmt.Fprintln(stderr, "agent-lounge-mcp: message list takes no argument")
+			messageUsage(stderr)
+			return exitUsage
+		}
+		filter, err = filterFromFlags(flags, *user, *scope, *scopeID, *since, *until)
+		if err != nil {
+			return reportFilter(stderr, messageUsage, err)
+		}
+		var stateSet, beforeSet bool
+		flags.Visit(func(fl *flag.Flag) {
+			switch fl.Name {
+			case "state":
+				stateSet = true
+			case "before-id":
+				beforeSet = true
+			}
+		})
+		if stateSet && !slices.Contains(store.DeliveryStates, *state) {
+			fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --state %q: use queued, delivered, acked or expired\n", *state)
+			messageUsage(stderr)
+			return exitUsage
+		}
+		if *limit < 1 {
+			fmt.Fprintln(stderr, "agent-lounge-mcp: --limit must be at least 1")
+			messageUsage(stderr)
+			return exitUsage
+		}
+		if beforeSet && *before < 1 {
+			fmt.Fprintln(stderr, "agent-lounge-mcp: --before-id must be a positive message ID")
+			messageUsage(stderr)
+			return exitUsage
+		}
+		if beforeSet {
+			beforeID = *before
+		}
+	} else {
+		if len(pos) == 1 {
+			id, err = strconv.ParseInt(pos[0], 10, 64)
+		}
+		if len(pos) != 1 || err != nil || id < 1 {
+			fmt.Fprintln(stderr, "agent-lounge-mcp: message show takes one message ID (a positive number, as message list shows it)")
+			messageUsage(stderr)
+			return exitUsage
+		}
+	}
+	st, code := openExisting(ctx, *db, stderr)
+	if st == nil {
+		return code
+	}
+	defer st.Close()
+	if cmd == "list" {
+		q := store.MessageQuery{Filter: filter, Limit: *limit, BeforeID: beforeID, Details: *details}
+		if state != nil {
+			q.State = *state
+		}
+		msgs, err := st.ListMessages(ctx, q)
+		if err != nil {
+			fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
+			return exitFail
+		}
+		writeMessageList(stdout, msgs, *details)
+		return exitOK
+	}
+	m, err := st.MessageAdmin(ctx, id)
+	if err != nil {
+		fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
+		return exitFail
+	}
+	writeMessageShow(stdout, m)
+	return exitOK
+}
+
+func writeMessageList(stdout io.Writer, msgs []store.AdminMessage, details bool) {
+	fmt.Fprintln(stdout, "ID\tSENT\tFROM\tTO\tSCOPE\tSCOPE_ID\tQUEUED\tDELIVERED\tACKED\tEXPIRED")
+	for _, m := range msgs {
+		fmt.Fprintf(stdout, "%d\t%s\t%s\t%s\t%s\t%s\t%d\t%d\t%d\t%d\n",
+			m.ID, formatStamp(m.SentAt), messageAddress(m.FromUser, m.FromName), messageTo(m),
+			m.Scope.Kind, m.Scope.ID, m.Queued, m.Delivered, m.Acked, m.Expired)
+		if details {
+			writeRecipients(stdout, m.Deliveries)
+		}
+	}
+}
+
+func writeMessageShow(stdout io.Writer, m store.AdminMessage) {
+	fmt.Fprintf(stdout, "ID: %d\n", m.ID)
+	fmt.Fprintf(stdout, "From: %s\n", messageAddress(m.FromUser, m.FromName))
+	fmt.Fprintf(stdout, "To: %s\n", messageTo(m))
+	fmt.Fprintf(stdout, "Scope: %s %s\n", m.Scope.Kind, m.Scope.ID)
+	fmt.Fprintf(stdout, "Sent: %s\n", formatStamp(m.SentAt))
+	if len(m.Deliveries) == 0 {
+		fmt.Fprintln(stdout, "Deliveries: none")
+	} else {
+		fmt.Fprintln(stdout, "Deliveries:")
+		writeRecipients(stdout, m.Deliveries)
+	}
+	fmt.Fprintln(stdout)
+	writeBody(stdout, m.Body)
+}
+
+func writeRecipients(stdout io.Writer, rs []store.AdminRecipient) {
+	for _, r := range rs {
+		fmt.Fprintf(stdout, "\t%s\t%s\t%s\n", messageAddress(r.User, r.Name), r.State, formatStamp(r.At))
+	}
+}
+
+func messageAddress(user, name string) string { return user + "/" + name }
+
+func messageTo(m store.AdminMessage) string {
+	if m.Room != "" {
+		return m.Room
+	}
+	return messageAddress(m.ToUser, m.ToName)
+}
+
+// formatStamp prints a UTC time as RFC 3339 with whole seconds, as session list and the
+// export do. A stored fraction of a second is not shown. A filter can still name that
+// instant: the bound is parsed as an RFC 3339 time (a fraction is allowed) and compared
+// with the stored millisecond.
+func formatStamp(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	return t.UTC().Format(time.RFC3339)
+}
+
+func writeBody(w io.Writer, body string) {
+	fmt.Fprint(w, body)
+	if body == "" || !strings.HasSuffix(body, "\n") {
+		fmt.Fprintln(w)
+	}
 }

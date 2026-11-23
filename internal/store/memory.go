@@ -910,14 +910,27 @@ func (s *Store) deleteForgottenMemories(ctx context.Context, tx *sql.Tx, now tim
 
 // ListMemories returns every memory, or those of one scope kind, in the order scope, scope
 // identifier, ID, with the retention under the store's RetentionPolicy. It is for the
-// administration commands, which see every user's memories.
-func (s *Store) ListMemories(ctx context.Context, kind string) ([]Memory, error) {
+// administration commands, which see every user's memories. scopeID, when not nil, also
+// keeps only that scope identifier; an empty kind with a scope ID is not used by the command,
+// which requires --scope together with --scope-id.
+func (s *Store) ListMemories(ctx context.Context, kind string, scopeID *string) ([]Memory, error) {
 	if kind != "" && !ValidScope(kind) {
 		return nil, ErrInvalidScope
 	}
+	q := "SELECT m.id FROM memories m WHERE 1 = 1"
+	var args []any
+	if kind != "" {
+		q += " AND m.scope = ?"
+		args = append(args, kind)
+	}
+	if scopeID != nil {
+		q += " AND m.scope_id = ?"
+		args = append(args, *scopeID)
+	}
+	q += " ORDER BY m.scope, m.scope_id, m.id"
 	var out []Memory
 	err := s.readTx(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, "SELECT m.id FROM memories m WHERE ? = '' OR m.scope = ? ORDER BY m.scope, m.scope_id, m.id", kind, kind)
+		rows, err := tx.QueryContext(ctx, q, args...)
 		if err != nil {
 			return err
 		}

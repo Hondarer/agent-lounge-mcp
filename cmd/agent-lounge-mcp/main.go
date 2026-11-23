@@ -3,9 +3,10 @@
 //
 //	agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
 //
-// Users and their tokens are managed with the user subcommand (see user.go), sessions and
-// memories with the session and memory subcommands, and the export subcommand writes the
-// messages and memories as Markdown files (see admin.go). Diagnostics go to standard error.
+// Users and their tokens are managed with the user subcommand (see user.go), sessions,
+// messages and memories with the session, message and memory subcommands, and the export
+// subcommand writes the messages and memories as Markdown files (see admin.go). Diagnostics
+// go to standard error.
 package main
 
 import (
@@ -60,6 +61,8 @@ func main() {
 		os.Exit(runSession(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "memory":
 		os.Exit(runMemory(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	case "message":
+		os.Exit(runMessage(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "export":
 		os.Exit(runExport(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "version", "--version", "-version":
@@ -83,7 +86,8 @@ func usage(w io.Writer) {
 	fmt.Fprintln(w, "       agent-lounge-mcp user add|list|rotate|remove ...  (manage users and their tokens; see agent-lounge-mcp user -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp session list|remove ...          (list and remove sessions; see agent-lounge-mcp session -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp memory list|remove ...           (list and remove memories; see agent-lounge-mcp memory -h)")
-	fmt.Fprintln(w, "       agent-lounge-mcp export --out DIR [--format markdown] [--db FILE]  (write every message and memory as Markdown files)")
+	fmt.Fprintln(w, "       agent-lounge-mcp message list|show ...          (list and show messages; see agent-lounge-mcp message -h)")
+	fmt.Fprintln(w, "       agent-lounge-mcp export [filters] --out DIR [--format markdown] [--db FILE]  (write messages and memories as Markdown files)")
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
