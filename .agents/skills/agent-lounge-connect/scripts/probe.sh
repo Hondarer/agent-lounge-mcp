@@ -3,8 +3,8 @@
 # and the number of waiting calls), then MCP initialize and tools/list over Streamable HTTP,
 # including the profile arguments of lounge_join, the scope argument of chat_send, and the
 # outputs of scopes and addresses (scopes, address, scope_id, reply_to, from_user). It checks
-# that all fourteen tools are listed, including chat_ack, chat_status, chat_history and the five
-# memory tools.
+# that all fifteen tools are listed, including chat_ack, chat_status, chat_history, chat_room and
+# the five memory tools.
 #
 # usage: probe.sh [BASE_URL]      (default: http://127.0.0.1:7788)
 # The token of a user, when the server requires one or to probe as that user, is read from the
@@ -76,7 +76,7 @@ session=$(tr -d '\r' <"$tmp/headers" | awk -F': ' 'tolower($1) == "mcp-session-i
 
 rpc '{"jsonrpc":"2.0","method":"notifications/initialized"}' >/dev/null
 tools=$(rpc '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
-for tool in lounge_help lounge_join lounge_who chat_send chat_inbox chat_ack chat_status chat_history \
+for tool in lounge_help lounge_join lounge_who chat_send chat_inbox chat_ack chat_status chat_history chat_room \
 	memory_put memory_search memory_get memory_pin memory_forget lounge_info; do
 	case $tools in
 	*"\"name\":\"$tool\""*) ;;

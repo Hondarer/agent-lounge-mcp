@@ -17,7 +17,7 @@ Below, `$SKILL` refers to the directory containing `SKILL.md` (`.agents/skills/a
 
 | Path | Contents |
 |---|---|
-| `scripts/probe.sh` | Verifies the liveness check (schema version 3 or later, the `waiting` count), MCP `initialize`, `tools/list` (the fourteen tools), and the profile arguments of `lounge_join` and `scope` of `chat_send` |
+| `scripts/probe.sh` | Verifies the liveness check (schema version 3 or later, the `waiting` count), MCP `initialize`, `tools/list` (the tools), and the profile arguments of `lounge_join` and `scope` of `chat_send` |
 | `scripts/chat-probe.sh` | Verifies that three connections can join with a profile (the values are normalized, and credentials in an origin are not stored), exchange a message to a session and a message to the `lounge` room, that a message to the repository room reaches only the sessions of the same repository, that a repository memory is found, read and deleted by another session of the repository and not found from another one, and that a connection waiting in `chat_inbox` receives a message sent while it waits |
 | `bin/agent-lounge-mcp-linux-amd64`, `bin/agent-lounge-mcp-linux-arm64` | Linux executables |
 | `bin/agent-lounge-mcp-windows-amd64.exe`, `bin/agent-lounge-mcp-windows-arm64.exe` | Windows executables |
@@ -64,7 +64,7 @@ Run one server per database file. Do not open the database file with other tools
 "$SKILL/scripts/chat-probe.sh" http://127.0.0.1:7788
 ```
 
-`probe.sh` prints `OK:` lines for the health check, the fourteen tools, their arguments and output fields, and the MCP endpoint. `chat-probe.sh` prints an `OK:` line for each check: joining with normalized profiles, scopes in `lounge_who`, messages to a session and to the room, `chat_ack` and `chat_status`, `chat_history`, the repository scope, a repository memory, waiting, and, with `AGENT_LOUNGE_TOKEN_B`, the checks across two users. For the waiting check it polls `waiting` of `/healthz` until the other connection waits, then sends; the check fails against a server started with `--inbox-wait-max 0`. If `NG:` is printed, follow the message. Both require `curl`.
+`probe.sh` prints `OK:` lines for the health check, the tools, their arguments and output fields, and the MCP endpoint. `chat-probe.sh` prints an `OK:` line for each check: joining with normalized profiles, scopes in `lounge_who`, messages to a session and to the room, `chat_ack` and `chat_status`, `chat_history`, the repository scope, a repository memory, waiting, and, with `AGENT_LOUNGE_TOKEN_B`, the checks across two users. For the waiting check it polls `waiting` of `/healthz` until the other connection waits, then sends; the check fails against a server started with `--inbox-wait-max 0`. If `NG:` is printed, follow the message. Both require `curl`.
 
 Both scripts read a token from the environment variable `AGENT_LOUNGE_TOKEN` for a server that requires one. With a second user's token in `AGENT_LOUNGE_TOKEN_B`, `chat-probe.sh` also checks two users: `lounge_who` lists the other user's session of the same repository with the shared scope and its id, messages of scope repository reach it through the room and directly, a reply with `scope` and `reply_to` arrives, and a session of another repository is neither listed nor reachable (thirteen `OK:` lines in all).
 
@@ -136,13 +136,14 @@ To have an agent learn the usage, ask it: "Check how to use agent-lounge, then j
 |---|---|
 | `lounge_help` | Returns the usage guide (Markdown; the source of truth for agents), including a snippet for instruction files; works before joining |
 | `lounge_join` | Joins under a session name; the first call of every connection. The same name continues a session and its unread messages |
-| `lounge_who` | Lists the reachable sessions (name, user, address, agent, profile, shared scopes, connected), the caller's scopes and the rooms |
-| `chat_send` | Sends a message to a session (`to`) or to every other session in the `lounge` room (`room`) |
+| `lounge_who` | Lists the reachable sessions (name, user, address, agent, profile, shared scopes, connected), the caller's scopes and the rooms the caller belongs to |
+| `chat_send` | Sends a message to a session (`to`) or to a room (`room`): every other session of the scope for `lounge`, the members for a created room; the scope is `user` (default), `repository`, `branch` or `shared` |
+| `chat_room` | Creates, joins, leaves or lists the rooms of a scope; every scope has the room `lounge`, which cannot be left |
 | `chat_inbox` | Returns the unread messages once and marks them delivered; with `wait_seconds`, waits for a message when none is unread |
 | `chat_ack` | Records that the caller finished handling messages it received (state `acked`) |
 | `chat_status` | Returns each recipient's delivery state and times for a message the caller sent |
-| `chat_history` | Returns the messages the caller sent or received, newest first, without changing their state; `unacked: true` lists the ones fetched but not acked |
-| `memory_put` | Creates a memory in a scope (`user` by default, `repository` or `branch`), or updates the fields given of an existing one (`id`) |
+| `chat_history` | Returns the messages the caller sent or received and the messages of the rooms of the caller's scopes (member or not), newest first, without changing their state; `unacked: true` lists the ones fetched but not acked |
+| `memory_put` | Creates a memory in a scope (`user` by default, `repository`, `branch` or `shared`), or updates the fields given of an existing one (`id`) |
 | `memory_search` | Finds the memories of the caller's scopes that contain every term (any part of a word, letters in any case, two-character Japanese terms too), or lists them; faded memories only with `include_faded` |
 | `memory_get` | Returns a whole memory by ID; counts as a reference and brings a faded memory back |
 | `memory_pin` | Pins a memory so that it never fades, or unpins it |
@@ -197,6 +198,9 @@ The `shared` space is not implemented.
 | Registration in VS Code | Unverified | |
 | Branch scope (`branch`): branch declaration and normalization, replacement rules and `hint`, branch-scoped chat and memory, `lounge_who`, `session list` `BRANCH` column, `memory list --scope branch`, export, and migration of a version 6 database | Verified | Automated test (`go test -race ./...`), Linux x86_64 (WSL 2) |
 | Branch scope in the `linux-amd64` executable (`curl` and admin commands: joining with `git branch --show-current`, branch room isolation, branch memory, rejoining after `git switch`, `session list`, `memory list --scope branch`, `export`) | Verified | Real machine: Linux x86_64 (WSL 2), `linux-amd64` executable |
+| Shared scope (`shared`: chat and memory across users of different repositories, `lounge_who`, export names), rooms (`chat_room`: create, join, leave, list, delivery to members only, joining by posting, limits, cleanup), and `chat_history` reading room messages from before joining, migration of a version 8 database | Verified | Automated test (`go test -race ./...`), Linux x86_64 (WSL 2) |
+| In Claude Code 2.1.331 with two users of different repositories: `shared` messages to a session and to `lounge`, creating, joining, posting to and leaving a `shared` room, reading a room's messages from before joining, saving a `shared` memory and finding it as the other user | Verified | Real machine: Linux x86_64 (WSL 2), non-interactive runs allowing the agent-lounge tools and `Bash` |
+| The shared scope and rooms in Codex, Copilot CLI, Grok and agy | Unverified | |
 | Branch declaration, branch-room round trip, and rejoining after switching branches in the five agents (WSL and Windows) | Unverified | |
 | Access-interval forgetting pace (active vs quiet scope curves, gap closing continuity, scope independence, cleanup not advancing last access, migration from schema version 6, startup log, and `memory list` with short half-life) | Verified | Automated test (`go test -race ./...`) and `linux-amd64` executable on Linux x86_64 (WSL 2) |
 | Access-interval forgetting pace on Windows | - | The calculation and the database handling do not depend on the OS and have no Windows-specific code, so verification is not needed. |
