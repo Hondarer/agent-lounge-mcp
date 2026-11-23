@@ -11,7 +11,7 @@
 | `go vet ./...` | 通過 | Linux x86_64 (WSL 2)、Go 1.27.4 |
 | `GOOS=windows go vet ./...` | 通過 | 同上 |
 | `go test -race ./...` | 通過 | 同上 |
-| CI (3 つの OS) | 未実施 (作業ブランチの push の後に実施) | |
+| CI (3 つの OS) | 通過 | GitHub Actions の `ubuntu-latest`、`windows-latest`、`macos-latest` (run 45284144295、`c54c91d`。前のコミット `3a864b6` の run 45283192071 も通過) |
 
 Table: 自動テストの結果
 

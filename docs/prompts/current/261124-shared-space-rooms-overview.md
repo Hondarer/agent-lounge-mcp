@@ -1,10 +1,10 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-24 07:19:00 JST
+最終更新日時: 2026-11-24 08:05:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
-上流文書: `261123-backlog-batch-backlog.md` (対策元の残課題一覧。BL-004、BL-009、BL-033 の (1)。BL-031 の (6) は容認して除く)。移動または削除されている場合があります。
+上流文書: `../past/261123-backlog-batch-backlog.md` (対策元の残課題一覧。BL-004、BL-009、BL-033 の (1)。BL-031 の (6) は容認して除く)。移動または削除されている場合があります。
 下流文書: `261124-shared-space-rooms-discussion.md` (検討用 Markdown)、`261124-shared-space-rooms-lightadr.md` (簡易 ADR)、`261124-shared-space-rooms-design.md` (最終仕様)、`261124-shared-space-rooms-backlog.md` (残課題一覧)、`261124-shared-space-rooms-validation.md` (確認の記録)。未作成の場合や、削除されている場合があります。
 再開手順: このファイルを開いたエージェントは、作業の前に agree-before-implement スキルを読み込んでください。この文書と、ユーザーが編集した最新の検討用 Markdown を読み直し、作業 WBS の `← **CURRENT**` の項目から再開します。最終更新エージェントのセッション情報や稼働 OS・最終更新日時が参照可能であれば再開時のコンテキストや環境差分の把握に利用し、別エージェントや別環境・別 OS からの引き継ぎ、担当変更によりセッションが見つからない場合も異常とせず、文書の記載から継続してください。`← **CURRENT**` の項目は処理が中止された項目である場合があり、どこまで進んでいたかは文書だけでは分かりません。対象成果物の内容を確認して実施済みの範囲を特定してから、作業を再開してください。`← **CURRENT**` がなく、作業 WBS がすべて完了 (✅) であれば、この案件の合意フローは完了しています。
 -->
@@ -21,7 +21,7 @@
 
 検討用 Markdown の版: 3
 
-状態: 成果物の承認待ち (第 3 ゲート)
+状態: 完了 (第 3 ゲート通過。CI の成功をもって承認)
 
 ## 作業 WBS と進捗管理
 
@@ -29,7 +29,7 @@
 
 凡例: ⏸️ 未着手、🔄 実施中、🚫 ブロック中、⚠️ 要注意、✅ 完了。現在取り組んでいる項目の末尾に `← **CURRENT**` を付けます。
 
-- 🔄 1. 検討用 Markdown のための情報収集と質問の実施
+- ✅ 1. 検討用 Markdown のための情報収集と質問の実施
     - ✅ 1.1. 依頼とスキル (agree-before-implement。`/home/user/c-modernization-kit/app/general/.agents/skills/agree-before-implement`) の確認
     - ✅ 1.2. 前提条件の調査 (対策元の残課題一覧の BL-004、BL-009 と関連の BL-031、BL-033、前の案件の簡易 ADR の LADR-002、企画提案書の「空間の分け方」「宛先」「ツール」、`internal/store/scope.go`、`internal/store/chat.go`、`internal/store/schema/` の 0001・0002・0003・0007、`internal/tools/chat.go`・`address.go`・`delivery.go`・`help.go`、`docs/ja/reference.md` の「スコープと対象」「lounge_who」「メモリの項目と空間」「制限事項」、初回の検討 `../past/261117-chat-connectivity-discussion.md` の Q-003・Q-005)
     - ✅ 1.3. 対策元の残課題一覧 (`261123-backlog-batch-backlog.md`) のメタ情報と状態の更新 (BL-004、BL-009 を「検討中」にし、この案件の開始を記録)
@@ -46,19 +46,19 @@
     - ✅ 3.1. `261124-shared-space-rooms-design.md` の作成 (知見の反映計画を含む)。対策元の残課題一覧の BL-004、BL-009、BL-033 を「対応中」に更新
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認 (決定から一意に決まらない細部は、最終仕様の 13 章にまとめ、第 2 ゲートで確認を受ける)
     - ✅ 3.3. 対話セッションにおける最終仕様の承認の受付 (第 2 ゲート: 作業着手の合意)。2026-11-24 06:55 JST に承認受領。あわせて、難易度の低い実装を Sonnet のサブエージェントに依頼する指示を受けた ([LADR-008](261124-shared-space-rooms-lightadr.md#ladr-008-作業の進め方))
-- ⚠️ 4. 承認された最終仕様に従った作業の実施 (順は、最終仕様の 12 章。依頼先は、難易度の低い 4.2 を Sonnet のサブエージェント、4.3 と 4.4 と文書を Claude Code とする。難易度の区分は、Claude Code の判断)
+- ✅ 4. 承認された最終仕様に従った作業の実施 (順は、最終仕様の 12 章。依頼先は、難易度の低い 4.2 を Sonnet のサブエージェント、4.3 と 4.4 と文書を Claude Code とする。難易度の区分は、Claude Code の判断)
     - ✅ 4.1. 作業ブランチ `feature/shared-space-rooms` の作成と、作業前の記録の最初のコミット (`40f3549`)
     - ✅ 4.2. (コミット `ab7f967`。Sonnet のサブエージェントが実装し、Claude Code が点検。`memory_retention` の CHECK に `shared` を加えるスキーマ版 9 を追加) BL-004: `shared` のスコープ (`internal/store/scope.go`、`internal/store/` の関連箇所、`internal/tools/`、`internal/config/`、`cmd/agent-lounge-mcp/`、テスト)。完了時に対策元の残課題一覧を更新
     - ✅ 4.3. (コミット `6d38c0c`。Claude Code が実装。スキーマ版 10。使い方の案内も、このコミットで最終の内容に更新) BL-009: ルームの作成と参加 (`internal/store/schema/` の新しいスクリプト、`internal/store/`、`internal/tools/` の `chat_room`、テスト)。完了時に対策元の残課題一覧を更新
     - ✅ 4.4. (コミット `e91f7da`。Claude Code が実装) BL-033 の (1): 参加の前のルームのやりとりの読み返し (`internal/store/delivery.go`、`internal/tools/delivery.go`、テスト)。完了時に対策元の残課題一覧を更新
     - ✅ 4.5. (コミット `6d38c0c` の `help.go`、`0c8894d` の文書。文書の本文は Sonnet のサブエージェントが書き、Claude Code が点検。`probe.sh` のツールの一覧も更新) 使い方の案内 (`internal/tools/help.go`) と正本の文書 (`docs/ja/reference.md`、`docs/ja/user-guide.md`、`docs/agent-lounge-mcp-proposal.md`、`.agents/skills/` の `SKILL.md`) の更新
-    - ⚠️ 4.6. 機械的検証 (`go vet ./...`、`go test ./...`) と、Claude Code での実機の確認 (最終仕様の 9.2)、確認の記録 `261124-shared-space-rooms-validation.md` の作成。手元の `go vet ./...` (Linux、`GOOS=windows`)、`go test -race ./...`、Claude Code 2.1.331 での実機の確認は完了。未確認: CI (3 つの OS)。確認方法: 作業ブランチを push し、CI を手動で起動する (push は利用者の確認を受けてから行う)
-    - ⚠️ 4.7. 受入条件への適合確認 (全作業の完了確認)。受入条件の 2 から 5 は適合。1 は、CI (3 つの OS) が未確認
+    - ✅ 4.6. 機械的検証 (`go vet ./...`、`go test ./...`) と、Claude Code での実機の確認 (最終仕様の 9.2)、確認の記録 `261124-shared-space-rooms-validation.md` の作成。手元の `go vet ./...` (Linux、`GOOS=windows`)、`go test -race ./...`、Claude Code 2.1.331 での実機の確認は完了。CI (3 つの OS) は、run 45284144295 (`c54c91d`) で成功
+    - ✅ 4.7. 受入条件への適合確認 (全作業の完了確認)。受入条件の 1 から 5 に適合
     - ✅ 4.8. 簡易 ADR の最終確認 (各決定が案件終了時点の決定を示し、経緯が時系列にそろっていることの確認)
     - ✅ 4.9. 残課題一覧 (`261124-shared-space-rooms-backlog.md`) の再構築と整理 (対策元の未対処の項目の全量の転記を含む)、および対策元の残課題一覧の最終状態・転記先の確定。13 件 (転記 11 件、BL-048、BL-049)。対策元の BL-004、BL-009、BL-033 を対応済み、BL-031 の (6) を容認、他の 11 件を「次フェーズへ転記」に更新
-- 🔄 5. 成果物の承認の受付 (第 3 ゲート)
-    - 🔄 5.1. 成果物・検証結果・残課題の提示 ← **CURRENT**
-    - ⏸️ 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)
+- ✅ 5. 成果物の承認の受付 (第 3 ゲート)
+    - ✅ 5.1. 成果物・検証結果・残課題の提示
+    - ✅ 5.2. 対話セッションにおける成果物の承認の受付 (「承認」または「完了」の受領によるスキル完了)。利用者の「CI成功を以て承認します。」により、CI の成功 (2026-11-24 08:02 JST に確認) をもって承認
 
 ## 対象と参照資料
 
@@ -144,6 +144,10 @@
 | 2026-11-24 06:55 | 第 2 ゲートの通過 | 利用者の「承認します。難易度の低い実装はSonnetをサブエージェントで利用してください。」([LADR-008](261124-shared-space-rooms-lightadr.md#ladr-008-作業の進め方)) |
 | 2026-11-24 07:12 | 実装の完了 (4.2 から 4.4) | 実装中に、`memory_retention` の CHECK 制約が `shared` を受け付けないことが判明し、スキーマ版 9 を追加した。参加の記録のスクリプトは版 10 になった。最終仕様の 6.9 をこれに合わせて直した。`go vet ./...`、`go test -race ./...`、`GOOS=windows go vet ./...` が通過 |
 | 2026-11-24 07:19 | 文書、実機の確認、残課題の整理の完了 | 実機の確認で、Claude Code 2.1.331 が `lounge_help` の案内を空として扱う問題を見つけ、範囲外として残課題 BL-049 に記録した。成果物の承認 (第 3 ゲート) を待つ |
+| 2026-11-24 07:48 | 作業ブランチの push と CI の起動 | 利用者の許可「pushを許可する。CI成功を以て承認します。」。案内の上限は 19,300 バイトのまま ([LADR-009](261124-shared-space-rooms-lightadr.md#ladr-009-使い方の案内の大きさの上限)) |
+| 2026-11-24 07:54 | 注記の追加 | `maxGuideBytes` に、上限を広げる前に Copilot CLI で測り直す旨を記載 (`c54c91d`) |
+| 2026-11-24 08:02 | 第 3 ゲートの通過 | CI (run 45284144295、`c54c91d`) が 3 つの OS で成功し、利用者の指示により承認とした。前のコミットの run 45283192071 も成功 |
+| 2026-11-24 08:05 | 対策元の記録の移動 | 案件 `backlog-batch` の残課題が全件「対応済み」または「次フェーズへ転記」になったため、その記録 (6 つ) を `docs/prompts/past/` へ移動した。この案件の記録は、残課題一覧に未対処の項目があるため `docs/prompts/current/` に置く |
 
 ## 反映と検証の記録
 
@@ -156,10 +160,9 @@
 
 Table: 対応箇所
 
-検証の結果は、確認の記録 `261124-shared-space-rooms-validation.md` のとおりです。手元の自動テストと、Claude Code 2.1.331 での実機の確認 (最終仕様の 9.2 の 4 項目) は、すべて通りました。
+検証の結果は、確認の記録 `261124-shared-space-rooms-validation.md` のとおりです。手元の自動テスト、CI (3 つの OS。run 45284144295)、Claude Code 2.1.331 での実機の確認 (最終仕様の 9.2 の 4 項目) は、すべて通りました。
 
 未完了の項目:
 
-- CI (3 つの OS) は未実施です。作業ブランチの push が必要です。
 - Codex、Copilot CLI、Grok、agy での実機の確認は、未検証として残課題 BL-048 にしました。
 - 確認の中で見つけた、Claude Code 2.1.331 で `lounge_help` の案内が空として扱われる問題は、範囲外として残課題 BL-049 にしました。
