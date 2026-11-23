@@ -59,7 +59,7 @@ func TestBranchScopeEndToEnd(t *testing.T) {
 
 	// lounge_who reports top-level branch, each session's branch, and shared branch scope.
 	w := testutil.Call[branchWho](t, alice, "lounge_who", nil)
-	if w.Branch != "feature/x" || len(w.Scopes) != 3 || w.Scopes[2].Scope != "branch" || w.Scopes[2].ID != "github.com/org/repo:feature/x" {
+	if w.Branch != "feature/x" || len(w.Scopes) != 4 || w.Scopes[2].Scope != "branch" || w.Scopes[2].ID != "github.com/org/repo:feature/x" {
 		t.Fatalf("who = %+v", w)
 	}
 	byName := map[string]string{}

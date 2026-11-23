@@ -17,6 +17,7 @@ func TestRetentionByKind(t *testing.T) {
 		ScopeUser:       {HalfLife: day, Threshold: 0.25, Grace: day},
 		ScopeRepository: {HalfLife: 2 * day, Threshold: 0.5},
 		ScopeBranch:     {HalfLife: 4 * day, Threshold: 0.25, Grace: day},
+		ScopeShared:     {HalfLife: 8 * day, Threshold: 0.25, Grace: day},
 	}})
 	alice := joinWith(t, s, JoinParams{
 		UserID: user, Name: "alice", Location: &Location{Origin: "github.com/org/repo"}, Branch: ptr("main"),
@@ -33,6 +34,7 @@ func TestRetentionByKind(t *testing.T) {
 		ScopeUser:       {true, math.Exp2(-10.0 / 3)},
 		ScopeRepository: {true, 0.25},
 		ScopeBranch:     {false, math.Exp2(-4.0 / 3)},
+		ScopeShared:     {false, 0.5},
 	}
 	check := func(source string, rows []Memory) {
 		t.Helper()
@@ -51,13 +53,13 @@ func TestRetentionByKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("list", listed)
-	found := search(t, s, alice, MemorySearch{Limit: 3})
-	if len(found) != 1 || found[0].Scope.Kind != ScopeBranch {
-		t.Fatalf("plain search = %+v, want only the branch memory", found)
+	found := search(t, s, alice, MemorySearch{Limit: 4})
+	if len(found) != 2 || found[0].Scope.Kind != ScopeShared || found[1].Scope.Kind != ScopeBranch {
+		t.Fatalf("plain search = %+v, want only the shared and branch memories", found)
 	}
-	found = search(t, s, alice, MemorySearch{Limit: 3, IncludeFaded: true})
+	found = search(t, s, alice, MemorySearch{Limit: 4, IncludeFaded: true})
 	check("search", found)
-	if kinds := []string{found[0].Scope.Kind, found[1].Scope.Kind, found[2].Scope.Kind}; !slices.Equal(kinds, []string{ScopeBranch, ScopeRepository, ScopeUser}) {
+	if kinds := []string{found[0].Scope.Kind, found[1].Scope.Kind, found[2].Scope.Kind, found[3].Scope.Kind}; !slices.Equal(kinds, []string{ScopeShared, ScopeBranch, ScopeRepository, ScopeUser}) {
 		t.Errorf("search order = %v", kinds)
 	}
 
@@ -138,8 +140,8 @@ func TestRetentionMigrationAndRestart(t *testing.T) {
 
 	upgraded := open(t, path)
 	upgraded.SetClock(clock.now)
-	if v, err := upgraded.SchemaVersion(ctx); err != nil || v != 8 {
-		t.Fatalf("schema = %d, %v, want 8", v, err)
+	if v, err := upgraded.SchemaVersion(ctx); err != nil || v != len(ms) {
+		t.Fatalf("schema = %d, %v, want %d", v, err, len(ms))
 	}
 	checkDiscount(upgraded, 2*day)
 	if p, err := upgraded.RecordedRetention(ctx); err != nil || len(p.ByKind) != 0 || p.Common != DefaultRetention() {

@@ -184,7 +184,7 @@ func TestChatHistory(t *testing.T) {
 	}
 	for args, want := range map[string]map[string]any{
 		"either room or with": {"room": "lounge", "with": "alice"},
-		"invalid scope":       {"scope": "shared"},
+		"invalid scope":       {"scope": "global"},
 		"limit":               {"limit": -1},
 		"before":              {"before": -1},
 		"invalid":             {"with": "/x"},

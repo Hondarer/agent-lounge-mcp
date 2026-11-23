@@ -46,7 +46,7 @@ func registerLounge(r *Registry, d *Deps) {
 	add(r, groupChat, &mcp.Tool{
 		Name:  toolWho,
 		Title: "List sessions and rooms",
-		Description: "List the sessions you can reach: the sessions of your user, and the sessions of other users that declared your repository. " +
+		Description: "List the sessions you can reach: the sessions of your user, and the sessions of other users that declared your repository or branch, and every session of every user through the shared scope. " +
 			"For each: name, user, address, agent, OS user, machine, repository, branch, the scopes you share with it (scope and id), whether connected now, last activity. " +
 			"Also returns your scopes and the rooms. To send to a session, pass its address as the 'to' of chat_send with one of its scopes.",
 		Annotations: readOnly(),
@@ -219,8 +219,8 @@ type WhoInput struct{}
 
 // ScopeOutput is a scope in tool output: its kind and identifier.
 type ScopeOutput struct {
-	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user), repository (the sessions of one repository, whatever their user) or branch (the sessions of one repository and branch, whatever their user)"`
-	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository, repository:branch for branch"`
+	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user), repository (the sessions of one repository, whatever their user), branch (the sessions of one repository and branch, whatever their user) or shared (every session of every user)"`
+	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository, repository:branch for branch, empty for shared"`
 }
 
 func scopesOutput(scopes []store.Scope) []ScopeOutput {

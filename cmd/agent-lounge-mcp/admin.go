@@ -251,7 +251,7 @@ func runExport(ctx context.Context, args []string, stdout, stderr io.Writer) int
 }
 
 func memoryUsage(w io.Writer) {
-	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository|branch] [--scope-id ID] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
+	fmt.Fprintln(w, "usage: agent-lounge-mcp memory list [--scope user|repository|branch|shared] [--scope-id ID] [--memory-half-life DURATION] [--memory-fade-threshold X] [--db FILE]")
 	for _, kind := range store.ScopeKinds() {
 		fmt.Fprintf(w, "           [--memory-%[1]s-half-life DURATION] [--memory-%[1]s-fade-threshold X]\n", kind)
 	}
@@ -287,7 +287,7 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 	var yes *bool
 	var applyRetentionFlags func()
 	if cmd == "list" {
-		scope = flags.String("scope", "", "list only the memories of this scope kind: user, repository or branch")
+		scope = flags.String("scope", "", "list only the memories of this scope kind: user, repository, branch or shared")
 		scopeID = flags.String("scope-id", "", "with --scope, list only the memories of this scope identifier")
 		applyRetentionFlags = addMemoryRetentionFlags(flags, &cfg, false)
 	} else {
@@ -320,7 +320,7 @@ func runMemory(ctx context.Context, args []string, stdout, stderr io.Writer) int
 			memoryUsage(stderr)
 			return exitUsage
 		case *scope != "" && !store.ValidScope(*scope):
-			fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --scope %q: use user, repository or branch\n", *scope)
+			fmt.Fprintf(stderr, "agent-lounge-mcp: unknown --scope %q: use user, repository, branch or shared\n", *scope)
 			return exitUsage
 		case scopeIDSet && *scope == "":
 			fmt.Fprintln(stderr, "agent-lounge-mcp: --scope-id needs --scope")
@@ -453,7 +453,7 @@ func (e usageErr) Error() string { return string(e) }
 
 func addFilterFlags(fs *flag.FlagSet) (user, scope, scopeID, since, until *string) {
 	user = fs.String("user", "", "select records stored with this user name")
-	scope = fs.String("scope", "", "select records of this scope kind: user, repository or branch")
+	scope = fs.String("scope", "", "select records of this scope kind: user, repository, branch or shared")
 	scopeID = fs.String("scope-id", "", "with --scope, select records of this scope identifier")
 	since = fs.String("since", "", "inclusive RFC 3339 lower bound of the time range")
 	until = fs.String("until", "", "exclusive RFC 3339 upper bound of the time range")
@@ -483,7 +483,7 @@ func filterFromFlags(fs *flag.FlagSet, user, scope, scopeID, since, until string
 		f.User = name
 	}
 	if scope != "" && !store.ValidScope(scope) {
-		return store.RecordFilter{}, usageErr(fmt.Sprintf("unknown --scope %q: use user, repository or branch", scope))
+		return store.RecordFilter{}, usageErr(fmt.Sprintf("unknown --scope %q: use user, repository, branch or shared", scope))
 	}
 	f.Scope = scope
 	if scopeIDSet && scope == "" {

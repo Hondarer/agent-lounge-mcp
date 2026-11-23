@@ -439,7 +439,7 @@ func TestMessageListShowAndFilters(t *testing.T) {
 	if _, err := s.ListMessages(ctx, MessageQuery{Limit: 1, State: "read"}); err == nil || !strings.Contains(err.Error(), "unknown delivery state") {
 		t.Errorf("bad state: %v", err)
 	}
-	if _, err := s.ListMessages(ctx, MessageQuery{Limit: 1, Filter: RecordFilter{Scope: "shared"}}); !errors.Is(err, ErrInvalidScope) {
+	if _, err := s.ListMessages(ctx, MessageQuery{Limit: 1, Filter: RecordFilter{Scope: "global"}}); !errors.Is(err, ErrInvalidScope) {
 		t.Errorf("bad scope: %v", err)
 	}
 	if err := s.ExportSelected(ctx, RecordFilter{Scope: "nope"}, func(ExportMessage) error { return nil }, nil); !errors.Is(err, ErrInvalidScope) {

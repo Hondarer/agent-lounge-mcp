@@ -57,7 +57,7 @@ func TestTwoUsers(t *testing.T) {
 
 	// lounge_who from alice's claude.
 	w := testutil.Call[scopedWho](t, a1, "lounge_who", nil)
-	if !slices.Equal(w.Scopes, []scopeOut{{"user", "alice"}, {"repository", repo}}) {
+	if !slices.Equal(w.Scopes, []scopeOut{{"user", "alice"}, {"repository", repo}, {"shared", ""}}) {
 		t.Errorf("top-level scopes = %+v", w.Scopes)
 	}
 	got := map[string][]scopeOut{}
@@ -68,10 +68,11 @@ func TestTwoUsers(t *testing.T) {
 		}
 	}
 	want := map[string][]scopeOut{
-		"claude":     {{"user", "alice"}, {"repository", repo}},
-		"codex":      {{"user", "alice"}},
-		"bob/claude": {{"repository", repo}},
-		"local/agy":  {{"repository", repo}},
+		"claude":     {{"user", "alice"}, {"repository", repo}, {"shared", ""}},
+		"codex":      {{"user", "alice"}, {"shared", ""}},
+		"bob/claude": {{"repository", repo}, {"shared", ""}},
+		"bob/grok":   {{"shared", ""}},
+		"local/agy":  {{"repository", repo}, {"shared", ""}},
 	}
 	if len(got) != len(want) {
 		t.Errorf("who lists %v, want %v", got, want)
@@ -81,9 +82,9 @@ func TestTwoUsers(t *testing.T) {
 			t.Errorf("%s: scopes %+v, want %+v", addr, got[addr], sc)
 		}
 	}
-	// bob's session of another repository is not visible, and not addressable.
-	if _, ok := got["bob/grok"]; ok {
-		t.Error("bob/grok is listed")
+	// bob's session of another repository is visible through the shared scope only.
+	if len(got["bob/grok"]) != 1 {
+		t.Error("bob/grok is not listed with the shared scope only")
 	}
 
 	// user + room: alice's other session only.
@@ -121,7 +122,7 @@ func TestTwoUsers(t *testing.T) {
 		if scope != nil {
 			args["scope"] = scope
 		}
-		if msg := testutil.CallErr(t, a1, "chat_send", args); !strings.Contains(msg, "scope repository") {
+		if msg := testutil.CallErr(t, a1, "chat_send", args); !strings.Contains(msg, "scope repository, branch or shared") {
 			t.Errorf("scope %v to bob/claude: %q", scope, msg)
 		}
 	}
@@ -195,7 +196,7 @@ func TestTakeoverStaysWithinUser(t *testing.T) {
 	if j := testutil.Call[joined](t, cs, "lounge_join", map[string]any{"name": "claude"}); j.Resumed || j.User != "bob" {
 		t.Errorf("bob's join = %+v", j)
 	}
-	if w := testutil.Call[scopedWho](t, a, "lounge_who", nil); len(w.Sessions) != 1 || !w.Sessions[0].You {
+	if w := testutil.Call[scopedWho](t, a, "lounge_who", nil); len(w.Sessions) != 2 || !w.Sessions[0].You {
 		t.Errorf("alice after bob's join: %+v", w)
 	}
 	// Within alice's user, the later join takes the name over.

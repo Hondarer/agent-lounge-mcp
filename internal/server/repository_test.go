@@ -277,7 +277,7 @@ func TestRepositorySendErrors(t *testing.T) {
 	}{
 		{map[string]any{"room": "lounge", "scope": "repository", "body": "x"}, "lounge_join"},
 		{map[string]any{"to": "bob", "scope": "repository", "body": "x"}, "lounge_join"},
-		{map[string]any{"room": "lounge", "scope": "shared", "body": "x"}, "invalid scope"},
+		{map[string]any{"room": "lounge", "scope": "global", "body": "x"}, "invalid scope"},
 	} {
 		if msg := testutil.CallErr(t, cs[0], "chat_send", tc.args); !strings.Contains(msg, tc.want) {
 			t.Errorf("%v: error %q does not mention %q", tc.args, msg, tc.want)

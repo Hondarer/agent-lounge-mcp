@@ -269,6 +269,28 @@ func TestWriteMarkdownBranchScope(t *testing.T) {
 	}
 }
 
+func TestWriteMarkdownSharedScope(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "out")
+	shared := store.Scope{Kind: store.ScopeShared}
+	msgs := []store.ExportMessage{{
+		ID: 10, Scope: shared, Room: "lounge", FromUser: "local", From: "alice",
+		SentAt: t0, Body: "shared message", Deliveries: []store.ExportDelivery{},
+	}}
+	mems := []store.Memory{{
+		ID: 20, Scope: shared, Title: "note", Body: "shared memory", Tags: []string{},
+		CreatedAt: t0, UpdatedAt: t0,
+		CreatedBy: store.Author{User: "local", Session: "alice"},
+		UpdatedBy: store.Author{User: "local", Session: "alice"},
+	}}
+	if _, err := WriteMarkdown(dir, feed(msgs, mems...)); err != nil {
+		t.Fatal(err)
+	}
+	wantFiles := []string{"chat/shared/room-lounge.md", "memory/shared.md"}
+	if got := files(t, dir); !slices.Equal(got, wantFiles) {
+		t.Errorf("files = %v, want %v", got, wantFiles)
+	}
+}
+
 func TestSafeNameCutsLongNames(t *testing.T) {
 	long := strings.Repeat("あ", 100) // 300 bytes
 	a, b := SafeName(long+"x"), SafeName(long+"y")

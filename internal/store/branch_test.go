@@ -14,7 +14,7 @@ func TestBranchScopeRulesAndJoinReplacement(t *testing.T) {
 	ctx := context.Background()
 	s, user := openLocal(t)
 
-	if want := []string{ScopeUser, ScopeRepository, ScopeBranch}; !slices.Equal(ScopeKinds(), want) {
+	if want := []string{ScopeUser, ScopeRepository, ScopeBranch, ScopeShared}; !slices.Equal(ScopeKinds(), want) {
 		t.Fatalf("ScopeKinds() = %v, want %v", ScopeKinds(), want)
 	}
 
@@ -31,6 +31,7 @@ func TestBranchScopeRulesAndJoinReplacement(t *testing.T) {
 		{Kind: ScopeUser, ID: LocalUser},
 		{Kind: ScopeRepository, ID: "github.com/org/repo"},
 		{Kind: ScopeBranch, ID: "github.com/org/repo:feature/x"},
+		{Kind: ScopeShared},
 	}
 	if got := ScopesOf(a); !slices.Equal(got, wantScopes) {
 		t.Fatalf("ScopesOf(a) = %+v, want %+v", got, wantScopes)
@@ -59,7 +60,7 @@ func TestBranchScopeRulesAndJoinReplacement(t *testing.T) {
 	if noRepo.Branch != "main" || noRepo.Repository != "" {
 		t.Fatalf("branch without repo: %+v", noRepo.Profile)
 	}
-	if got := ScopesOf(noRepo); !slices.Equal(got, []Scope{{Kind: ScopeUser, ID: LocalUser}}) {
+	if got := ScopesOf(noRepo); !slices.Equal(got, []Scope{{Kind: ScopeUser, ID: LocalUser}, {Kind: ScopeShared}}) {
 		t.Errorf("ScopesOf(noRepo) = %+v", got)
 	}
 	if _, err := sendRoom(s, noRepo, ScopeBranch, LoungeRoom, "hi"); !errors.Is(err, ErrNoBranch) {
@@ -97,6 +98,7 @@ func TestSendToBranchRoomAndSwitch(t *testing.T) {
 	if got := SharedScopes(alice, bob); !slices.Equal(got, []Scope{
 		{Kind: ScopeRepository, ID: "github.com/org/a"},
 		{Kind: ScopeBranch, ID: "github.com/org/a:feat"},
+		{Kind: ScopeShared},
 	}) {
 		t.Errorf("SharedScopes(alice, bob) = %+v", got)
 	}
@@ -104,6 +106,7 @@ func TestSendToBranchRoomAndSwitch(t *testing.T) {
 	if got := SharedScopes(alice, carol); !slices.Equal(got, []Scope{
 		{Kind: ScopeUser, ID: LocalUser},
 		{Kind: ScopeRepository, ID: "github.com/org/a"},
+		{Kind: ScopeShared},
 	}) {
 		t.Errorf("SharedScopes(alice, carol) = %+v", got)
 	}
