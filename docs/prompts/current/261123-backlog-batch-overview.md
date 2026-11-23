@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-23 12:10:00 JST
+最終更新日時: 2026-11-23 14:10:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `../past/261121-branch-scope-backlog.md`、`../past/261122-cli-without-mcp-backlog.md` (対策元の残課題一覧。全件を `261123-backlog-batch-backlog.md` に転記済み)。移動または削除されている場合があります。
@@ -55,13 +55,13 @@
     - ✅ 4.2. (コミット `3e31fe9`。Grok が実装、Claude Code が点検) BL-046 (最終仕様の 2 章。`internal/profile/` とテスト)
     - ✅ 4.3. (コミット `f3e5425`。Grok が実装、Claude Code が点検) BL-045 (3 章。`internal/store/` の定期の処理と `user remove`、テスト)
     - ✅ 4.4. (コミット `d424768`。Codex が実装。点検で、空の名前の扱い、宛先のエラーの案内文、書き出しのファイル名の長さの上限を Claude Code が直した) BL-014 (4 章。名前の検査と正規化、通す箇所、`export.SafeName`、管理コマンドの `--`、`internal/tools/help.go` の名前の説明、テスト)
-    - ⏸️ 4.5. (未着手。依頼文は用意済みで、Grok に依頼する。利用量の上限で中断) ← **CURRENT** BL-011 (5 章。`message list`、`message show`、絞り込み、`memory list --scope-id`、テスト)
-    - ⏸️ 4.6. BL-034 (6 章。起動オプション、種類ごとの適用、スキーマの版 8、`memory list`、`lounge_help` と `lounge_info`、テスト)
-    - ⏸️ 4.7. BL-047 (7 章。`connection`、`tools`、`call`、常駐プロセス、プロフィールの収集、案内の文章、テスト)
+    - ✅ 4.5. BL-011 (コミット `4f51cd7`。Grok が実装、Claude Code が点検)
+    - ✅ 4.6. BL-034 (コミット `7fef6ba`。Codex が実装、Claude Code が点検)
+    - ✅ 4.7. BL-047 (コミット `fe59fbb`。Codex が実装。点検で、`call` の出力をツールの構造化された結果だけにし、オプションをツール名の後にも書けるようにし、`tools` の案内文を書き直した)
     - ✅ 4.8. (コミット `ace7065`。Codex が実装。点検で、静止の判定を英数字の出力に戻し、再応答の条件に英数字の出力を加えた。最終仕様の 8 章に反映) BL-035 の (17) (8 章。`scripts/interactive/harness/agents.py` とテスト)
-    - ⏸️ 4.9. 各課題の点検 (差分、`go vet`、`go test -race`、仕様との照合) と、GitHub への push、CI の 3 つの OS の結果の確認
-    - ⏸️ 4.10. 実機の確認 (9.2 の a から h。WSL)
-    - ⏸️ 4.11. 利用者向けの文書の更新 (11 章)、取り下げの反映 (10 章)、スキルの文書
+    - ✅ 4.9. 各課題の点検と、GitHub への push、CI の結果の確認 (CI は `main` への push と pull request でだけ自動で動くため、`gh workflow run CI --ref feature/backlog-batch` で起動。run 45111492974 が、BL-047 までのコミットで、3 つの OS とも成功)
+    - 🔄 4.10. 実機の確認 (9.2。WSL)。a から d: 5 つの CLI が 1 回目で通過。e: agy 1.5.14 でも直っていない (1 回目の指示は 6 回とも失敗、2 回目は 5 回成功)。f: Claude Code、Copilot CLI、Grok、agy が 1 回目で通過。Codex は、サンドボックスなしで参加、送信、メモリは通過 (返信の受信は、確認用スクリプトの相手役が古い未読に返信した不備で未確認。やり直しが要る)。g: Codex の `workspace-write` では、既定の保存場所 (`/run/user/<UID>`) のソケットに接続できず、`--detach` の起動もログを書けずに失敗した。保存場所を `/tmp` の下にした場合の確認 (一時フォルダーの `g2.sh`、結果は `g2.out`) が実行中。h: 管理コマンドは通過。結果のファイルは、セッションの一時フォルダーの `verify-mcp-results.json`、`verify-cli-results.json`、`v2/results.json` ← **CURRENT**
+    - 🔄 4.11. 利用者向けの文書の更新 (11 章)。agy が、実装済みの課題の `docs/ja/` への反映と、`docs/ja/cli-without-mcp.md`、スキルの文書 (`agent-lounge-cli`) の執筆を終え、Claude Code が抜き取りで点検した。残り: `cli-without-mcp.md` の「検証済みの範囲」(仮の 1 行のまま) と、サンドボックスの CLI の記述、`user-guide.md` と `interactive-verification.md` の「検証済みの範囲」への 9.2 の結果の反映、agy の版の 1.5.14 への更新、全体の照合
     - ⏸️ 4.12. 正本ドキュメントおよびコード コメントへの永続的知見の反映 (14 章)、確認の記録 (`261123-backlog-batch-validation.md`) の作成、文書の「検証済みの範囲」への反映
     - ⏸️ 4.13. 全体のレビュー、受入条件 (13 章) への適合確認、簡易 ADR の最終確認
     - ⏸️ 4.14. 残課題一覧 (`261123-backlog-batch-backlog.md`) の再構築と整理
@@ -187,6 +187,7 @@
 | 2026-11-23 12:10 | 作業の中断 | BL-046、BL-045、BL-014、BL-035 の (17) をコミット済み。利用量の上限で中断。残りは BL-011、BL-034、BL-047、push と CI、実機の確認、文書、記録 |
 | 2026-11-23 12:20 | 作業の再開 | BL-011 を Grok に依頼。作業ブランチを GitHub に push |
 | 2026-11-23 12:30 | 担当の指示 | 利用者が、文章の推敲と編集を agy (gemini-4-hydrogen-high) に依頼するよう指示 ([LADR-003](261123-backlog-batch-lightadr.md#ladr-003-記録の扱いと作業の進め方)) |
+| 2026-11-23 14:10 | 作業の中断 | 7 つの課題の実装をコミットして push 済み (CI は 3 つの OS で成功)。文書の下書きをコミット。利用量の上限で中断。残りは、実機の確認 f (Codex) と g の仕上げ、文書の「検証済みの範囲」、確認の記録、残課題一覧の整理、全体のレビュー、第 3 ゲート |
 
 ## 反映と検証の記録
 

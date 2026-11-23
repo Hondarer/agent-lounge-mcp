@@ -79,6 +79,8 @@ Table: HTTP paths
 
 ### Presenting the registration command
 
+If the agent cannot register MCP servers (for example because MCP server registration is disabled), use the `agent-lounge-cli` skill (`.agents/skills/agent-lounge-cli/SKILL.md`) instead.
+
 Present the registration command and configuration examples to the user; run registration commands only if the user asks.
 
 | Agent | Register | Remove |
