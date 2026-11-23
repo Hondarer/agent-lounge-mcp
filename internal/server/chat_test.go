@@ -13,12 +13,12 @@ import (
 )
 
 type joined struct {
-	Name    string   `json:"name"`
-	Agent   string   `json:"agent"`
-	User    string   `json:"user"`
-	Resumed bool     `json:"resumed"`
-	Rooms   []string `json:"rooms"`
-	Unread  *int     `json:"unread"`
+	Name    string    `json:"name"`
+	Agent   string    `json:"agent"`
+	User    string    `json:"user"`
+	Resumed bool      `json:"resumed"`
+	Rooms   []roomRef `json:"rooms"`
+	Unread  *int      `json:"unread"`
 }
 
 type sent struct {
@@ -48,8 +48,8 @@ type who struct {
 		Connected bool   `json:"connected"`
 		You       bool   `json:"you"`
 	} `json:"sessions"`
-	Rooms  []string `json:"rooms"`
-	Unread *int     `json:"unread"`
+	Rooms  []roomRef `json:"rooms"`
+	Unread *int      `json:"unread"`
 }
 
 // clients connects n clients to one server and joins them under the given names.
@@ -78,7 +78,7 @@ func TestJoinAndWho(t *testing.T) {
 	alice := testutil.Connect(t, s.MCP, nil)
 
 	j := testutil.Call[joined](t, alice, "lounge_join", map[string]any{"name": "alice", "agent": "claude-code@host-a"})
-	if j.Name != "alice" || j.Agent != "claude-code@host-a" || j.User != "local" || j.Resumed || !slices.Equal(j.Rooms, []string{"lounge"}) || unreadOf(t, j.Unread) != 0 {
+	if j.Name != "alice" || j.Agent != "claude-code@host-a" || j.User != "local" || j.Resumed || !slices.Equal(roomNames(j.Rooms), []string{"user:lounge", "shared:lounge"}) || unreadOf(t, j.Unread) != 0 {
 		t.Fatalf("join = %+v", j)
 	}
 
@@ -89,7 +89,7 @@ func TestJoinAndWho(t *testing.T) {
 	}
 
 	w := testutil.Call[who](t, alice, "lounge_who", nil)
-	if len(w.Sessions) != 2 || !slices.Equal(w.Rooms, []string{"lounge"}) {
+	if len(w.Sessions) != 2 || !slices.Equal(roomNames(w.Rooms), []string{"user:lounge", "shared:lounge"}) {
 		t.Fatalf("who = %+v", w)
 	}
 	for _, sess := range w.Sessions {
@@ -202,12 +202,12 @@ func TestSendErrors(t *testing.T) {
 	cs := clients(t, "alice", "bob")
 	alice := cs[0]
 	for want, args := range map[string]map[string]any{
-		"not both":           {"to": "bob", "room": "lounge", "body": "x"},
-		"give a destination": {"body": "x"},
-		"must not be empty":  {"to": "bob", "body": ""},
-		"lounge_who":         {"to": "nobody", "body": "x"},
-		"your own session":   {"to": "alice", "body": "x"},
-		"the only room is":   {"room": "other", "body": "x"},
+		"not both":                              {"to": "bob", "room": "lounge", "body": "x"},
+		"give a destination":                    {"body": "x"},
+		"must not be empty":                     {"to": "bob", "body": ""},
+		"lounge_who":                            {"to": "nobody", "body": "x"},
+		"your own session":                      {"to": "alice", "body": "x"},
+		"no room named \"other\" in scope user": {"room": "other", "body": "x"},
 	} {
 		if msg := testutil.CallErr(t, alice, "chat_send", args); !strings.Contains(msg, want) {
 			t.Errorf("%v: got %q, want it to contain %q", args, msg, want)
@@ -403,4 +403,20 @@ func TestJoinAndAddressNormalizedSessionName(t *testing.T) {
 			t.Errorf("join %q = %+v", name, j)
 		}
 	}
+}
+
+// roomRef is a room in the output of lounge_join, lounge_who and chat_room.
+type roomRef struct {
+	Scope   string `json:"scope"`
+	ScopeID string `json:"scope_id"`
+	Room    string `json:"room"`
+}
+
+// roomNames returns the rooms as scope:room.
+func roomNames(rooms []roomRef) []string {
+	out := make([]string, 0, len(rooms))
+	for _, r := range rooms {
+		out = append(out, r.Scope+":"+r.Room)
+	}
+	return out
 }

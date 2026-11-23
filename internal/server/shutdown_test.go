@@ -25,6 +25,7 @@ func TestShutdownFailsToolCalls(t *testing.T) {
 		"chat_inbox":    {"wait_seconds": 10},
 		"chat_ack":      {"message_ids": []int64{1}},
 		"chat_status":   {"message_id": 1},
+		"chat_room":     {"action": "list"},
 		"memory_get":    {"id": 1},
 		"memory_pin":    {"id": 1},
 		"memory_forget": {"id": 1},

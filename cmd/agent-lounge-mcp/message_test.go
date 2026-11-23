@@ -482,7 +482,7 @@ func TestMessageUsageErrors(t *testing.T) {
 		{[]string{"list", "x"}, 2, "no argument"},
 		{[]string{"list", "--state", "read"}, 2, "unknown --state"},
 		{[]string{"list", "--state", "queued", "--scope-id", "x"}, 2, "--scope-id needs --scope"},
-		{[]string{"list", "--scope", "shared"}, 2, "unknown --scope"},
+		{[]string{"list", "--scope", "global"}, 2, "unknown --scope"},
 		{[]string{"list", "--since", "yesterday"}, 2, "invalid --since"},
 		{[]string{"list", "--until", "2026-11-23 08:00:00Z"}, 2, "invalid --until"},
 		{[]string{"list", "--limit", "0"}, 2, "--limit must be at least 1"},
@@ -527,7 +527,7 @@ func TestMessageUsageErrors(t *testing.T) {
 	if code, _, stderr := exportCmd("--scope-id", "x", "--out", t.TempDir()); code != 2 || !strings.Contains(stderr, "--scope-id needs --scope") {
 		t.Errorf("export scope-id: %d %s", code, stderr)
 	}
-	if code, _, stderr := exportCmd("--scope", "shared", "--out", t.TempDir()); code != 2 || !strings.Contains(stderr, "unknown --scope") {
+	if code, _, stderr := exportCmd("--scope", "global", "--out", t.TempDir()); code != 2 || !strings.Contains(stderr, "unknown --scope") {
 		t.Errorf("export scope: %d %s", code, stderr)
 	}
 

@@ -124,12 +124,9 @@ func TestEnsureLocalUserIsIdempotent(t *testing.T) {
 	if again.ID != id || again.Name != LocalUser {
 		t.Errorf("second call returned user %+v, want %d", again, id)
 	}
-	rooms, err := s.ListRooms(ctx, id)
-	if err != nil {
-		t.Fatal(err)
-	}
+	rooms := userRooms(t, s, id)
 	if !slices.Equal(rooms, []string{LoungeRoom}) {
-		t.Errorf("rooms = %v, want [lounge]", rooms)
+		t.Errorf("rooms of the user = %v, want [lounge]", rooms)
 	}
 }
 

@@ -338,7 +338,7 @@ func TestMemoryCommands(t *testing.T) {
 		want string
 	}{
 		{[]string{"list", "x", "--db", db}, 2, "no argument"},
-		{[]string{"list", "--scope", "shared", "--db", db}, 2, "--scope"},
+		{[]string{"list", "--scope", "global", "--db", db}, 2, "--scope"},
 		{[]string{"list", "--memory-fade-threshold", "1", "--db", db}, 2, "--memory-fade-threshold"},
 		{[]string{"remove", "--yes", "--db", db}, 2, "one memory ID"},
 		{[]string{"remove", "x", "--yes", "--db", db}, 2, "one memory ID"},

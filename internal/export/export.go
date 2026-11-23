@@ -8,6 +8,9 @@
 //	chat/<scope>-<scope id>/direct-<A>--<B>.md        messages between two sessions
 //	memory/<scope>-<scope id>.md                      the memories of a scope
 //
+// The shared scope has no identifier, so its names carry no suffix: chat/shared/ holds its
+// conversations and memory/shared.md its memories.
+//
 // A and B are the addresses (user/name) of the two sessions, in address order. Each name is
 // passed through SafeName.
 package export
@@ -94,7 +97,7 @@ func conversationOf(m store.ExportMessage) conversation {
 
 // path returns the path of the file of the conversation, relative to the output directory.
 func (c conversation) path() string {
-	dir := SafeName(c.scope.Kind + "-" + c.scope.ID)
+	dir := scopeName(c.scope)
 	var file string
 	if c.room != "" {
 		file = SafeName("room-" + c.room)
@@ -210,7 +213,16 @@ func WriteMarkdown(dir string, read Reader) (Summary, error) {
 // memoryPath returns the path of the file of the memories of a scope, relative to the output
 // directory.
 func memoryPath(sc store.Scope) string {
-	return filepath.Join(MemoryDir, SafeName(sc.Kind+"-"+sc.ID)+".md")
+	return filepath.Join(MemoryDir, scopeName(sc)+".md")
+}
+
+// scopeName returns the file or folder name of a scope: <scope>-<scope id>, or only the scope
+// for the shared scope, which has no identifier.
+func scopeName(sc store.Scope) string {
+	if sc.Kind == store.ScopeShared {
+		return SafeName(sc.Kind)
+	}
+	return SafeName(sc.Kind + "-" + sc.ID)
 }
 
 func writeMemoryHeader(w io.Writer, sc store.Scope) {

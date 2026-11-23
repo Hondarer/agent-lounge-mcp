@@ -1,7 +1,8 @@
 package store
 
 // The sessions a session can talk to are chosen on two axes: the scope, which is the range of
-// sessions (the sessions of one user, one repository unit, or one branch of a repository unit),
+// sessions (the sessions of one user, one repository unit, one branch of a repository unit, or
+// every session of every user),
 // and the target within that range (every other session, through the room, or one session).
 //
 // A scope is a kind together with an identifier that picks one range of that kind. A session
@@ -9,9 +10,9 @@ package store
 // (scopeRule.id), never given by the caller. Sessions of other users are therefore reachable
 // only through a scope both sessions share.
 //
-// Each kind is one entry of scopeRules. Adding a kind, such as a shared scope of all users,
-// means adding its name to scopeKinds and one rule: how its identifier is decided, which
-// sessions it contains, and where its rooms are kept.
+// Each kind is one entry of scopeRules. Adding a kind means adding its name to scopeKinds and
+// one rule: how its identifier is decided, which sessions it contains, and where its rooms are
+// kept. The shared kind has an empty identifier and contains every session.
 
 // Scope kinds.
 const (
@@ -23,6 +24,9 @@ const (
 	// ScopeBranch is the range of the sessions that declare one repository unit and one branch,
 	// whatever user they belong to. Its identifier is <repository>:<branch>.
 	ScopeBranch = "branch"
+	// ScopeShared is the range of every session of every user. Its identifier is the empty
+	// string, and every session can always use it.
+	ScopeShared = "shared"
 )
 
 // Scope is a range of sessions: its kind and identifier.
@@ -32,7 +36,7 @@ type Scope struct {
 }
 
 // scopeKinds lists the kinds in the order they are reported.
-var scopeKinds = []string{ScopeUser, ScopeRepository, ScopeBranch}
+var scopeKinds = []string{ScopeUser, ScopeRepository, ScopeBranch, ScopeShared}
 
 // scopeRule defines one kind of scope.
 type scopeRule struct {
@@ -73,6 +77,12 @@ var scopeRules = map[string]scopeRule{
 			return "s.repository <> '' AND s.branch <> '' AND (s.repository || ':' || s.branch) = ?", []any{id}
 		},
 		room: func(_ Session, id string) (any, string) { return nil, id },
+	},
+	ScopeShared: {
+		id:          func(Session) (string, bool) { return "", true },
+		unavailable: ErrInvalidScope, // every session can use it
+		members:     func(string) (string, []any) { return "1 = 1", nil },
+		room:        func(Session, string) (any, string) { return nil, "" },
 	},
 }
 

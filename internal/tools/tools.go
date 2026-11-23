@@ -65,6 +65,7 @@ const (
 	toolAck     = "chat_ack"
 	toolStatus  = "chat_status"
 	toolHistory = "chat_history"
+	toolRoom    = "chat_room"
 
 	toolMemPut    = "memory_put"
 	toolMemSearch = "memory_search"
@@ -227,6 +228,7 @@ func definitions(d *Deps) *Registry {
 	registerLounge(r, d)
 	registerChat(r, d)
 	registerDelivery(r, d)
+	registerRoom(r, d)
 	registerMemory(r, d)
 	registerCore(r, d)
 	return r

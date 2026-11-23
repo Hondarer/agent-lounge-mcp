@@ -59,6 +59,7 @@ type Config struct {
 	MaxBodyBytes       int
 	MaxUnread          int
 	MaxSessionsPerUser int
+	MaxRoomsPerScope   int
 	// MaxMemoryBytes and MaxMemoriesPerScope bound memories in the same way.
 	MaxMemoryBytes      int
 	MaxMemoriesPerScope int
@@ -89,7 +90,8 @@ const (
 func (c Config) Limits() store.Limits {
 	return store.Limits{
 		MaxBodyBytes: c.MaxBodyBytes, MaxUnread: c.MaxUnread, MaxSessionsPerUser: c.MaxSessionsPerUser,
-		MaxMemoryBytes: c.MaxMemoryBytes, MaxMemoriesPerScope: c.MaxMemoriesPerScope,
+		MaxRoomsPerScope: c.MaxRoomsPerScope,
+		MaxMemoryBytes:   c.MaxMemoryBytes, MaxMemoriesPerScope: c.MaxMemoriesPerScope,
 	}
 }
 
@@ -123,6 +125,7 @@ func Default() Config {
 		MaxBodyBytes:       store.DefaultMaxBodyBytes,
 		MaxUnread:          store.DefaultMaxUnread,
 		MaxSessionsPerUser: store.DefaultMaxSessionsPerUser,
+		MaxRoomsPerScope:   store.DefaultMaxRoomsPerScope,
 
 		MaxMemoryBytes:      store.DefaultMaxMemoryBytes,
 		MaxMemoriesPerScope: store.DefaultMaxMemoriesPerScope,
@@ -163,6 +166,9 @@ func (c Config) Validate() error {
 	}
 	if c.MaxSessionsPerUser < 1 {
 		return fmt.Errorf("--max-sessions-per-user %d: use 1 or more", c.MaxSessionsPerUser)
+	}
+	if c.MaxRoomsPerScope < 1 {
+		return fmt.Errorf("--max-rooms-per-scope %d: use 1 or more", c.MaxRoomsPerScope)
 	}
 	if err := ValidateFadeThreshold(c.MemoryFadeThreshold); err != nil {
 		return err

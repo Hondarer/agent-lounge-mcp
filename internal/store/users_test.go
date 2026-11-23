@@ -43,8 +43,8 @@ func TestUserLifecycle(t *testing.T) {
 		t.Error("the local user's marker was taken as a token hash")
 	}
 	// The user's space has its lounge room.
-	if rooms, err := s.ListRooms(ctx, alice.ID); err != nil || !slices.Equal(rooms, []string{LoungeRoom}) {
-		t.Errorf("rooms = %v, %v", rooms, err)
+	if rooms := userRooms(t, s, alice.ID); !slices.Equal(rooms, []string{LoungeRoom}) {
+		t.Errorf("rooms = %v", rooms)
 	}
 
 	// Names: taken, reserved, invalid.
@@ -220,7 +220,7 @@ func TestScopesAndTargets(t *testing.T) {
 	if _, err := sendTo(s, l1, ScopeRepository, LocalUser, "l1", "x"); !errors.Is(err, ErrSendToSelf) {
 		t.Errorf("to self: %v", err)
 	}
-	if _, err := sendRoom(s, l1, "shared", LoungeRoom, "x"); !errors.Is(err, ErrInvalidScope) {
+	if _, err := sendRoom(s, l1, "global", LoungeRoom, "x"); !errors.Is(err, ErrInvalidScope) {
 		t.Errorf("unknown scope: %v", err)
 	}
 
@@ -251,9 +251,11 @@ func TestScopesAndTargets(t *testing.T) {
 		got[sess.ID] = SharedScopes(viewer, sess)
 	}
 	want := map[int64][]Scope{
-		l1.ID: {{ScopeUser, LocalUser}, {ScopeRepository, "github.com/org/a"}},
-		l2.ID: {{ScopeUser, LocalUser}},
-		b1.ID: {{ScopeRepository, "github.com/org/a"}},
+		l1.ID: {{ScopeUser, LocalUser}, {ScopeRepository, "github.com/org/a"}, {ScopeShared, ""}},
+		l2.ID: {{ScopeUser, LocalUser}, {ScopeShared, ""}},
+		b1.ID: {{ScopeRepository, "github.com/org/a"}, {ScopeShared, ""}},
+		b2.ID: {{ScopeShared, ""}},
+		b3.ID: {{ScopeShared, ""}},
 	}
 	if len(got) != len(want) {
 		t.Errorf("visible = %v, want %v", got, want)
@@ -263,15 +265,14 @@ func TestScopesAndTargets(t *testing.T) {
 			t.Errorf("session %d: scopes %v, want %v", id, got[id], w)
 		}
 	}
-	if !slices.Equal(ScopesOf(viewer), []Scope{{ScopeUser, LocalUser}, {ScopeRepository, "github.com/org/a"}}) {
+	if !slices.Equal(ScopesOf(viewer), []Scope{{ScopeUser, LocalUser}, {ScopeRepository, "github.com/org/a"}, {ScopeShared, ""}}) {
 		t.Errorf("viewer scopes = %v", ScopesOf(viewer))
 	}
-	// A session without a repository sees its own user only.
+	// Every session is visible through the shared scope.
 	_, sessions, _, err = s.VisibleSessions(ctx, b3.ID, 100)
-	if err != nil || len(sessions) != 3 {
+	if err != nil || len(sessions) != 5 {
 		t.Errorf("b3 sees %+v, %v", sessions, err)
 	}
-	_ = b2
 }
 
 func TestLimits(t *testing.T) {

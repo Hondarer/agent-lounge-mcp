@@ -46,7 +46,7 @@ func registerLounge(r *Registry, d *Deps) {
 	add(r, groupChat, &mcp.Tool{
 		Name:  toolWho,
 		Title: "List sessions and rooms",
-		Description: "List the sessions you can reach: the sessions of your user, and the sessions of other users that declared your repository. " +
+		Description: "List the sessions you can reach: the sessions of your user, and the sessions of other users that declared your repository or branch, and every session of every user through the shared scope. " +
 			"For each: name, user, address, agent, OS user, machine, repository, branch, the scopes you share with it (scope and id), whether connected now, last activity. " +
 			"Also returns your scopes and the rooms. To send to a session, pass its address as the 'to' of chat_send with one of its scopes.",
 		Annotations: readOnly(),
@@ -69,11 +69,11 @@ type JoinInput struct {
 
 // JoinOutput is the result of the lounge_join tool.
 type JoinOutput struct {
-	Name    string   `json:"name" jsonschema:"the session name you joined as"`
-	Agent   string   `json:"agent" jsonschema:"recorded agent name"`
-	User    string   `json:"user" jsonschema:"user the session belongs to, decided by the token your client sends (local without a token)"`
-	Resumed bool     `json:"resumed" jsonschema:"true when an existing session was continued"`
-	Rooms   []string `json:"rooms" jsonschema:"rooms the session is a member of"`
+	Name    string    `json:"name" jsonschema:"the session name you joined as"`
+	Agent   string    `json:"agent" jsonschema:"recorded agent name"`
+	User    string    `json:"user" jsonschema:"user the session belongs to, decided by the token your client sends (local without a token)"`
+	Resumed bool      `json:"resumed" jsonschema:"true when an existing session was continued"`
+	Rooms   []RoomRef `json:"rooms" jsonschema:"rooms you are a member of: the lounge of each scope you can use, and the rooms you joined"`
 	// Profile as recorded.
 	OSUser     string `json:"os_user" jsonschema:"recorded OS user name"`
 	Machine    string `json:"machine" jsonschema:"recorded machine name"`
@@ -202,7 +202,7 @@ func (d *Deps) loungeJoin(ctx context.Context, req *mcp.CallToolRequest, in Join
 	case err != nil:
 		return nil, JoinOutput{}, err
 	}
-	rooms, err := d.Store.ListRooms(ctx, user.ID)
+	rooms, err := d.joinedRooms(ctx, sess.ID)
 	if err != nil {
 		return nil, JoinOutput{}, err
 	}
@@ -219,8 +219,8 @@ type WhoInput struct{}
 
 // ScopeOutput is a scope in tool output: its kind and identifier.
 type ScopeOutput struct {
-	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user), repository (the sessions of one repository, whatever their user) or branch (the sessions of one repository and branch, whatever their user)"`
-	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository, repository:branch for branch"`
+	Scope string `json:"scope" jsonschema:"kind of scope: user (the sessions of one user), repository (the sessions of one repository, whatever their user), branch (the sessions of one repository and branch, whatever their user) or shared (every session of every user)"`
+	ID    string `json:"id" jsonschema:"identifier of the scope: the user name for user, the repository for repository, repository:branch for branch, empty for shared"`
 }
 
 func scopesOutput(scopes []store.Scope) []ScopeOutput {
@@ -255,7 +255,7 @@ type WhoOutput struct {
 	Scopes     []ScopeOutput `json:"scopes" jsonschema:"scopes you can use, each with its id"`
 	Sessions   []WhoSession  `json:"sessions" jsonschema:"sessions you can reach, most recently active first"`
 	Truncated  bool          `json:"truncated" jsonschema:"true when more sessions exist than are listed"`
-	Rooms      []string      `json:"rooms" jsonschema:"room names"`
+	Rooms      []RoomRef     `json:"rooms" jsonschema:"rooms you are a member of: the lounge of each scope you can use, and the rooms you joined (chat_room lists every room)"`
 	unreadField
 }
 
@@ -268,7 +268,7 @@ func (d *Deps) loungeWho(ctx context.Context, req *mcp.CallToolRequest, _ WhoInp
 	if err != nil {
 		return nil, WhoOutput{}, err
 	}
-	rooms, err := d.Store.ListRooms(ctx, viewer.UserID)
+	rooms, err := d.joinedRooms(ctx, me.ID)
 	if err != nil {
 		return nil, WhoOutput{}, err
 	}

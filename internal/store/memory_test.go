@@ -196,8 +196,8 @@ func TestMemoryValidation(t *testing.T) {
 			t.Errorf("%s: %v, want %v", c.name, err, c.want)
 		}
 	}
-	if _, err := s.CreateMemory(ctx, alice.ID, "shared", MemoryInput{Body: sp("x")}); !errors.Is(err, ErrInvalidScope) {
-		t.Errorf("scope shared: %v", err)
+	if _, err := s.CreateMemory(ctx, alice.ID, "global", MemoryInput{Body: sp("x")}); !errors.Is(err, ErrInvalidScope) {
+		t.Errorf("scope global: %v", err)
 	}
 	// Japanese tags, duplicates folded, 32 characters allowed.
 	m, err := s.CreateMemory(ctx, alice.ID, "", MemoryInput{Body: sp("x"), Tags: tagsPtr("ビルド", "ビルド", strings.Repeat("あ", 32))})
@@ -341,8 +341,8 @@ func TestMemorySearch(t *testing.T) {
 	if _, _, err := s.SearchMemories(ctx, alice.ID, MemorySearch{Query: strings.Repeat("あ", 201), Limit: 1}); !errors.Is(err, ErrInvalidMemory) {
 		t.Errorf("201 characters: %v", err)
 	}
-	if _, _, err := s.SearchMemories(ctx, alice.ID, MemorySearch{Scope: "shared", Limit: 1}); !errors.Is(err, ErrInvalidScope) {
-		t.Errorf("scope shared: %v", err)
+	if _, _, err := s.SearchMemories(ctx, alice.ID, MemorySearch{Scope: "global", Limit: 1}); !errors.Is(err, ErrInvalidScope) {
+		t.Errorf("scope global: %v", err)
 	}
 }
 

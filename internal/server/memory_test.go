@@ -108,9 +108,9 @@ func TestMemoryTools(t *testing.T) {
 		{"memory_put", map[string]any{"title": "no body"}, "body is required"},
 		{"memory_put", map[string]any{"id": 1, "scope": "user", "body": "x"}, "scope cannot be changed"},
 		{"memory_put", map[string]any{"body": "x", "scope": "repository"}, "has no repository"},
-		{"memory_put", map[string]any{"body": "x", "scope": "shared"}, "invalid scope"},
+		{"memory_put", map[string]any{"body": "x", "scope": "global"}, "invalid scope"},
 		{"memory_put", map[string]any{"body": "x", "tags": []string{"a b"}}, "tag"},
-		{"memory_search", map[string]any{"scope": "shared"}, "invalid scope"},
+		{"memory_search", map[string]any{"scope": "global"}, "invalid scope"},
 		{"memory_search", map[string]any{"limit": -1}, "limit"},
 		{"memory_search", map[string]any{"query": strings.Repeat("a ", 11)}, "at most 10"},
 	} {

@@ -36,6 +36,9 @@ type Limits struct {
 	// MaxSessionsPerUser is the most sessions one user can have. Joining under a new name fails
 	// beyond it; joining under an existing name still works.
 	MaxSessionsPerUser int
+	// MaxRoomsPerScope is the most rooms one scope can have besides LoungeRoom. Creating a room
+	// fails beyond it; existing rooms stay.
+	MaxRoomsPerScope int
 	// MaxMemoryBytes is the largest memory body, in bytes of UTF-8.
 	MaxMemoryBytes int
 	// MaxMemoriesPerScope is the most memories one scope (one user, one repository unit, or one
@@ -48,6 +51,7 @@ const (
 	DefaultMaxBodyBytes        = 65536
 	DefaultMaxUnread           = 1000
 	DefaultMaxSessionsPerUser  = 500
+	DefaultMaxRoomsPerScope    = 100
 	DefaultMaxMemoryBytes      = 16384
 	DefaultMaxMemoriesPerScope = 10000
 )
@@ -56,7 +60,8 @@ const (
 func DefaultLimits() Limits {
 	return Limits{
 		MaxBodyBytes: DefaultMaxBodyBytes, MaxUnread: DefaultMaxUnread, MaxSessionsPerUser: DefaultMaxSessionsPerUser,
-		MaxMemoryBytes: DefaultMaxMemoryBytes, MaxMemoriesPerScope: DefaultMaxMemoriesPerScope,
+		MaxRoomsPerScope: DefaultMaxRoomsPerScope,
+		MaxMemoryBytes:   DefaultMaxMemoryBytes, MaxMemoriesPerScope: DefaultMaxMemoriesPerScope,
 	}
 }
 
@@ -440,24 +445,6 @@ func loadSession(ctx context.Context, tx *sql.Tx, id int64) (Session, error) {
 	return sess, err
 }
 
-// ListRooms returns the names of the rooms in the user's own space.
-func (s *Store) ListRooms(ctx context.Context, userID int64) ([]string, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT name FROM rooms WHERE scope = ? AND user_id = ? ORDER BY name", ScopeUser, userID)
-	if err != nil {
-		return nil, fmt.Errorf("list rooms: %w", err)
-	}
-	defer rows.Close()
-	var names []string
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("list rooms: %w", err)
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
-}
-
 // Send queues a message from the session senderID in the given scope (one of ScopeKinds).
 //
 // The scope is the sender's own: its identifier is decided from the sender as recorded at the
@@ -465,10 +452,12 @@ func (s *Store) ListRooms(ctx context.Context, userID int64) ([]string, error) {
 // recipients are the sessions in that range now, connected or not. A session that enters the
 // range later does not receive the message, and one that leaves it keeps what it received.
 //
-// To a room (target.Room, which must be LoungeRoom), the message is queued for every other
-// session of the range, except those whose inbox is full (Sent.Skipped). To one session
-// (target.User and target.Name), the session must be in the range: a session outside it and a
-// missing session both fail with ErrNoSuchSession, and a full inbox fails with ErrInboxFull.
+// To a room (target.Room, a normalized room name), the message is queued for every other
+// session of the range for LoungeRoom, or for the other members in the range for a created room
+// (see rooms.go), except those whose inbox is full (Sent.Skipped). A room that does not exist
+// in the scope fails with ErrNoSuchRoom. To one session (target.User and target.Name), the
+// session must be in the range: a session outside it and a missing session both fail with
+// ErrNoSuchSession, and a full inbox fails with ErrInboxFull.
 func (s *Store) Send(ctx context.Context, senderID int64, scope string, target Target, body string) (Sent, error) {
 	rule, ok := scopeRules[scope]
 	if !ok {
@@ -549,24 +538,26 @@ func (s *Store) sendToSession(ctx context.Context, tx *sql.Tx, sender Session, s
 }
 
 func (s *Store) sendToRoom(ctx context.Context, tx *sql.Tx, sender Session, sc Scope, room, body string) (Sent, error) {
-	if room != LoungeRoom {
+	now := millis(s.now())
+	// The lounge of a scope is created at its first message (the lounge of a user is created
+	// together with the user). Other rooms are created only by CreateRoom.
+	roomID, ok, err := findRoom(ctx, tx, sender, sc, room, now)
+	switch {
+	case err != nil:
+		return Sent{}, err
+	case !ok:
 		return Sent{}, ErrNoSuchRoom
 	}
-	// A room is created at the first message of its scope (the lounge of a user is created
-	// together with the user).
-	userID, repository := scopeRules[sc.Kind].room(sender, sc.ID)
-	if _, err := tx.ExecContext(ctx,
-		"INSERT INTO rooms (scope, user_id, repository, name, created_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING",
-		sc.Kind, userID, repository, room, millis(s.now())); err != nil {
-		return Sent{}, err
+	// The lounge reaches every other session of the range. A created room reaches its members
+	// in the range, and posting to it makes the sender a member, so that it gets the replies.
+	extra, args := "s.id <> ?", []any{sender.ID}
+	if room != LoungeRoom {
+		if err := joinRoom(ctx, tx, roomID, sender.ID, now); err != nil {
+			return Sent{}, err
+		}
+		extra, args = memberCondition, []any{sender.ID, roomID}
 	}
-	var roomID int64
-	if err := tx.QueryRowContext(ctx,
-		"SELECT id FROM rooms WHERE scope = ? AND coalesce(user_id, 0) = coalesce(?, 0) AND repository = ? AND name = ?",
-		sc.Kind, userID, repository, room).Scan(&roomID); err != nil {
-		return Sent{}, err
-	}
-	found, err := scopeMembers(ctx, tx, sc, "s.id <> ?", sender.ID)
+	found, err := scopeMembers(ctx, tx, sc, extra, args...)
 	if err != nil {
 		return Sent{}, err
 	}

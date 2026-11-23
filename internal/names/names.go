@@ -15,6 +15,7 @@ const characters = "1 to 64 normalized Unicode letters, digits, combining marks,
 const (
 	SessionRule = "Session names use " + characters + " and preserve case."
 	UserRule    = "User names use " + characters + " and are lowercased."
+	RoomRule    = "Room names use " + characters + " and are lowercased."
 )
 
 // Session uses RFC 8265 to fold width variants, normalize to NFC, and reject
@@ -27,6 +28,12 @@ func Session(name string) (string, error) {
 // cannot differ only in case.
 func User(name string) (string, error) {
 	return normalize(name, precis.UsernameCaseMapped, "user name", UserRule)
+}
+
+// Room applies the rules of User to a room name: sessions meet in a room by writing its name,
+// so names that differ only in case or width must not make separate rooms.
+func Room(name string) (string, error) {
+	return normalize(name, precis.UsernameCaseMapped, "room name", RoomRule)
 }
 
 func normalize(name string, profile *precis.Profile, label, rule string) (string, error) {

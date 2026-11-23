@@ -24,7 +24,7 @@ func registerMemory(r *Registry, d *Deps) {
 		Name:  toolMemPut,
 		Title: "Save a memory",
 		Description: "Save a memory: a piece of knowledge that other sessions can use for a while, such as how to fix an error, a specification that is about to change, or an agreement about the work. " +
-			"Omit id to create a memory in a scope (user, the default: the sessions of your user; repository: every session of your repository, of any user; branch: every session of your repository and branch, of any user). " +
+			"Omit id to create a memory in a scope (user, the default: the sessions of your user; repository: every session of your repository, of any user; branch: every session of your repository and branch, of any user; shared: every session of every user). " +
 			"Pass the id of an existing memory to update it: only the fields you pass (body, title, tags) are replaced. Search first (memory_search) and update a memory that already says the same thing. " +
 			"Memories that are not used fade and are deleted; see lounge_help. Knowledge that must last belongs in the documents of the repository. " +
 			"Do not write secrets (passwords, tokens, keys) or personal data in a memory.",
@@ -75,8 +75,8 @@ type MemoryAuthor struct {
 // MemoryView is a memory in a tool result.
 type MemoryView struct {
 	ID          int64        `json:"id" jsonschema:"ID of the memory"`
-	Scope       string       `json:"scope" jsonschema:"scope of the memory: user, repository or branch"`
-	ScopeID     string       `json:"scope_id" jsonschema:"identifier of the scope: the user name, the repository, or repository:branch"`
+	Scope       string       `json:"scope" jsonschema:"scope of the memory: user, repository, branch or shared"`
+	ScopeID     string       `json:"scope_id" jsonschema:"identifier of the scope: the user name, the repository, repository:branch, or empty for shared"`
 	Title       string       `json:"title,omitempty" jsonschema:"title; absent when it has none"`
 	Tags        []string     `json:"tags" jsonschema:"tags, lowercase"`
 	Body        string       `json:"body" jsonschema:"text of the memory, written by the sessions in created_by and updated_by"`
@@ -114,7 +114,7 @@ func memoryError(err error, id int64) error {
 		return fmt.Errorf("no memory with ID %d in your scopes: pass an id that %s or %s returned "+
 			"(memories that are not used fade and are deleted, see %s)", id, toolMemSearch, toolMemPut, toolHelp)
 	case errors.Is(err, store.ErrInvalidScope):
-		return fmt.Errorf("invalid scope: use %s, %s or %s, or omit it", store.ScopeUser, store.ScopeRepository, store.ScopeBranch)
+		return fmt.Errorf("invalid scope: use %s, %s, %s or %s, or omit it", store.ScopeUser, store.ScopeRepository, store.ScopeBranch, store.ScopeShared)
 	case errors.Is(err, store.ErrNoRepository):
 		return fmt.Errorf("your session has no repository, so scope %s cannot be used: call %s with the same name and your origin, "+
 			"or your folder and machine (see %s), then try again", store.ScopeRepository, toolJoin, toolHelp)
@@ -134,7 +134,7 @@ func memoryError(err error, id int64) error {
 // MemoryPutInput defines arguments for the memory_put tool.
 type MemoryPutInput struct {
 	ID    int64    `json:"id,omitempty" jsonschema:"ID of a memory to update. Omit it to create a memory"`
-	Scope string   `json:"scope,omitempty" jsonschema:"scope of a new memory: user (the default: the sessions of your user), repository (every session of your repository, of any user) or branch (every session of your repository and branch, of any user). Only when creating"`
+	Scope string   `json:"scope,omitempty" jsonschema:"scope of a new memory: user (the default: the sessions of your user), repository (every session of your repository, of any user), branch (every session of your repository and branch, of any user) or shared (every session of every user). Only when creating"`
 	Body  *string  `json:"body,omitempty" jsonschema:"text of the memory; required when creating. No secrets or personal data"`
 	Title *string  `json:"title,omitempty" jsonschema:"short title, one line of at most 200 characters; an empty string removes it"`
 	Tags  []string `json:"tags,omitempty" jsonschema:"tags, at most 10, each 1 to 32 characters without spaces or commas; stored lowercase. When updating, the list replaces the tags ([] removes them)"`
@@ -187,7 +187,7 @@ func (d *Deps) memoryPut(ctx context.Context, req *mcp.CallToolRequest, in Memor
 // MemorySearchInput defines arguments for the memory_search tool.
 type MemorySearchInput struct {
 	Query        string   `json:"query,omitempty" jsonschema:"terms separated by spaces (at most 10 terms, 200 characters): memories that contain every term. Omit it to list the memories"`
-	Scope        string   `json:"scope,omitempty" jsonschema:"user, repository or branch: only the memories of that scope. Omit it for every scope you can use"`
+	Scope        string   `json:"scope,omitempty" jsonschema:"user, repository, branch or shared: only the memories of that scope. Omit it for every scope you can use"`
 	Tags         []string `json:"tags,omitempty" jsonschema:"only the memories that have all of these tags"`
 	IncludeFaded bool     `json:"include_faded,omitempty" jsonschema:"true: include faded memories (marked faded)"`
 	Limit        int      `json:"limit,omitempty" jsonschema:"maximum number of memories to return (default 10, at most 50)"`
@@ -208,7 +208,7 @@ func (d *Deps) memorySearch(ctx context.Context, req *mcp.CallToolRequest, in Me
 	}
 	switch {
 	case in.Scope != "" && !store.ValidScope(in.Scope):
-		return nil, MemorySearchOutput{}, fmt.Errorf("invalid scope %q: use %s, %s or %s, or omit it", in.Scope, store.ScopeUser, store.ScopeRepository, store.ScopeBranch)
+		return nil, MemorySearchOutput{}, fmt.Errorf("invalid scope %q: use %s, %s, %s or %s, or omit it", in.Scope, store.ScopeUser, store.ScopeRepository, store.ScopeBranch, store.ScopeShared)
 	case in.Limit < 0:
 		return nil, MemorySearchOutput{}, fmt.Errorf("limit must be between 1 and %d", maxSearchLimit)
 	}

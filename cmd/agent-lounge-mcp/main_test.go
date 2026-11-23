@@ -121,7 +121,8 @@ func TestServeRetentionOptions(t *testing.T) {
 	}
 
 	cfg, err = parse(append(common, "--memory-user-half-life", "0",
-		"--memory-repository-fade-threshold", "0.4", "--memory-branch-grace", "0")...)
+		"--memory-repository-fade-threshold", "0.4", "--memory-branch-grace", "0",
+		"--memory-shared-half-life", "2d", "--memory-shared-fade-threshold", "0.2", "--memory-shared-grace", "3d")...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,6 +130,7 @@ func TestServeRetentionOptions(t *testing.T) {
 		store.ScopeUser:       {Threshold: 0.3, Grace: 8 * config.Day},
 		store.ScopeRepository: {HalfLife: 5 * config.Day, Threshold: 0.4, Grace: 8 * config.Day},
 		store.ScopeBranch:     {HalfLife: 5 * config.Day, Threshold: 0.3},
+		store.ScopeShared:     {HalfLife: 2 * config.Day, Threshold: 0.2, Grace: 3 * config.Day},
 	} {
 		if p := cfg.RetentionPolicies().For(kind); p != want {
 			t.Errorf("%s = %+v, want %+v", kind, p, want)
@@ -177,13 +179,13 @@ func TestServe(t *testing.T) {
 	}
 	policies, err := st.RecordedRetention(ctx)
 	st.Close()
-	if err != nil || len(policies.ByKind) != 3 || policies.For(store.ScopeBranch).HalfLife != 0 {
+	if err != nil || len(policies.ByKind) != 4 || policies.For(store.ScopeBranch).HalfLife != 0 {
 		t.Fatalf("serve recorded %+v, %v", policies, err)
 	}
 
 	cs := testutil.ConnectHTTP(t, "http://"+addr.String()+server.MCPPath)
 	out := testutil.Call[tools.InfoOutput](t, cs, "lounge_info", nil)
-	if out.SchemaVersion != 8 || len(out.MemoryRetention) != 3 || out.MemoryRetention[store.ScopeBranch].HalfLife != "0s" {
+	if out.SchemaVersion != 10 || len(out.MemoryRetention) != 4 || out.MemoryRetention[store.ScopeBranch].HalfLife != "0s" {
 		t.Fatalf("got %+v", out)
 	}
 
