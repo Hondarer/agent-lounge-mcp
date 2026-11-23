@@ -52,7 +52,9 @@ func (r CleanupResult) Empty() bool {
 //     it wrote stay: a memory outlives its session.
 //  4. Delete memories: a memory that faded more than the grace period ago is deleted, under
 //     the store's RetentionPolicy (see retention.go), and the references older than
-//     ReferenceWindow are dropped.
+//     ReferenceWindow are dropped. The same transaction deletes a memory_scope_activity row
+//     whose scope has no memory and whose last access is older than scopeActivityIdle.
+//     Pinned and faded memories count as memories.
 //
 // Each step is its own transaction. When a step fails, Cleanup returns what the earlier steps
 // did with the error; the caller tries again at its next run.
@@ -129,7 +131,10 @@ func (s *Store) Cleanup(ctx context.Context, p CleanupPolicy) (CleanupResult, er
 	err := s.tx(ctx, func(tx *sql.Tx) error {
 		var err error
 		r.Memories, err = s.deleteForgottenMemories(ctx, tx, now)
-		return err
+		if err != nil {
+			return err
+		}
+		return deleteIdleScopeActivity(ctx, tx, now)
 	})
 	if err != nil {
 		r.Memories = 0

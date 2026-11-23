@@ -472,3 +472,51 @@ func TestMigrateVersion2KeepsData(t *testing.T) {
 		rows.Close()
 	}
 }
+
+// RemoveUser deletes that user's user-scope activity row in the same transaction, and leaves
+// repository and branch rows, including rows a search with no results created.
+func TestRemoveUserDeletesUserScopeActivity(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openLocal(t)
+	alice := addUser(t, s, "alice")
+	bob := addUser(t, s, "bob")
+	a := joinWith(t, s, JoinParams{
+		UserID:   alice.ID,
+		Name:     "work",
+		Location: &Location{Origin: "github.com/org/a"},
+		Branch:   ptr("feature/x"),
+	})
+	b := join(t, s, bob.ID, "work")
+	createMemory(t, s, a, ScopeUser, "alice's note")
+	if ms := search(t, s, a, MemorySearch{Query: "zzznomatch", Limit: 10}); len(ms) != 0 {
+		t.Fatalf("alice search = %d memories, want 0", len(ms))
+	}
+	searchNone(t, s, b, ScopeUser)
+
+	repoID, branchID := a.Repository, a.Repository+":"+a.Branch
+	for _, sc := range []Scope{
+		{Kind: ScopeUser, ID: "alice"},
+		{Kind: ScopeRepository, ID: repoID},
+		{Kind: ScopeBranch, ID: branchID},
+		{Kind: ScopeUser, ID: "bob"},
+	} {
+		if _, _, ok := scopeActivityRow(t, s, sc.Kind, sc.ID); !ok {
+			t.Fatalf("missing activity %s %s before removal", sc.Kind, sc.ID)
+		}
+	}
+	if _, err := s.RemoveUser(ctx, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeUser, "alice"); ok {
+		t.Error("alice's user-scope activity remains")
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeRepository, repoID); !ok {
+		t.Error("repository activity was deleted")
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeBranch, branchID); !ok {
+		t.Error("branch activity was deleted")
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeUser, "bob"); !ok {
+		t.Error("another user's activity was deleted")
+	}
+}

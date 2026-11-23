@@ -838,6 +838,27 @@ func (s *Store) SearchMemories(ctx context.Context, sessionID int64, q MemorySea
 	return memories, more, nil
 }
 
+// scopeActivityIdle is how long a memory_scope_activity row with no memory is kept after its
+// last access. The period is fixed and independent of the retention options, including a
+// half-life of 0 and a grace of 0: the table must not grow when forgetting is disabled, and
+// deleting a row of a scope without memories does not change any retention score.
+const scopeActivityIdle = 60 * 24 * time.Hour
+
+// deleteIdleScopeActivity deletes memory_scope_activity rows that have no memory in the same
+// (scope, scope_id) and whose last access is older than scopeActivityIdle. The absence check
+// and the delete are one statement. Pinned and faded memories are rows of memories, so they
+// keep the activity row.
+func deleteIdleScopeActivity(ctx context.Context, tx *sql.Tx, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `
+		DELETE FROM memory_scope_activity
+		WHERE last_access < ?
+		  AND NOT EXISTS (
+			SELECT 1 FROM memories m
+			WHERE m.scope = memory_scope_activity.scope AND m.scope_id = memory_scope_activity.scope_id)`,
+		millis(now.Add(-scopeActivityIdle)))
+	return err
+}
+
 // deleteForgottenMemories deletes the memories that faded more than the grace period ago, and
 // the references older than ReferenceWindow, which no longer keep anything from being counted.
 // It returns the number of memories it deleted.

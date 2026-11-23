@@ -310,8 +310,10 @@ func countUserData(ctx context.Context, tx *sql.Tx, name string) (UserData, erro
 }
 
 // RemoveUser deletes the user with its sessions, the messages they sent or that were addressed
-// to them, the delivery records of those, and the memories of its user scope, and returns what it deleted. Connections of the
-// user are rejected from their next request, since the token no longer matches any user.
+// to them, the delivery records of those, the memories of its user scope, and the activity row
+// of that user scope. It returns what it deleted. Connections of the user are rejected from
+// their next request, since the token no longer matches any user. Repository and branch
+// activity rows are shared and stay.
 func (s *Store) RemoveUser(ctx context.Context, name string) (UserData, error) {
 	if err := checkManagedUser(name); err != nil {
 		return UserData{}, fmt.Errorf("remove user %q: %w", name, err)
@@ -327,6 +329,13 @@ func (s *Store) RemoveUser(ctx context.Context, name string) (UserData, error) {
 		// is a virtual table without foreign keys: its rows are deleted first.
 		if _, err := tx.ExecContext(ctx, `DELETE FROM memories_fts WHERE rowid IN (
 			SELECT m.id FROM memories m JOIN users u ON u.id = m.user_id WHERE u.name = ?)`, name); err != nil {
+			return err
+		}
+		// memory_scope_activity does not reference the user. Delete this user's own user-scope
+		// row in this transaction. Repository and branch rows are shared and stay.
+		if _, err := tx.ExecContext(ctx,
+			"DELETE FROM memory_scope_activity WHERE scope = ? AND scope_id = ?",
+			ScopeUser, name); err != nil {
 			return err
 		}
 		_, err = tx.ExecContext(ctx, "DELETE FROM users WHERE name = ?", name)
