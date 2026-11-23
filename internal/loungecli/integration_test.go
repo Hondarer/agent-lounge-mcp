@@ -163,7 +163,9 @@ func TestShellCalls(t *testing.T) {
 func TestReconnectAndUnknownOutcome(t *testing.T) {
 	sess := setup(t)
 	cfg := config.Default()
-	cfg.ConnectionIdle = 500 * time.Millisecond
+	// Long enough that a connection made after the reconnect is not closed again while the
+	// concurrent calls below run on a slow machine.
+	cfg.ConnectionIdle = 2 * time.Second
 	first := server.New(cfg, sess)
 	var handler atomic.Pointer[http.Handler]
 	current := server.Handler(first, sess)
