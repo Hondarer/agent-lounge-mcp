@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-23 18:55:00 JST
+最終更新日時: 2026-11-23 19:40:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `../past/261121-branch-scope-backlog.md`、`../past/261122-cli-without-mcp-backlog.md` (対策元の残課題一覧。全件を `261123-backlog-batch-backlog.md` に転記済み)。移動または削除されている場合があります。
@@ -192,6 +192,7 @@
 | 2026-11-23 18:00 | 作業の完了と、成果物の提示 | 文書、確認の記録、残課題一覧の整理を終え、成果物の承認を依頼 |
 | 2026-11-23 18:35 | 成果物の提示への指示 | 利用者が、macOS の実機の確認を行わず、机上の確認だけにすることを、恒久の決定として指示 ([LADR-012](261123-backlog-batch-lightadr.md#ladr-012-macos-の実機の確認を行わない))。文書の検証済みの範囲、残課題一覧 (BL-014、BL-047)、`AGENTS.md` に反映。成果物の承認は、引き続き待っている |
 | 2026-11-23 18:50 | 第 3 ゲートの通過 | 利用者が成果物を承認。`main` へマージ。残課題は、`261123-backlog-batch-backlog.md` の 14 件 |
+| 2026-11-23 19:40 | マージの後の直し | `main` の CI (run 45150510164) で、windows-latest の `TestReconnectAndUnknownOutcome` が失敗。CLI の方式の、同時の呼び出しの競合を直し (`fix/cli-reconnect-race`)、CI の 3 つの OS で確かめて `main` へマージ。経緯は、確認の記録の 1 章 |
 
 ## 反映と検証の記録
 
