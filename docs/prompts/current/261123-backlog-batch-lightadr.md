@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 簡易 ADR (lightadr)
-最終更新日時: 2026-11-23 10:35:00 JST
+最終更新日時: 2026-11-23 12:30:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261123-backlog-batch-overview.md` (全体管理文書)、`261123-backlog-batch-discussion.md` (検討用 Markdown)。いずれも削除されている場合があります。
@@ -118,6 +118,7 @@
 - 18 件の残課題を、同じ課題 ID で、この案件の残課題一覧 (`261123-backlog-batch-backlog.md`) に引き継ぎます。対策元の 2 つの残課題一覧は、全件を「次フェーズへ転記」にし、`branch-scope` と `cli-without-mcp` の記録を `docs/prompts/past/` へ移します。
 - 作業ブランチ `feature/backlog-batch` を 1 つ作り、課題ごとにコミットを分け、途中で GitHub に push します。第 3 ゲートの承認の後に `main` へマージして push し、作業ブランチを消します。
 - 実装のうち、難易度の低い作業は Grok (`grok --always-approve`、grok 4.7、reasoning effort high) が、それ以外は Codex (gpt-6.2-sol、reasoning effort low) が書きます。Codex のトークンを温存するためです。このセッション (Claude Code) が、点検、レビュー、実機の確認、記録を行います。
+- 文章の推敲と編集 (利用者向けの文書など) は、agy (`agy --dangerously-skip-permissions`、gemini-4-hydrogen-high) に依頼します。下書きと、仕様との照合は、このセッションが行います。
 
 ### 経緯
 
@@ -127,6 +128,7 @@
 | 2026-11-23 09:11 | [Q-002](261123-backlog-batch-discussion.md#q-002-作業ブランチとマージ) | A: 作業ブランチを 1 つ作り、課題ごとにコミットし、途中で push する | なし | 決定を補足 |
 | 2026-11-23 09:11 | [Q-003](261123-backlog-batch-discussion.md#q-003-実装と審査の担当) | B: 実装も Codex に書かせ、このセッションが点検、レビュー、実機の確認、記録を行う (推奨の A とは異なる) | なし | 決定を補足 |
 | 2026-11-23 10:30 | 対話での指示 (第 2 ゲートの承認とあわせて) | (選択肢なし) | 「難易度の低い作業は、grok --always-approve で grok 4.7 High に依頼してほしい。(codex のトークンを温存する)」 | 決定を変更 (難易度の低い作業の依頼先を Grok にした) |
+| 2026-11-23 12:30 | 対話での指示 | (選択肢なし) | 「文章の推敲、編集は agy --dangerously-skip-permissions 経由で gemini-4-hydrogen-high に依頼してください。」 | 決定を補足 (文章の推敲と編集の依頼先を agy にした) |
 
 ## LADR-004 ブランチの名前の検査 (BL-046)
 
