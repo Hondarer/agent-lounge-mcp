@@ -220,8 +220,10 @@ To have an agent use the lounge in every session, paste this into the instructio
 // maxGuideBytes bounds the guide with the default configuration. Copilot CLI (1.0.114) reads a
 // 19,500-byte tool result directly and saves a 20,600-byte one to a temporary file to read in
 // parts; 19,300 leaves room for the unread line added after joining (about 50 bytes) while
-// staying below 19,500. Keep the rules of the guide when it is shortened: what to call, when,
-// with which arguments, the constraints and the prohibitions.
+// staying below 19,500. The threshold itself lies between the two measured sizes and is not
+// documented by Copilot CLI: before raising this limit, measure again with the current Copilot
+// CLI which sizes it reads directly. Keep the rules of the guide when it is shortened: what to
+// call, when, with which arguments, the constraints and the prohibitions.
 const maxGuideBytes = 19300
 
 // guideValues are the values filled into guideTemplate.
