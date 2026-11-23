@@ -1,6 +1,7 @@
 package store
 
 import (
+	"maps"
 	"math"
 	"time"
 )
@@ -53,11 +54,47 @@ func DefaultRetention() RetentionPolicy {
 	return RetentionPolicy{HalfLife: DefaultMemoryHalfLife, Threshold: DefaultMemoryThreshold, Grace: DefaultMemoryGrace}
 }
 
-// SetRetention replaces the retention policy. Call it before the store is used concurrently.
-func (s *Store) SetRetention(p RetentionPolicy) { s.retention = p }
+// RetentionPolicies holds the common policy and any policies specific to a scope kind.
+type RetentionPolicies struct {
+	Common RetentionPolicy
+	ByKind map[string]RetentionPolicy
+}
 
-// Retention returns the retention policy in effect.
-func (s *Store) Retention() RetentionPolicy { return s.retention }
+// For returns the effective policy for kind.
+func (p RetentionPolicies) For(kind string) RetentionPolicy {
+	if policy, ok := p.ByKind[kind]; ok {
+		return policy
+	}
+	return p.Common
+}
+
+// Uniform reports whether all supported kinds have the same policy.
+func (p RetentionPolicies) Uniform() (RetentionPolicy, bool) {
+	first := p.For(scopeKinds[0])
+	for _, kind := range scopeKinds[1:] {
+		if p.For(kind) != first {
+			return first, false
+		}
+	}
+	return first, true
+}
+
+// SetRetention applies one policy to all scope kinds.
+func (s *Store) SetRetention(p RetentionPolicy) {
+	s.SetRetentionPolicies(RetentionPolicies{Common: p})
+}
+
+// SetRetentionPolicies replaces the policies without changing accumulated scope discounts.
+// Call it before the store is used concurrently.
+func (s *Store) SetRetentionPolicies(p RetentionPolicies) {
+	s.retention = p.Common
+	s.retentionByKind = maps.Clone(p.ByKind)
+}
+
+// Retention returns the effective policy for kind.
+func (s *Store) Retention(kind string) RetentionPolicy {
+	return (RetentionPolicies{Common: s.retention, ByKind: s.retentionByKind}).For(kind)
+}
 
 // RoundRetention renders a retention score with two decimals for display. It rounds down, so
 // that a faded memory never shows the threshold itself (0.098 shows as 0.09, not 0.10), with a

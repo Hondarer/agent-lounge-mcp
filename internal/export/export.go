@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
@@ -33,22 +35,33 @@ const (
 	MemoryDir = "memory"
 )
 
-// SafeName returns name as a file name: every character other than A-Z a-z 0-9 . _ - is
-// replaced with _. When a character is replaced, a hyphen and the first 8 hexadecimal digits
-// of the SHA-256 hash of the original name are appended, so that two names that differ only in
-// replaced characters (such as a/b and a:b) do not give the same file name.
+// maxSafeNameBytes bounds the part of a file name that comes from a name. File systems limit
+// a file name to 255 bytes or UTF-16 units, and macOS stores names decomposed, which can
+// double the bytes of some scripts: 120 bytes leave room for that, the hash and the extension.
+const maxSafeNameBytes = 120
+
+// SafeName returns name as a file name. Unicode letters, digits and combining marks, and
+// . _ - are kept, so that a name in any script stays readable; every other character is
+// replaced with _. A result longer than maxSafeNameBytes is cut at a character boundary.
+// When a character was replaced or the name was cut, a hyphen and the first 8 hexadecimal
+// digits of the SHA-256 hash of the original name are appended, so that two names that
+// differ only in what was replaced or cut (such as a/b and a:b) do not give the same file
+// name.
 func SafeName(name string) string {
 	var b strings.Builder
-	replaced := false
+	changed := false
 	for _, r := range name {
-		if r >= 'A' && r <= 'Z' || r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('_')
-			replaced = true
+		keep := unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsMark(r) || r == '.' || r == '_' || r == '-'
+		if !keep {
+			r, changed = '_', true
 		}
+		if b.Len()+utf8.RuneLen(r) > maxSafeNameBytes {
+			changed = true
+			break
+		}
+		b.WriteRune(r)
 	}
-	if !replaced {
+	if !changed {
 		return b.String()
 	}
 	sum := sha256.Sum256([]byte(name))

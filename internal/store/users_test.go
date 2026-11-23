@@ -24,7 +24,7 @@ func TestUserLifecycle(t *testing.T) {
 	ctx := context.Background()
 	s, _ := openLocal(t)
 
-	alice, err := s.AddUser(ctx, "alice", "hash-1", time.Time{})
+	alice, err := s.AddUser(ctx, "Alice", "hash-1", time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,10 +51,10 @@ func TestUserLifecycle(t *testing.T) {
 	if _, err := s.AddUser(ctx, "alice", "hash-2", time.Time{}); !errors.Is(err, ErrUserExists) {
 		t.Errorf("duplicate name: %v", err)
 	}
-	if _, err := s.AddUser(ctx, LocalUser, "hash-3", time.Time{}); !errors.Is(err, ErrReservedUser) {
+	if _, err := s.AddUser(ctx, "LOCAL", "hash-3", time.Time{}); !errors.Is(err, ErrReservedUser) {
 		t.Errorf("local: %v", err)
 	}
-	for _, name := range []string{"", "Alice", "-a", ".a", "a/b", "a b", strings.Repeat("a", 33), "日本"} {
+	for _, name := range []string{"", "a/b", "a b", strings.Repeat("日", 65)} {
 		if _, err := s.AddUser(ctx, name, "h", time.Time{}); err == nil || !strings.Contains(err.Error(), "invalid user name") {
 			t.Errorf("name %q: %v", name, err)
 		}
@@ -470,5 +470,53 @@ func TestMigrateVersion2KeepsData(t *testing.T) {
 			t.Error("foreign key violations after the migration")
 		}
 		rows.Close()
+	}
+}
+
+// RemoveUser deletes that user's user-scope activity row in the same transaction, and leaves
+// repository and branch rows, including rows a search with no results created.
+func TestRemoveUserDeletesUserScopeActivity(t *testing.T) {
+	ctx := context.Background()
+	s, _ := openLocal(t)
+	alice := addUser(t, s, "alice")
+	bob := addUser(t, s, "bob")
+	a := joinWith(t, s, JoinParams{
+		UserID:   alice.ID,
+		Name:     "work",
+		Location: &Location{Origin: "github.com/org/a"},
+		Branch:   ptr("feature/x"),
+	})
+	b := join(t, s, bob.ID, "work")
+	createMemory(t, s, a, ScopeUser, "alice's note")
+	if ms := search(t, s, a, MemorySearch{Query: "zzznomatch", Limit: 10}); len(ms) != 0 {
+		t.Fatalf("alice search = %d memories, want 0", len(ms))
+	}
+	searchNone(t, s, b, ScopeUser)
+
+	repoID, branchID := a.Repository, a.Repository+":"+a.Branch
+	for _, sc := range []Scope{
+		{Kind: ScopeUser, ID: "alice"},
+		{Kind: ScopeRepository, ID: repoID},
+		{Kind: ScopeBranch, ID: branchID},
+		{Kind: ScopeUser, ID: "bob"},
+	} {
+		if _, _, ok := scopeActivityRow(t, s, sc.Kind, sc.ID); !ok {
+			t.Fatalf("missing activity %s %s before removal", sc.Kind, sc.ID)
+		}
+	}
+	if _, err := s.RemoveUser(ctx, "alice"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeUser, "alice"); ok {
+		t.Error("alice's user-scope activity remains")
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeRepository, repoID); !ok {
+		t.Error("repository activity was deleted")
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeBranch, branchID); !ok {
+		t.Error("branch activity was deleted")
+	}
+	if _, _, ok := scopeActivityRow(t, s, ScopeUser, "bob"); !ok {
+		t.Error("another user's activity was deleted")
 	}
 }

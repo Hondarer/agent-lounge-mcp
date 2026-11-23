@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"slices"
@@ -266,5 +267,146 @@ func TestCleanupCancelled(t *testing.T) {
 	cancel()
 	if _, err := s.Cleanup(ctx, defaultPolicy); !errors.Is(err, context.Canceled) {
 		t.Errorf("cancelled cleanup: %v", err)
+	}
+}
+
+// scopeActivityRow reads one memory_scope_activity row.
+func scopeActivityRow(t *testing.T, s *Store, kind, id string) (last time.Time, discount int64, ok bool) {
+	t.Helper()
+	var lastMs int64
+	err := s.db.QueryRowContext(context.Background(),
+		"SELECT last_access, discount FROM memory_scope_activity WHERE scope = ? AND scope_id = ?",
+		kind, id).Scan(&lastMs, &discount)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, 0, false
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return fromMillis(lastMs), discount, true
+}
+
+func repoSession(t *testing.T, s *Store, user int64, name, origin string) Session {
+	t.Helper()
+	return joinWith(t, s, JoinParams{UserID: user, Name: name, Location: &Location{Origin: origin}})
+}
+
+// searchNone searches sess in scope and requires no match. The search still records activity.
+func searchNone(t *testing.T, s *Store, sess Session, scope string) {
+	t.Helper()
+	if ms := search(t, s, sess, MemorySearch{Scope: scope, Query: "zzznomatch", Limit: 10}); len(ms) != 0 {
+		t.Fatalf("search = %d memories, want 0", len(ms))
+	}
+}
+
+// A memory_scope_activity row created by a search that found nothing is kept until 60 days
+// have passed since its last access, then deleted. Access after that creates the row again
+// with discount 0. Exactly 60 days is kept: the row goes once the access is older than 60 days.
+func TestIdleScopeActivity(t *testing.T) {
+	if scopeActivityIdle != 60*day {
+		t.Fatalf("scopeActivityIdle = %v, want 60 days", scopeActivityIdle)
+	}
+	s, local := openLocal(t)
+	clock := useClock(s)
+	empty := repoSession(t, s, local, "empty", "github.com/org/empty")
+	searchNone(t, s, empty, ScopeRepository)
+	if _, discount, ok := scopeActivityRow(t, s, ScopeRepository, empty.Repository); !ok || discount != 0 {
+		t.Fatalf("search with no results: activity ok=%v discount=%d", ok, discount)
+	}
+
+	clock.advance(60*day - time.Millisecond)
+	cleanup(t, s, CleanupPolicy{})
+	if _, _, ok := scopeActivityRow(t, s, ScopeRepository, empty.Repository); !ok {
+		t.Fatal("activity deleted just before 60 days")
+	}
+
+	clock.advance(time.Millisecond) // exactly 60 days
+	cleanup(t, s, CleanupPolicy{})
+	if _, _, ok := scopeActivityRow(t, s, ScopeRepository, empty.Repository); !ok {
+		t.Fatal("activity deleted at exactly 60 days")
+	}
+
+	clock.advance(time.Millisecond) // older than 60 days
+	cleanup(t, s, CleanupPolicy{})
+	if _, _, ok := scopeActivityRow(t, s, ScopeRepository, empty.Repository); ok {
+		t.Fatal("activity kept after 60 days")
+	}
+
+	searchNone(t, s, empty, ScopeRepository)
+	last, discount, ok := scopeActivityRow(t, s, ScopeRepository, empty.Repository)
+	if !ok || discount != 0 || !last.Equal(clock.now()) {
+		t.Fatalf("re-access = %v discount %d ok %v, want %v discount 0", last, discount, ok, clock.now())
+	}
+	if n := memoryCount(t, s, "memories"); n != 0 {
+		t.Errorf("%d memories, want a scope with none", n)
+	}
+}
+
+// An activity row older than 60 days stays while its scope still has a memory. A pinned memory
+// and a faded memory count.
+func TestScopeActivityKeptWhileMemoryExists(t *testing.T) {
+	ctx := context.Background()
+	s, local := openLocal(t)
+	clock := useClock(s)
+	pinnedSess := repoSession(t, s, local, "pinned", "github.com/org/pinned")
+	fadedSess := repoSession(t, s, local, "faded", "github.com/org/faded")
+	pinned := createMemory(t, s, pinnedSess, ScopeRepository, "pinned note")
+	if _, err := s.PinMemory(ctx, pinnedSess.ID, pinned.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	faded := createMemory(t, s, fadedSess, ScopeRepository, "fades later")
+
+	clock.advance(60*day + time.Millisecond)
+	cleanup(t, s, CleanupPolicy{})
+
+	got, err := s.MemoryByID(ctx, pinned.ID)
+	if err != nil || !got.Pinned || got.Faded {
+		t.Fatalf("pinned memory = %+v, %v", got, err)
+	}
+	if _, _, ok := scopeActivityRow(t, s, pinned.Scope.Kind, pinned.Scope.ID); !ok {
+		t.Error("activity of a scope with a pinned memory was deleted")
+	}
+	got, err = s.MemoryByID(ctx, faded.ID)
+	if err != nil || got.Pinned || !got.Faded {
+		t.Fatalf("faded memory = %+v, %v", got, err)
+	}
+	if _, _, ok := scopeActivityRow(t, s, faded.Scope.Kind, faded.Scope.ID); !ok {
+		t.Error("activity of a scope with a faded memory was deleted")
+	}
+}
+
+// Forgetting disabled (half-life 0) and a grace of 0 still delete an activity row that has no
+// memory and is older than 60 days. A scope that still has a memory keeps its row.
+func TestIdleScopeActivityIgnoresRetention(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		p    RetentionPolicy
+	}{
+		{"half-life 0", RetentionPolicy{HalfLife: 0, Threshold: 0.1, Grace: 30 * day}},
+		{"grace 0", RetentionPolicy{HalfLife: 7 * day, Threshold: 0.1, Grace: 0}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			s, local := openLocal(t)
+			s.SetRetention(tc.p)
+			clock := useClock(s)
+			empty := repoSession(t, s, local, "empty", "github.com/org/empty")
+			kept := repoSession(t, s, local, "kept", "github.com/org/kept")
+			searchNone(t, s, empty, ScopeRepository)
+			mem := createMemory(t, s, kept, ScopeRepository, "stays")
+
+			clock.advance(60*day + time.Millisecond)
+			cleanup(t, s, CleanupPolicy{})
+
+			if _, _, ok := scopeActivityRow(t, s, ScopeRepository, empty.Repository); ok {
+				t.Error("activity with no memory was kept")
+			}
+			if _, err := s.MemoryByID(ctx, mem.ID); err != nil {
+				t.Fatalf("memory: %v", err)
+			}
+			if _, _, ok := scopeActivityRow(t, s, mem.Scope.Kind, mem.Scope.ID); !ok {
+				t.Error("activity of a scope that still has a memory was deleted")
+			}
+		})
 	}
 }

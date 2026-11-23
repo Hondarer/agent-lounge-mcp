@@ -42,44 +42,71 @@ func TestMachine(t *testing.T) {
 }
 
 func TestBranch(t *testing.T) {
-	for _, tc := range []struct{ in, want string }{
-		{"main", "main"},
-		{"  Feature/Foo-Bar  \r\n", "feature/foo-bar"},
-		{"warning line\n  Release/1.0 \n\n", "release/1.0"},
-		{"", ""},
-		{"   \r\n\t ", ""},
-		{"feature/日本語", "feature/日本語"},
-		{"a@b", "a@b"},
-		{"a#b", "a#b"},
-		{strings.Repeat("a", MaxBranchLen), strings.Repeat("a", MaxBranchLen)},
+	const ideo = "\u3000" // full-width space
+	for _, tc := range []struct {
+		in   string
+		want string
+		fail bool
+	}{
+		// Names the previous rules already accepted.
+		{"main", "main", false},
+		{"  Feature/Foo-Bar  \r\n", "feature/foo-bar", false},
+		{"warning line\n  Release/1.0 \n\n", "release/1.0", false},
+		{"feature/日本語", "feature/日本語", false},
+		{"a@b", "a@b", false},
+		{"a#b", "a#b", false},
+		// Length limit is unchanged: 255 characters are kept, 256 are rejected.
+		{strings.Repeat("a", MaxBranchLen), strings.Repeat("a", MaxBranchLen), false},
+		{strings.Repeat("a", MaxBranchLen+1), "", true},
+
+		// Every row of the specification table. ␣ is an ASCII space, □ is U+3000.
+		{"a" + ideo + "b", "a" + ideo + "b", false},
+		{ideo + "foo" + ideo, ideo + "foo" + ideo, false},
+		{" foo ", "foo", false},
+		{"foo\n", "foo", false},
+		{"foo\r\n", "foo", false},
+		{"a b", "", true},
+		{"HEAD", "", true},
+		{"head", "head", false},
+		{"Head", "head", false},
+		{"", "", false},
+		{"\n", "", false},
+		{"\r\n", "", false},
+
+		// A full-width space inside and around a name is kept, including one that is the
+		// whole name. A tab around the name is trimmed. Mixed case other than HEAD folds.
+		{ideo, ideo, false},
+		{"A" + ideo + "B", "a" + ideo + "b", false},
+		{" \t" + ideo + "Foo" + ideo + "\t ", ideo + "foo" + ideo, false},
+		{"\tfeature/x\t", "feature/x", false},
+		{"  HeAd \n", "head", false},
+		{"  HEAD \r\n", "", true},
+
+		// A control character is rejected, as are the other characters Git excludes.
+		// A tab inside the name is a control character.
+		{"a\x00b", "", true},
+		{"a\tb", "", true},
+		{"a:b", "", true},
+		{"a~1", "", true},
+		{"a^2", "", true},
+		{"a?b", "", true},
+		{"a*b", "", true},
+		{"a[b", "", true},
+		{`a\b`, "", true},
+		{"* main", "", true},
+		{"   \r\n\t ", "", false},
 	} {
 		got, err := Branch(tc.in)
+		if tc.fail {
+			if err == nil {
+				t.Errorf("Branch(%q) = %q, want an error", tc.in, got)
+			} else if !strings.Contains(err.Error(), "git branch --show-current") {
+				t.Errorf("Branch(%q) error %q does not mention git branch --show-current", tc.in, err)
+			}
+			continue
+		}
 		if err != nil || got != tc.want {
 			t.Errorf("Branch(%q) = %q, %v; want %q", tc.in, got, err, tc.want)
-		}
-	}
-	for _, in := range []string{
-		strings.Repeat("a", MaxBranchLen+1),
-		"a:b",
-		"a b",
-		"a\tb",
-		"a\x00b",
-		"a~1",
-		"a^2",
-		"a?b",
-		"a*b",
-		"a[b",
-		`a\b`,
-		"* main",
-		"HEAD",
-		"head",
-		"  HeAd \n",
-	} {
-		got, err := Branch(in)
-		if err == nil {
-			t.Errorf("Branch(%q) = %q, want an error", in, got)
-		} else if !strings.Contains(err.Error(), "git branch --show-current") {
-			t.Errorf("Branch(%q) error %q does not mention git branch --show-current", in, err.Error())
 		}
 	}
 }

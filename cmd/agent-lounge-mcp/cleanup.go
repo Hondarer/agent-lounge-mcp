@@ -85,15 +85,20 @@ func describeCleanupPolicy(cfg config.Config) string {
 
 // describeMemoryPolicy states the forgetting model of memories for the start-up log.
 func describeMemoryPolicy(cfg config.Config) string {
-	if cfg.MemoryHalfLife == 0 {
+	policies := cfg.RetentionPolicies()
+	p, uniform := policies.Uniform()
+	if !uniform {
+		return "memories: half-life, fade threshold and deletion grace by scope: " + config.FormatRetentionByKind(policies)
+	}
+	if p.HalfLife == 0 {
 		return "memories: forgetting is disabled (they never fade and are never deleted)"
 	}
 	s := fmt.Sprintf("memories: half-life %s, longer with references; they fade below a retention score of %v",
-		config.FormatDuration(cfg.MemoryHalfLife), cfg.MemoryFadeThreshold)
-	if cfg.MemoryGrace == 0 {
+		config.FormatDuration(p.HalfLife), p.Threshold)
+	if p.Grace == 0 {
 		s += " and are never deleted"
 	} else {
-		s += " and are deleted " + config.FormatDuration(cfg.MemoryGrace) + " after they fade"
+		s += " and are deleted " + config.FormatDuration(p.Grace) + " after they fade"
 	}
-	return s + "; scopes with no memory access for " + config.FormatDuration(cfg.MemoryHalfLife) + " forget at 1/3 the pace (up to about 3x longer)"
+	return s + "; scopes with no memory access for " + config.FormatDuration(p.HalfLife) + " forget at 1/3 the pace (up to about 3x longer)"
 }

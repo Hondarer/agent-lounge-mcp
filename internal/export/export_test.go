@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
@@ -19,7 +20,9 @@ func TestSafeName(t *testing.T) {
 		"repo-a/b":     "repo-a_b-",
 		"repo-a:b":     "repo-a_b-",
 		"x\\y z":       "x_y_z-",
-		"日本":           "__-",
+		"日本":           "日本",
+		"नमस्ते๒":      "नमस्ते๒",
+		"日本@語":         "日本_語-",
 		"direct-a--b/": "direct-a--b_-",
 	} {
 		got := SafeName(in)
@@ -263,5 +266,19 @@ func TestWriteMarkdownBranchScope(t *testing.T) {
 	}
 	if got := files(t, dir); !slices.Equal(got, wantFiles) {
 		t.Errorf("files = %v, want %v", got, wantFiles)
+	}
+}
+
+func TestSafeNameCutsLongNames(t *testing.T) {
+	long := strings.Repeat("あ", 100) // 300 bytes
+	a, b := SafeName(long+"x"), SafeName(long+"y")
+	if len(a) > maxSafeNameBytes+9 || !utf8.ValidString(a) {
+		t.Errorf("SafeName gave %d bytes (valid UTF-8: %v), want at most %d", len(a), utf8.ValidString(a), maxSafeNameBytes+9)
+	}
+	if a == b {
+		t.Errorf("two long names that differ after the cut gave the same file name %q", a)
+	}
+	if short := strings.Repeat("あ", 40); SafeName(short) != short {
+		t.Errorf("SafeName(%q) = %q, want it unchanged", short, SafeName(short))
 	}
 }

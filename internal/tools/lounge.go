@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/hondarer/agent-lounge-mcp/internal/names"
 	"github.com/hondarer/agent-lounge-mcp/internal/profile"
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 )
@@ -22,11 +22,8 @@ const (
 	maxLocationLen = 1024
 )
 
-// sessionNameRule describes sessionNameRE to agents.
-const sessionNameRule = "1 to 64 characters from A-Z a-z 0-9 . _ - @"
-
-// sessionNameRE is the form of a session name.
-var sessionNameRE = regexp.MustCompile(`^[A-Za-z0-9._@-]{1,64}$`)
+// sessionNameRule describes the session name rules to agents.
+const sessionNameRule = names.SessionRule
 
 func registerLounge(r *Registry, d *Deps) {
 	add(r, groupChat, &mcp.Tool{
@@ -58,7 +55,7 @@ func registerLounge(r *Registry, d *Deps) {
 
 // JoinInput defines arguments for the lounge_join tool.
 type JoinInput struct {
-	Name  string  `json:"name,omitempty" jsonschema:"session name: 1 to 64 characters from A-Z a-z 0-9 . _ - @ (for example claude or review-task). Omit to let the server choose one"`
+	Name  *string `json:"name,omitempty" jsonschema:"case-sensitive session name, normalized using RFC 8265 (1 to 64 Unicode letters, digits, combining marks, or ASCII . _ - @). Omit to let the server choose one"`
 	Agent *string `json:"agent,omitempty" jsonschema:"what you are, shown to other sessions, for example claude-code@host-a (up to 128 characters). Omit to keep the recorded value"`
 	// Profile. agent, os_user and machine: omit to keep the recorded value, "" to clear it.
 	// origin, folder and wsl_distro: see joinParams.
@@ -100,14 +97,17 @@ type JoinOutput struct {
 // name and place the session in a same-named branch of the new repository. Passing branch
 // without location replaces only branch.
 func joinParams(userID int64, in JoinInput) (store.JoinParams, error) {
-	p := store.JoinParams{UserID: userID, Name: in.Name, Agent: in.Agent}
-	if in.Name != "" && !sessionNameRE.MatchString(in.Name) {
-		return p, fmt.Errorf("invalid name %q: use %s", in.Name, sessionNameRule)
+	p := store.JoinParams{UserID: userID, Agent: in.Agent}
+	var err error
+	// An empty name is the same as an omitted one: the server chooses the name.
+	if in.Name != nil && *in.Name != "" {
+		if p.Name, err = names.Session(*in.Name); err != nil {
+			return p, err
+		}
 	}
 	if in.Agent != nil && utf8.RuneCountInString(*in.Agent) > maxAgentLen {
 		return p, fmt.Errorf("agent is too long: %d characters, at most %d", utf8.RuneCountInString(*in.Agent), maxAgentLen)
 	}
-	var err error
 	if p.OSUser, err = normalized(in.OSUser, profile.OSUser); err != nil {
 		return p, err
 	}

@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -405,5 +407,118 @@ func TestPlural(t *testing.T) {
 	cfg.MemoryHalfLife = 0
 	if got := describeMemoryPolicy(cfg); !strings.Contains(got, "disabled") {
 		t.Errorf("describeMemoryPolicy without forgetting = %q", got)
+	}
+}
+
+func TestAdminNormalizesNamesAndEndsOptions(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "lounge.db")
+	if code, _, stderr := user("add", "ＡＬＩＣＥ", "--db", db); code != 0 || !strings.Contains(stderr, "user alice") {
+		t.Fatalf("user add: %d %s", code, stderr)
+	}
+	if code, _, stderr := user("add", "--db", db, "--", "-x"); code != 0 {
+		t.Fatalf("user add -- -x: %d %s", code, stderr)
+	}
+	if code, _, stderr := user("add", "LOCAL", "--db", db); code != 1 || !strings.Contains(stderr, "reserved") {
+		t.Fatalf("user add LOCAL: %d %s", code, stderr)
+	}
+
+	ctx := context.Background()
+	st, err := store.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	users, err := st.ListUsers(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, u := range users {
+		if u.Name == "alice" || u.Name == "-x" {
+			if _, _, err := st.JoinSession(ctx, store.JoinParams{UserID: u.ID, Name: "レビュー担当2"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if code, stdout, stderr := session("list", "--user", "Ａlice", "--db", db); code != 0 ||
+		!strings.Contains(stdout, "alice/レビュー担当2") || strings.Contains(stdout, "-x/") {
+		t.Fatalf("session list: %d %q %s", code, stdout, stderr)
+	}
+	for _, owner := range []struct{ input, normalized string }{{"ＡＬＩＣＥ", "alice"}, {"-X", "-x"}} {
+		if code, stdout, stderr := session("remove", "--yes", "--db", db, "--", owner.input+"/レビュー担当２"); code != 0 ||
+			!strings.Contains(stdout, "removed session "+owner.normalized+"/レビュー担当2") {
+			t.Fatalf("session remove: %d %q %s", code, stdout, stderr)
+		}
+	}
+	for _, args := range [][]string{
+		{"rotate", "Ａlice", "--db", db},
+		{"expiry", "--db", db, "--never", "--", "-X"},
+		{"remove", "Ａlice", "--yes", "--db", db},
+	} {
+		if code, _, stderr := user(args...); code != 0 {
+			t.Errorf("user %s: %d %s", args[0], code, stderr)
+		}
+	}
+	if code, _, _ := user("remove", "--db", db, "--", "-x", "--yes"); code != 2 {
+		t.Errorf("user remove parsed --yes after --: code %d", code)
+	}
+}
+
+func TestInterleavedOptionsConsumeDelimiterAsValue(t *testing.T) {
+	flags := flag.NewFlagSet("test", flag.ContinueOnError)
+	value := flags.String("value", "", "")
+	pos, err := parseInterleaved(flags, []string{"first", "--value", "--", "second", "--", "-third"})
+	if err != nil || *value != "--" || !slices.Equal(pos, []string{"first", "second", "-third"}) {
+		t.Fatalf("parse = %v, %v, value %q", pos, err, *value)
+	}
+}
+
+func TestMemoryListRecordedRetention(t *testing.T) {
+	ctx := context.Background()
+	db := filepath.Join(t.TempDir(), "lounge.db")
+	seedMemories(t, db, time.Now().Add(-60*config.Day))
+	check := func(user, repo string, flags ...string) {
+		t.Helper()
+		args := append([]string{"list", "--db", db}, flags...)
+		code, out, stderr := memory(args...)
+		if code != 0 || !strings.Contains(out, "\tuser\tlocal\t"+user+"\t") ||
+			!strings.Contains(out, "\trepository\tgithub.com/org/a\t"+repo+"\t") {
+			t.Errorf("%v: exit %d, output %q, error %q, want user %s and repository %s", flags, code, out, stderr, user, repo)
+		}
+	}
+	check("faded", "faded")
+	check("active", "faded", "--memory-user-half-life", "0")
+
+	st, err := store.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	policies := store.RetentionPolicies{Common: store.DefaultRetention(), ByKind: map[string]store.RetentionPolicy{
+		store.ScopeUser:       {HalfLife: 30 * config.Day, Threshold: 0.2},
+		store.ScopeRepository: {HalfLife: 30 * config.Day, Threshold: 0.5},
+	}}
+	if err := st.RecordRetention(ctx, policies); err != nil {
+		t.Fatal(err)
+	}
+	check("active", "faded")
+	check("faded", "faded", "--memory-fade-threshold", "0.6")
+	check("faded", "active", "--memory-fade-threshold", "0.6", "--memory-repository-fade-threshold", "0.3")
+	check("active", "faded", "--memory-half-life", "1d", "--memory-user-half-life", "0")
+	check("active", "faded")
+
+	recorded, err := st.RecordedRetention(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, kind := range store.ScopeKinds() {
+		if recorded.For(kind) != policies.For(kind) {
+			t.Errorf("list changed %s record: %+v", kind, recorded.For(kind))
+		}
+	}
+	for _, args := range [][]string{{"--memory-branch-grace", "0"}, {"--memory-branch-fade-threshold", "1"}, {"--memory-branch-half-life", "-1d"}} {
+		if code, _, stderr := memory(append([]string{"list", "--db", db}, args...)...); code != exitUsage || !strings.Contains(stderr, args[0][1:]) {
+			t.Errorf("%v: exit %d, error %q", args, code, stderr)
+		}
 	}
 }

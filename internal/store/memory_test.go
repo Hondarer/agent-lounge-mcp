@@ -589,14 +589,22 @@ func TestMemoryAdminAndExport(t *testing.T) {
 	r1 := createMemory(t, s, alice, ScopeRepository, "repo")
 	u3 := createMemory(t, s, alice, ScopeUser, "third")
 
-	all, err := s.ListMemories(ctx, "")
+	all, err := s.ListMemories(ctx, "", nil)
 	if err != nil || !slices.Equal(memoryIDs(all), []int64{r1.ID, u2.ID, u3.ID}) {
 		t.Errorf("list = %v, %v", memoryIDs(all), err)
 	}
-	if user, _ := s.ListMemories(ctx, ScopeUser); !slices.Equal(memoryIDs(user), []int64{u2.ID, u3.ID}) {
+	if user, _ := s.ListMemories(ctx, ScopeUser, nil); !slices.Equal(memoryIDs(user), []int64{u2.ID, u3.ID}) {
 		t.Errorf("list user = %v", memoryIDs(user))
 	}
-	if _, err := s.ListMemories(ctx, "nope"); !errors.Is(err, ErrInvalidScope) {
+	repoID := "github.com/org/a"
+	if one, _ := s.ListMemories(ctx, ScopeRepository, &repoID); !slices.Equal(memoryIDs(one), []int64{r1.ID}) {
+		t.Errorf("list repository scope id = %v", memoryIDs(one))
+	}
+	other := "github.com/org/other"
+	if none, _ := s.ListMemories(ctx, ScopeRepository, &other); len(none) != 0 {
+		t.Errorf("list other scope id = %v", memoryIDs(none))
+	}
+	if _, err := s.ListMemories(ctx, "nope", nil); !errors.Is(err, ErrInvalidScope) {
 		t.Errorf("list nope: %v", err)
 	}
 

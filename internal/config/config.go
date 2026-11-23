@@ -67,9 +67,10 @@ type Config struct {
 	// MemoryHalfLife is the half-life of a memory never referenced (0 disables forgetting),
 	// MemoryFadeThreshold the retention score below which a memory has faded, and MemoryGrace
 	// how long a faded memory is kept before the cleanup deletes it (0 keeps it).
-	MemoryHalfLife      time.Duration
-	MemoryFadeThreshold float64
-	MemoryGrace         time.Duration
+	MemoryHalfLife        time.Duration
+	MemoryFadeThreshold   float64
+	MemoryRetentionByKind map[string]RetentionOverride
+	MemoryGrace           time.Duration
 
 	// LogConnections writes diagnostics of every MCP connection to standard error: its
 	// client and the methods and tools it calls. They hold no tool arguments or results.
@@ -166,6 +167,9 @@ func (c Config) Validate() error {
 	if err := ValidateFadeThreshold(c.MemoryFadeThreshold); err != nil {
 		return err
 	}
+	if err := c.ValidateRetentionOverrides(); err != nil {
+		return err
+	}
 	if c.MaxMemoryBytes < 1 || c.MaxMemoryBytes > MaxMaxBodyBytes {
 		return fmt.Errorf("--max-memory-bytes %d: use a number from 1 to %d", c.MaxMemoryBytes, MaxMaxBodyBytes)
 	}
@@ -192,8 +196,12 @@ func (c Config) Validate() error {
 
 // ValidateFadeThreshold checks a --memory-fade-threshold value: above 0 and below 1.
 func ValidateFadeThreshold(v float64) error {
+	return validateFadeThreshold("--memory-fade-threshold", v)
+}
+
+func validateFadeThreshold(name string, v float64) error {
 	if !(v > 0 && v < 1) {
-		return fmt.Errorf("--memory-fade-threshold %v: use a number above 0 and below 1, such as 0.1", v)
+		return fmt.Errorf("%s %v: use a number above 0 and below 1, such as 0.1", name, v)
 	}
 	return nil
 }

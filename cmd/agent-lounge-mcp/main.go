@@ -3,9 +3,10 @@
 //
 //	agent-lounge-mcp serve --listen 127.0.0.1:7788 --db lounge.db
 //
-// Users and their tokens are managed with the user subcommand (see user.go), sessions and
-// memories with the session and memory subcommands, and the export subcommand writes the
-// messages and memories as Markdown files (see admin.go). Diagnostics go to standard error.
+// Users and their tokens are managed with the user subcommand (see user.go), sessions,
+// messages and memories with the session, message and memory subcommands, and the export
+// subcommand writes the messages and memories as Markdown files (see admin.go). Diagnostics
+// go to standard error.
 package main
 
 import (
@@ -19,9 +20,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/config"
+	"github.com/hondarer/agent-lounge-mcp/internal/loungecli"
 	"github.com/hondarer/agent-lounge-mcp/internal/server"
 	"github.com/hondarer/agent-lounge-mcp/internal/store"
 	"github.com/hondarer/agent-lounge-mcp/internal/version"
@@ -54,12 +58,16 @@ func main() {
 		if err := serve(ctx, force, cfg, nil); err != nil {
 			log.Fatal(err)
 		}
+	case "connection", "tools", "call":
+		os.Exit(runLoungeCLI(os.Args[1], os.Args[2:]))
 	case "user":
 		os.Exit(runUser(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "session":
 		os.Exit(runSession(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "memory":
 		os.Exit(runMemory(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
+	case "message":
+		os.Exit(runMessage(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "export":
 		os.Exit(runExport(context.Background(), os.Args[2:], os.Stdout, os.Stderr))
 	case "version", "--version", "-version":
@@ -73,17 +81,28 @@ func main() {
 	}
 }
 
+func runLoungeCLI(command string, args []string) int {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return loungecli.Run(ctx, command, args, os.Stdin, os.Stdout, os.Stderr)
+}
+
 func usage(w io.Writer) {
 	fmt.Fprintln(w, "usage: agent-lounge-mcp serve [--listen ADDR] [--allow-remote] [--require-token] [--allowed-host NAME]... [--db FILE] [--inbox-wait-max DURATION]")
 	fmt.Fprintln(w, "           [--expire-after DURATION] [--retain-for DURATION] [--session-idle DURATION] [--cleanup-interval DURATION]")
 	fmt.Fprintln(w, "           [--max-body-bytes N] [--max-unread N] [--max-sessions-per-user N]")
 	fmt.Fprintln(w, "           [--memory-half-life DURATION] [--memory-fade-threshold X] [--memory-grace DURATION]")
+	for _, kind := range store.ScopeKinds() {
+		fmt.Fprintf(w, "           [--memory-%[1]s-half-life DURATION] [--memory-%[1]s-fade-threshold X] [--memory-%[1]s-grace DURATION]\n", kind)
+	}
 	fmt.Fprintln(w, "           [--max-memory-bytes N] [--max-memories-per-scope N]")
 	fmt.Fprintln(w, "           start the server; see agent-lounge-mcp serve -h")
 	fmt.Fprintln(w, "       agent-lounge-mcp user add|list|rotate|remove ...  (manage users and their tokens; see agent-lounge-mcp user -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp session list|remove ...          (list and remove sessions; see agent-lounge-mcp session -h)")
 	fmt.Fprintln(w, "       agent-lounge-mcp memory list|remove ...           (list and remove memories; see agent-lounge-mcp memory -h)")
-	fmt.Fprintln(w, "       agent-lounge-mcp export --out DIR [--format markdown] [--db FILE]  (write every message and memory as Markdown files)")
+	fmt.Fprintln(w, "       agent-lounge-mcp message list|show ...          (list and show messages; see agent-lounge-mcp message -h)")
+	fmt.Fprintln(w, "       agent-lounge-mcp export [filters] --out DIR [--format markdown] [--db FILE]  (write messages and memories as Markdown files)")
+	fmt.Fprint(w, loungecli.Usage)
 	fmt.Fprintln(w, "       agent-lounge-mcp version")
 }
 
@@ -118,7 +137,7 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 		fmt.Sprintf("largest message body in bytes of UTF-8 (1 to %d)", config.MaxMaxBodyBytes))
 	fs.IntVar(&cfg.MaxUnread, "max-unread", cfg.MaxUnread, "most unread messages one session can hold (1 or more)")
 	fs.IntVar(&cfg.MaxSessionsPerUser, "max-sessions-per-user", cfg.MaxSessionsPerUser, "most sessions one user can have (1 or more)")
-	addMemoryRetentionFlags(fs, &cfg)
+	applyRetentionFlags := addMemoryRetentionFlags(fs, &cfg, true)
 	fs.Var(config.DurationValue{D: &cfg.MemoryGrace}, "memory-grace",
 		"time after a memory faded after which the cleanup deletes it (0: never)")
 	fs.IntVar(&cfg.MaxMemoryBytes, "max-memory-bytes", cfg.MaxMemoryBytes,
@@ -134,16 +153,57 @@ func parseServeFlags(fs *flag.FlagSet, args []string) (config.Config, error) {
 	if fs.NArg() > 0 {
 		return cfg, fmt.Errorf("unexpected argument %q", fs.Arg(0))
 	}
+	applyRetentionFlags()
 	return cfg, cfg.Validate()
 }
 
-// addMemoryRetentionFlags adds the options that decide when a memory fades. memory list takes
-// them too, to show the state the server would give.
-func addMemoryRetentionFlags(fs *flag.FlagSet, cfg *config.Config) {
+// addMemoryRetentionFlags registers the options shared by serve and memory list. The
+// returned function collects the supplied per-kind items after parsing, including zeros.
+func addMemoryRetentionFlags(fs *flag.FlagSet, cfg *config.Config, withGrace bool) func() {
 	fs.Var(config.DurationValue{D: &cfg.MemoryHalfLife}, "memory-half-life",
 		"half-life of the retention score of a memory never referenced; references lengthen it (0: memories never fade)")
 	fs.Float64Var(&cfg.MemoryFadeThreshold, "memory-fade-threshold", cfg.MemoryFadeThreshold,
 		"retention score below which a memory has faded and leaves plain searches (above 0, below 1)")
+	type kindFlags struct {
+		halfLife, grace time.Duration
+		threshold       float64
+	}
+	valuesByKind := make(map[string]*kindFlags)
+	for _, kind := range store.ScopeKinds() {
+		prefix := "memory-" + kind + "-"
+		values := &kindFlags{}
+		valuesByKind[kind] = values
+		fs.Var(config.DurationValue{D: &values.halfLife}, prefix+"half-life", "override the half-life for "+kind+" (0: never fades)")
+		fs.Lookup(prefix + "half-life").DefValue = ""
+		fs.Float64Var(&values.threshold, prefix+"fade-threshold", 0, "override the fade threshold for "+kind+" (above 0, below 1)")
+		if withGrace {
+			fs.Var(config.DurationValue{D: &values.grace}, prefix+"grace", "override the deletion grace for "+kind+" (0: never deletes faded memories)")
+			fs.Lookup(prefix + "grace").DefValue = ""
+		}
+	}
+	return func() {
+		fs.Visit(func(f *flag.Flag) {
+			name, memoryFlag := strings.CutPrefix(f.Name, "memory-")
+			kind, item, _ := strings.Cut(name, "-")
+			values := valuesByKind[kind]
+			if !memoryFlag || values == nil {
+				return
+			}
+			o := cfg.MemoryRetentionByKind[kind]
+			switch item {
+			case "half-life":
+				o.HalfLife = &values.halfLife
+			case "fade-threshold":
+				o.Threshold = &values.threshold
+			case "grace":
+				o.Grace = &values.grace
+			}
+			if cfg.MemoryRetentionByKind == nil {
+				cfg.MemoryRetentionByKind = make(map[string]config.RetentionOverride)
+			}
+			cfg.MemoryRetentionByKind[kind] = o
+		})
+	}
 }
 
 // listenAddr returns the address to show for a listener: the host as configured (the listener
@@ -202,6 +262,10 @@ func serve(ctx context.Context, force <-chan struct{}, cfg config.Config, ready 
 	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
+		return err
+	}
+	defer ln.Close()
+	if err := st.RecordRetention(ctx, cfg.RetentionPolicies()); err != nil {
 		return err
 	}
 	sess := server.Session{Store: st, LocalUser: local}

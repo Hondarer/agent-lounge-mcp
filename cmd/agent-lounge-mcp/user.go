@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hondarer/agent-lounge-mcp/internal/auth"
@@ -28,7 +29,8 @@ func userUsage(w io.Writer) {
 	fmt.Fprintln(w, "       agent-lounge-mcp user rotate <name> [--expires-in DURATION] [--db FILE]   print a new token; the old one stops working")
 	fmt.Fprintln(w, "       agent-lounge-mcp user expiry <name> (--in DURATION | --never) [--db FILE] change only the expiry of the token")
 	fmt.Fprintln(w, "       agent-lounge-mcp user remove <name> --yes [--db FILE]                     delete the user, its sessions, messages and memories")
-	fmt.Fprintf(w, "A user name is %s. The commands open the database file directly and work while a server uses it.\n", store.UserNameRule)
+	fmt.Fprintf(w, "%s The name local is reserved. The commands open the database file directly and work while a server uses it.\n", store.UserNameRule)
+	fmt.Fprintln(w, "Put options before -- to pass a name starting with a hyphen.")
 	fmt.Fprintln(w, "A DURATION is counted from now and is at least 1s, such as 90d, 1d12h or 36h (d is 24 hours). "+
 		"Without --expires-in, the token does not expire; user rotate does not keep the expiry of the previous token.")
 }
@@ -148,6 +150,13 @@ func runUser(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		userUsage(stderr)
 		return exitUsage
 	}
+	if wantArgs == 1 {
+		pos[0], err = store.NormalizeManagedUser(pos[0])
+		if err != nil {
+			fmt.Fprintf(stderr, "agent-lounge-mcp: %v\n", err)
+			return exitFail
+		}
+	}
 	if *db == "" {
 		fmt.Fprintln(stderr, "agent-lounge-mcp: --db must not be empty")
 		return exitUsage
@@ -189,30 +198,43 @@ func runUser(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 // "user add alice --db x.db", and returns the positional arguments.
 func parseInterleaved(flags *flag.FlagSet, args []string) ([]string, error) {
 	var pos []string
-	for {
-		if err := flags.Parse(args); err != nil {
+	for len(args) > 0 {
+		arg := args[0]
+		if arg == "--" {
+			return append(pos, args[1:]...), nil
+		}
+		if arg == "-" || !strings.HasPrefix(arg, "-") {
+			pos = append(pos, arg)
+			args = args[1:]
+			continue
+		}
+
+		// Parse one option at a time so that -- ends option parsing only
+		// when it is not consumed as an option value.
+		option, _, hasValue := strings.Cut(strings.TrimPrefix(strings.TrimPrefix(arg, "-"), "-"), "=")
+		n := 1
+		if f := flags.Lookup(option); f != nil && !hasValue && len(args) > 1 {
+			boolean, ok := f.Value.(interface{ IsBoolFlag() bool })
+			if !ok || !boolean.IsBoolFlag() {
+				n++
+			}
+		}
+		if err := flags.Parse(args[:n]); err != nil {
 			return nil, err
 		}
-		args = flags.Args()
-		if len(args) == 0 {
-			return pos, nil
-		}
-		pos = append(pos, args[0])
-		args = args[1:]
+		args = args[n:]
 	}
+	return pos, nil
 }
 
 // tokenGuidance is written to stderr after a token is printed.
 func tokenGuidance(stderr io.Writer, name, db string) {
 	fmt.Fprintf(stderr, "The token of user %s is printed above. It is shown only this once: the database keeps only its hash, so it cannot be read again.\n", name)
 	fmt.Fprintln(stderr, "Register the server in the user's agents with the HTTP header \"Authorization: Bearer <token>\" (see the user guide for each agent).")
-	fmt.Fprintf(stderr, "If the token leaks, issue a new one with: agent-lounge-mcp user rotate %s --db %s\n", name, db)
+	fmt.Fprintf(stderr, "If the token leaks, issue a new one with: agent-lounge-mcp user rotate --db %s -- %s\n", db, name)
 }
 
 func userAdd(ctx context.Context, st *store.Store, name, db string, expiresAt time.Time, stdout, stderr io.Writer) error {
-	if err := store.ValidateUserName(name); err != nil {
-		return err
-	}
 	token, err := auth.NewToken()
 	if err != nil {
 		return err

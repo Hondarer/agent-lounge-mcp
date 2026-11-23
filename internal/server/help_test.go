@@ -49,7 +49,8 @@ func TestHelpBeforeJoining(t *testing.T) {
 	if raw, _ := json.Marshal(res.StructuredContent); strings.Contains(string(raw), "guide") {
 		t.Errorf("structured result has the guide: %s", raw)
 	}
-	for _, want := range append(toolNames, "wait_seconds", "at most 45 seconds", "## Snippet for instruction files", "shutting down") {
+	for _, want := range append(toolNames, "wait_seconds", "at most 45 seconds", "## Snippet for instruction files", "shutting down",
+		"1 to 64 normalized Unicode letters, digits, combining marks, or ASCII . _ - @ and preserve case") {
 		if !strings.Contains(guide, want) {
 			t.Errorf("guide does not mention %q", want)
 		}

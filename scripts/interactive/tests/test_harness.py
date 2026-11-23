@@ -15,12 +15,14 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
 from harness import screen, terminal  # noqa: E402
 from harness.agents import CTRL_U, DEFINITIONS, ENTER, Agent, AgentNotReady, Definition, clean_environment  # noqa: E402
+from harness.agents import _Prompts  # noqa: E402
 from harness.scenarios.common import answer, connections, new_lines, tools_called  # noqa: E402
 from harness.lounge import Client  # noqa: E402
 from harness.server import Server  # noqa: E402
@@ -440,6 +442,32 @@ def fake(dialog: bool = False) -> Definition:
         quit_keys=["quit\r"], env={"FAKE_DIALOG": "1"} if dialog else {},
         approvals=[("Do you want to run this command?", [ENTER])], busy=["esc to interrupt"],
     )
+
+
+class PromptsTest(unittest.TestCase):
+    def test_rewriting_the_same_screen_does_not_answer_again_before_retry(self):
+        question = "Do you want to run this command?"
+        terminal_screen = screen.Screen(80, 24)
+        terminal_screen.feed(f"command 0\r\n{question}\r\n2 requests remaining")
+        original = terminal_screen.display()
+        output = "\x1b[3;1H2 requests remaining"
+        with patch("harness.agents.time.monotonic", return_value=0) as clock:
+            mark = 0
+            prompts = _Prompts([question], lambda: mark)
+            self.assertEqual(prompts.new(original), question)
+            prompts.answered(original, question)
+
+            clock.return_value = 1
+            terminal_screen.feed(output)
+            mark += len(output)
+            rewritten = terminal_screen.display()
+            self.assertEqual(rewritten, original)
+            self.assertIsNone(prompts.new(rewritten))
+
+            clock.return_value = 1 + prompts.SETTLE
+            self.assertIsNone(prompts.new(rewritten))
+            clock.return_value = prompts.RETRY
+            self.assertEqual(prompts.new(rewritten), question)
 
 
 class AgentTest(unittest.TestCase):

@@ -9,8 +9,9 @@ import (
 	"time"
 )
 
-// The functions in this file serve the administration commands (session, memory, export), which open
-// the database file directly, possibly while a server uses it.
+// The functions in this file serve the administration commands (session, memory, message, export), which open
+// the database file directly, possibly while a server uses it. They read in one transaction, so the
+// result is the database at one moment.
 
 // ErrNoSessionToRemove is returned by CountSessionData and RemoveSession for a session that
 // does not exist.
@@ -157,20 +158,49 @@ type ExportDelivery struct {
 // name or pair, and oldest first within a conversation. Deliveries are in the order of the
 // recipients' user/name. When a callback fails, Export stops and returns its error.
 func (s *Store) Export(ctx context.Context, onMessage func(ExportMessage) error, onMemory func(Memory) error) error {
+	return s.ExportSelected(ctx, RecordFilter{}, onMessage, onMemory)
+}
+
+// ExportSelected reads like Export, keeping the messages and memories that match f.
+// The zero filter reads every record, with the same queries and the same order as
+// Export. A message is kept or dropped as a whole, with all of its deliveries.
+func (s *Store) ExportSelected(ctx context.Context, f RecordFilter, onMessage func(ExportMessage) error, onMemory func(Memory) error) error {
+	if err := f.validate(); err != nil {
+		return err
+	}
 	return s.readTx(ctx, func(tx *sql.Tx) error {
-		if err := exportMessages(ctx, tx, onMessage); err != nil {
+		var err error
+		if f.IsZero() {
+			err = exportMessages(ctx, tx, onMessage)
+		} else {
+			err = exportMessagesFiltered(ctx, tx, f, onMessage)
+		}
+		if err != nil {
 			return err
 		}
 		if onMemory == nil {
 			return nil
 		}
-		return exportMemories(ctx, tx, onMemory)
+		if f.IsZero() {
+			return exportMemories(ctx, tx, onMemory)
+		}
+		return exportMemoriesFiltered(ctx, tx, f, onMemory)
 	})
 }
 
 // exportMemories passes every memory to fn, in the order scope, scope ID, ID.
 func exportMemories(ctx context.Context, tx *sql.Tx, fn func(Memory) error) error {
-	rows, err := tx.QueryContext(ctx, "SELECT id FROM memories ORDER BY scope, scope_id, id")
+	return exportMemoryQuery(ctx, tx, "SELECT id FROM memories ORDER BY scope, scope_id, id", nil, fn)
+}
+
+// exportMemoriesFiltered passes the memories that match f, in the same order.
+func exportMemoriesFiltered(ctx context.Context, tx *sql.Tx, f RecordFilter, fn func(Memory) error) error {
+	where, args := f.memoryWhere()
+	return exportMemoryQuery(ctx, tx, "SELECT id FROM memories"+where+" ORDER BY scope, scope_id, id", args, fn)
+}
+
+func exportMemoryQuery(ctx context.Context, tx *sql.Tx, query string, args []any, fn func(Memory) error) error {
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}
@@ -201,10 +231,9 @@ func exportMemories(ctx context.Context, tx *sql.Tx, fn func(Memory) error) erro
 	return nil
 }
 
-// exportMessages passes every message to fn; see Export.
-func exportMessages(ctx context.Context, tx *sql.Tx, fn func(ExportMessage) error) error {
-	{
-		rows, err := tx.QueryContext(ctx, `
+// exportMessageSQL is the unfiltered read. ExportSelected with no filter runs this
+// text, so a filtered read cannot change what an unfiltered export returns.
+const exportMessageSQL = `
 			WITH msg AS (
 				SELECT m.id, m.scope, m.scope_id, coalesce(r.name, '') AS room,
 					coalesce(tu.name, '') AS to_user, coalesce(ts.name, '') AS to_name,
@@ -228,42 +257,82 @@ func exportMessages(ctx context.Context, tx *sql.Tx, fn func(ExportMessage) erro
 			LEFT JOIN deliveries d ON d.message_id = msg.id
 			LEFT JOIN sessions ds ON ds.id = d.recipient_session_id
 			LEFT JOIN users du ON du.id = ds.user_id
-			ORDER BY msg.scope, msg.scope_id, msg.pair, msg.room, msg.id, du.name || '/' || ds.name`)
-		if err != nil {
-			return err
-		}
-		defer rows.Close()
-		var cur *ExportMessage
-		for rows.Next() {
-			var m ExportMessage
-			var d ExportDelivery
-			var sentAt, queued, delivered, acked, expired int64
-			if err := rows.Scan(&m.ID, &m.Scope.Kind, &m.Scope.ID, &m.Room, &m.ToUser, &m.ToName, &m.FromUser, &m.From,
-				&m.FromAgent, &sentAt, &m.Body, &d.User, &d.Name, &d.State, &queued, &delivered, &acked, &expired); err != nil {
-				return err
-			}
-			if cur == nil || cur.ID != m.ID {
-				if cur != nil {
-					if err := fn(*cur); err != nil {
-						return err
-					}
-				}
-				m.SentAt = fromMillis(sentAt)
-				m.Deliveries = []ExportDelivery{}
-				cur = &m
-			}
-			if d.State != "" {
-				d.QueuedAt, d.DeliveredAt, d.AckedAt, d.ExpiredAt =
-					optionalTime(queued), optionalTime(delivered), optionalTime(acked), optionalTime(expired)
-				cur.Deliveries = append(cur.Deliveries, d)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			return err
-		}
-		if cur != nil {
-			return fn(*cur)
-		}
-		return nil
+			ORDER BY msg.scope, msg.scope_id, msg.pair, msg.room, msg.id, du.name || '/' || ds.name`
+
+// exportMessages passes every message to fn; see Export.
+func exportMessages(ctx context.Context, tx *sql.Tx, fn func(ExportMessage) error) error {
+	return queryExportMessages(ctx, tx, exportMessageSQL, nil, fn)
+}
+
+// exportMessagesFiltered passes the messages that match f, in the same order, each
+// with all of its deliveries. The condition is applied inside the message set, so
+// the grouping and the delivery order stay those of exportMessageSQL.
+func exportMessagesFiltered(ctx context.Context, tx *sql.Tx, f RecordFilter, fn func(ExportMessage) error) error {
+	where, args := f.messageWhere("", 0)
+	q := `
+			WITH msg AS (
+				SELECT m.id, m.scope, m.scope_id, coalesce(r.name, '') AS room,
+					coalesce(tu.name, '') AS to_user, coalesce(ts.name, '') AS to_name,
+					u.name AS from_user, s.name AS from_name, m.sender_agent, m.sent_at, m.body,
+					CASE WHEN m.room_id IS NULL
+						THEN min(u.name || '/' || s.name, tu.name || '/' || ts.name) || char(10) ||
+							max(u.name || '/' || s.name, tu.name || '/' || ts.name)
+						ELSE '' END AS pair
+				FROM messages m
+				JOIN sessions s ON s.id = m.sender_session_id
+				JOIN users u ON u.id = s.user_id
+				LEFT JOIN rooms r ON r.id = m.room_id
+				LEFT JOIN sessions ts ON ts.id = m.to_session_id
+				LEFT JOIN users tu ON tu.id = ts.user_id` + where + `
+			)
+			SELECT msg.id, msg.scope, msg.scope_id, msg.room, msg.to_user, msg.to_name, msg.from_user, msg.from_name,
+				msg.sender_agent, msg.sent_at, msg.body,
+				coalesce(du.name, ''), coalesce(ds.name, ''), coalesce(d.state, ''), coalesce(d.queued_at, 0),
+				coalesce(d.delivered_at, 0), coalesce(d.acked_at, 0), coalesce(d.expired_at, 0)
+			FROM msg
+			LEFT JOIN deliveries d ON d.message_id = msg.id
+			LEFT JOIN sessions ds ON ds.id = d.recipient_session_id
+			LEFT JOIN users du ON du.id = ds.user_id
+			ORDER BY msg.scope, msg.scope_id, msg.pair, msg.room, msg.id, du.name || '/' || ds.name`
+	return queryExportMessages(ctx, tx, q, args, fn)
+}
+
+func queryExportMessages(ctx context.Context, tx *sql.Tx, query string, args []any, fn func(ExportMessage) error) error {
+	rows, err := tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
 	}
+	defer rows.Close()
+	var cur *ExportMessage
+	for rows.Next() {
+		var m ExportMessage
+		var d ExportDelivery
+		var sentAt, queued, delivered, acked, expired int64
+		if err := rows.Scan(&m.ID, &m.Scope.Kind, &m.Scope.ID, &m.Room, &m.ToUser, &m.ToName, &m.FromUser, &m.From,
+			&m.FromAgent, &sentAt, &m.Body, &d.User, &d.Name, &d.State, &queued, &delivered, &acked, &expired); err != nil {
+			return err
+		}
+		if cur == nil || cur.ID != m.ID {
+			if cur != nil {
+				if err := fn(*cur); err != nil {
+					return err
+				}
+			}
+			m.SentAt = fromMillis(sentAt)
+			m.Deliveries = []ExportDelivery{}
+			cur = &m
+		}
+		if d.State != "" {
+			d.QueuedAt, d.DeliveredAt, d.AckedAt, d.ExpiredAt =
+				optionalTime(queued), optionalTime(delivered), optionalTime(acked), optionalTime(expired)
+			cur.Deliveries = append(cur.Deliveries, d)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if cur != nil {
+		return fn(*cur)
+	}
+	return nil
 }

@@ -94,6 +94,7 @@ claude mcp add --transport http agent-lounge http://127.0.0.1:7788/mcp
 | 文書 | 内容 |
 |---|---|
 | [利用ガイド](docs/ja/user-guide.md) | ビルド、サーバーの起動、エージェントへの登録、会話の手順、検証済みの範囲 |
+| [CLI での利用](docs/ja/cli-without-mcp.md) | MCP サーバーを登録できないエージェントから、シェルのコマンドだけでツールを使う手順 |
 | [リファレンス](docs/ja/reference.md) | 起動オプション、管理コマンド、HTTP のパス、識別、各ツールの入出力、期限切れと削除、忘却モデル、制限事項 |
 | [企画提案書](docs/agent-lounge-mcp-proposal.md) | 目的、範囲、設計判断、未確定の点 |
 

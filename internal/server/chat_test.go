@@ -102,7 +102,7 @@ func TestJoinAndWho(t *testing.T) {
 func TestJoinRejectsInvalidArguments(t *testing.T) {
 	s, _ := newServer(t)
 	cs := testutil.Connect(t, s.MCP, nil)
-	for _, name := range []string{"has space", "日本語", strings.Repeat("a", 65), "a/b"} {
+	for _, name := range []string{"has space", "日本。", strings.Repeat("a", 65), "a/b"} {
 		if msg := testutil.CallErr(t, cs, "lounge_join", map[string]any{"name": name}); !strings.Contains(msg, "invalid name") {
 			t.Errorf("name %q: %s", name, msg)
 		}
@@ -374,5 +374,33 @@ func TestConversationOverHTTP(t *testing.T) {
 	in = testutil.Call[inbox](t, alice, "chat_inbox", nil)
 	if len(in.Messages) != 1 || in.Messages[0].Room != "lounge" {
 		t.Fatalf("inbox = %+v", in)
+	}
+}
+
+func TestJoinAndAddressNormalizedSessionName(t *testing.T) {
+	s, _ := newServer(t)
+	recipient := testutil.Connect(t, s.MCP, nil)
+	j := testutil.Call[joined](t, recipient, "lounge_join", map[string]any{"name": "レビュー担当２"})
+	if j.Name != "レビュー担当2" {
+		t.Fatalf("join name = %q", j.Name)
+	}
+
+	sender := testutil.Connect(t, s.MCP, nil)
+	testutil.Call[joined](t, sender, "lounge_join", map[string]any{"name": "sender"})
+	for _, address := range []string{"レビュー担当2", "レビュー担当２", "local/レビュー担当2", "ＬＯＣＡＬ/レビュー担当２"} {
+		out := testutil.Call[sent](t, sender, "chat_send", map[string]any{"to": address, "body": address})
+		if !slices.Equal(out.Recipients, []string{j.Name}) {
+			t.Errorf("send to %q: recipients = %v", address, out.Recipients)
+		}
+	}
+	if got := testutil.Call[inbox](t, recipient, "chat_inbox", nil); len(got.Messages) != 4 {
+		t.Errorf("received %d messages, want 4", len(got.Messages))
+	}
+
+	for _, name := range []string{"Reviewer", "reviewer"} {
+		j := testutil.Call[joined](t, testutil.Connect(t, s.MCP, nil), "lounge_join", map[string]any{"name": name})
+		if j.Name != name || j.Resumed {
+			t.Errorf("join %q = %+v", name, j)
+		}
 	}
 }
