@@ -219,8 +219,8 @@ To have an agent use the lounge in every session, paste this into the instructio
 
 // maxGuideBytes bounds the guide with the default configuration. Copilot CLI (1.0.114) reads a
 // 19,500-byte tool result directly and saves a 20,600-byte one to a temporary file to read in
-// parts; 19,300 leaves room for the unread line added after joining (about 50 bytes) while
-// staying below 19,500. The threshold itself lies between the two measured sizes and is not
+// parts. The guide is only in the text of the result (see loungeHelp); 19,300 leaves room for
+// the unread line added after joining (about 50 bytes) while staying below 19,500. The threshold itself lies between the two measured sizes and is not
 // documented by Copilot CLI: before raising this limit, measure again with the current Copilot
 // CLI which sizes it reads directly. Keep the rules of the guide when it is shortened: what to
 // call, when, with which arguments, the constraints and the prohibitions.
@@ -328,7 +328,7 @@ func guide(cfg config.Config) string {
 }
 
 func registerHelp(r *Registry, d *Deps) {
-	add(r, groupCore, &mcp.Tool{
+	addText(r, groupCore, &mcp.Tool{
 		Name:  toolHelp,
 		Title: "Usage guide",
 		Description: "Get the full usage guide of agent-lounge: joining, how to find your profile values (including branch), scopes and targets (your user, repository, branch and shared, across users), rooms, addresses, sending, receiving, replying and waiting for replies, " +
@@ -341,17 +341,11 @@ func registerHelp(r *Registry, d *Deps) {
 // HelpInput defines arguments for the lounge_help tool.
 type HelpInput struct{}
 
-// HelpOutput is the result of the lounge_help tool. Its result text is the guide itself, not
-// JSON, because agents read Markdown more easily. The guide is left out of the structured
-// result: clients that pass both to the model would pass it twice, beyond what Copilot CLI
-// reads at once (see maxGuideBytes).
-type HelpOutput struct {
-	Guide string `json:"-"`
-	unreadField
-}
-
-func (o *HelpOutput) resultText() string { return o.Guide }
-
-func (d *Deps) loungeHelp(context.Context, *mcp.CallToolRequest, HelpInput) (*mcp.CallToolResult, HelpOutput, error) {
-	return nil, HelpOutput{Guide: guide(d.Cfg)}, nil
+// loungeHelp returns the guide as the text of the result, with no structured result. Claude
+// Code passes only the structured result to the model when there is one, so a guide there would
+// be missing from what the model reads; Copilot CLI passes both, so a guide in both would
+// appear twice, beyond what Copilot CLI reads at once (see maxGuideBytes). The guide is text
+// only, and appears once.
+func (d *Deps) loungeHelp(context.Context, *mcp.CallToolRequest, HelpInput) (string, error) {
+	return guide(d.Cfg), nil
 }

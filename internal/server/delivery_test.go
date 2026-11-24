@@ -278,8 +278,8 @@ func TestDeletedSession(t *testing.T) {
 		}
 	}
 	// The tools that work before joining still work, without the unread count.
-	if h := testutil.Call[help](t, alice, "lounge_help", nil); h.Unread != nil {
-		t.Errorf("lounge_help after deletion: unread = %d", *h.Unread)
+	if g := guideOf(t, alice); strings.Contains(g, "\nUnread messages:") {
+		t.Errorf("lounge_help after deletion has an unread line:\n%s", g[len(g)-80:])
 	}
 	j := testutil.Call[joined](t, alice, "lounge_join", map[string]any{"name": "alice"})
 	if j.Resumed || unreadOf(t, j.Unread) != 0 {

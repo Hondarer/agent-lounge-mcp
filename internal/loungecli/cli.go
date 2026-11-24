@@ -356,8 +356,8 @@ func optionsFirst(fs *flag.FlagSet, args []string) []string {
 }
 
 // result prints what the tool returned, as an agent connected over MCP receives it: the
-// structured result as one line of JSON, or, for a tool that returns only text (lounge_help),
-// the text.
+// structured result as one line of JSON, or, for a tool that has no structured result
+// (lounge_help returns only text), the text.
 func (s streams) result(raw json.RawMessage) int {
 	var r struct {
 		Content []struct {
@@ -375,7 +375,7 @@ func (s streams) result(raw json.RawMessage) int {
 			return s.fail(1, err)
 		}
 	}
-	// lounge_help returns its guide as text, with an empty structured result.
+	// A tool that returns only text has no structured result; an empty one counts as none.
 	if structured := line.String(); structured != "" && structured != "null" && structured != "{}" {
 		fmt.Fprintln(s.out, structured)
 		return 0

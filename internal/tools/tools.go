@@ -241,6 +241,13 @@ func add[In, Out any](r *Registry, group string, t *mcp.Tool, h mcp.ToolHandlerF
 	}})
 }
 
+// addText collects a tool that returns only text, without registering it with the SDK.
+func addText[In any](r *Registry, group string, t *mcp.Tool, h textHandler[In]) {
+	r.tools = append(r.tools, toolDefinition{tool: t, group: group, register: func(s *mcp.Server) {
+		registerTextTool(s, r.d, t, h)
+	}})
+}
+
 // unreadField is embedded in every tool output. It carries the caller's number of unread
 // messages, the way agents notice incoming messages: an MCP server cannot interrupt an agent.
 type unreadField struct {
@@ -249,76 +256,111 @@ type unreadField struct {
 
 func (u *unreadField) setUnread(n int) { u.Unread = &n }
 
-// registerTool wraps a handler with the processing every tool shares. While the server stops,
-// every call fails with the shutdown error. For a connection that joined, every call
-// records the session's activity (before the handler, see below), and a successful call
-// reports its unread messages, both as the unread output
-// field and as the last line of the text, because agents differ in which of the two they read.
-// The text is the output as JSON, or the output's own text when it has one (see resultTexter).
+// admit runs the processing every tool call starts with. While the server stops, the call
+// fails with the shutdown error. For a connection that joined, the call records the session's
+// activity (see below).
+func (d *Deps) admit(ctx context.Context, req *mcp.CallToolRequest, tool string) error {
+	if d.notify.stopping() {
+		return errShuttingDown
+	}
+	// A session can be deleted while a connection is joined as it (by the cleanup of unused
+	// sessions, session remove or user remove). The connection is then no longer joined; tools
+	// that need a session say why, the others work as before joining.
+	//
+	// The check is the update of the session's time of last use (one query for both, see
+	// store.Touch), so the time advances with every call of a joined connection, also one that
+	// fails: a session whose calls fail is still in use.
+	if sess, joined := d.presence.lookup(req.Session); joined {
+		exists, err := d.Store.Touch(ctx, sess)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			d.presence.dropDeleted(req.Session, sess)
+			if !beforeJoin[tool] {
+				return sessionDeletedError(sess.Name)
+			}
+		}
+	}
+	return nil
+}
+
+// finished returns the error of a call whose handler returned err: a call cancelled while its
+// handler ran fails even when the handler succeeded.
+func finished(ctx context.Context, err error) error {
+	if err == nil && ctx.Err() != nil {
+		return fmt.Errorf("cancelled: %w", ctx.Err())
+	}
+	return err
+}
+
+// unreadOf returns the number of unread messages of the session the connection joined, and
+// false for a connection that did not join (or whose session was deleted).
+func (d *Deps) unreadOf(ctx context.Context, req *mcp.CallToolRequest) (int, bool, error) {
+	sess, joined := d.presence.lookup(req.Session)
+	if !joined {
+		return 0, false, nil
+	}
+	unread, err := d.Store.Unread(ctx, sess.ID)
+	return unread, true, err
+}
+
+// registerTool wraps a handler with the processing every tool shares (see admit). A
+// successful call of a connection that joined reports its unread messages, both as the unread
+// output field and as the last line of the text, because agents differ in which of the two
+// they read. The text is the output as JSON.
 func registerTool[In, Out any](s *mcp.Server, d *Deps, t *mcp.Tool, h mcp.ToolHandlerFor[In, Out]) {
 	mcp.AddTool(s, t, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
 		var zero Out
-		if d.notify.stopping() {
-			return nil, zero, errShuttingDown
-		}
-		// A session can be deleted while a connection is joined as it (by the cleanup of
-		// unused sessions, session remove or user remove). The connection is then no longer
-		// joined; tools that need a session say why, the others work as before joining.
-		//
-		// The check is the update of the session's time of last use (one query for both, see
-		// store.Touch), so the time advances with every call of a joined connection, also one
-		// that fails: a session whose calls fail is still in use.
-		if sess, joined := d.presence.lookup(req.Session); joined {
-			exists, err := d.Store.Touch(ctx, sess)
-			if err != nil {
-				return nil, zero, err
-			}
-			if !exists {
-				d.presence.dropDeleted(req.Session, sess)
-				if !beforeJoin[t.Name] {
-					return nil, zero, sessionDeletedError(sess.Name)
-				}
-			}
+		if err := d.admit(ctx, req, t.Name); err != nil {
+			return nil, zero, err
 		}
 		res, out, err := h(ctx, req, in)
-		if err == nil && ctx.Err() != nil {
-			err = fmt.Errorf("cancelled: %w", ctx.Err())
-		}
-		if err != nil || res != nil {
+		if err = finished(ctx, err); err != nil || res != nil {
 			return res, out, err
 		}
-		var text string
-		texter, hasText := any(&out).(resultTexter)
-		if hasText {
-			text = texter.resultText()
-		}
-		sess, joined := d.presence.lookup(req.Session)
 		setter, hasUnread := any(&out).(interface{ setUnread(int) })
-		if !joined || !hasUnread {
-			if hasText {
-				return textResult(text), out, nil
-			}
+		if !hasUnread {
 			return nil, out, nil
 		}
-		unread, err := d.Store.Unread(ctx, sess.ID)
-		if err != nil {
+		unread, joined, err := d.unreadOf(ctx, req)
+		if err != nil || !joined {
 			return nil, out, err
 		}
 		setter.setUnread(unread)
-		if !hasText {
-			b, err := json.Marshal(out)
-			if err != nil {
-				return nil, out, err
-			}
-			text = string(b)
+		b, err := json.Marshal(out)
+		if err != nil {
+			return nil, out, err
 		}
-		return textResult(text + "\n" + unreadLine(unread)), out, nil
+		return textResult(string(b) + "\n" + unreadLine(unread)), out, nil
 	})
 }
 
-// resultTexter is implemented by outputs whose result text is not their JSON form.
-type resultTexter interface {
-	resultText() string
+// textHandler is the handler of a tool that returns only text.
+type textHandler[In any] func(ctx context.Context, req *mcp.CallToolRequest, in In) (string, error)
+
+// registerTextTool registers a tool whose result is only its text: the tool has no output
+// schema and its results have no structured content. With Out of type any and a nil output,
+// the SDK produces neither. The processing is that of registerTool; a successful call of a
+// connection that joined gets the unread line after the text.
+func registerTextTool[In any](s *mcp.Server, d *Deps, t *mcp.Tool, h textHandler[In]) {
+	mcp.AddTool(s, t, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
+		if err := d.admit(ctx, req, t.Name); err != nil {
+			return nil, nil, err
+		}
+		text, err := h(ctx, req, in)
+		if err = finished(ctx, err); err != nil {
+			return nil, nil, err
+		}
+		unread, joined, err := d.unreadOf(ctx, req)
+		if err != nil {
+			return nil, nil, err
+		}
+		if joined {
+			text += "\n" + unreadLine(unread)
+		}
+		return textResult(text), nil, nil
+	})
 }
 
 func textResult(text string) *mcp.CallToolResult {
