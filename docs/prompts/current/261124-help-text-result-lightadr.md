@@ -31,7 +31,7 @@
 
 ### 背景と課題
 
-案件 `shared-space-rooms` の残課題一覧 (`261124-shared-space-rooms-backlog.md`) の 13 件のうち、どれを対策するかを決める必要がありました。
+案件 `shared-space-rooms` の残課題一覧 (`../past/261124-shared-space-rooms-backlog.md`) の 13 件のうち、どれを対策するかを決める必要がありました。
 
 ### 得られた事実
 
@@ -107,7 +107,7 @@ Claude Code 2.1.331 は `lounge_help` の結果を `{}` として扱い、案内
 
 ### 得られた事実
 
-- 前の案件 (`shared-space-rooms`) で、利用者は「難易度の低い実装はSonnetをサブエージェントで利用してください。」と指示しました (`261124-shared-space-rooms-lightadr.md` の LADR-008)。
+- 前の案件 (`shared-space-rooms`) で、利用者は「難易度の低い実装はSonnetをサブエージェントで利用してください。」と指示しました (`../past/261124-shared-space-rooms-lightadr.md` の LADR-008)。
 
 ### 決定
 
