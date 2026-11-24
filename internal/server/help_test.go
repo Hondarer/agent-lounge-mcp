@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -10,10 +9,6 @@ import (
 
 	"github.com/hondarer/agent-lounge-mcp/internal/testutil"
 )
-
-type help struct {
-	Unread *int `json:"unread"`
-}
 
 // guideOf returns the text of lounge_help: the guide, with the unread line after joining.
 func guideOf(t *testing.T, cs *mcp.ClientSession) string {
@@ -37,17 +32,16 @@ func TestHelpBeforeJoining(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := decode[help](t, res)
-	if out.Unread != nil {
-		t.Errorf("unread before joining = %d", *out.Unread)
+	// The result is the guide as text only: no structured result, no unread line.
+	if res.StructuredContent != nil {
+		t.Errorf("structured result = %v, want none", res.StructuredContent)
 	}
-	// The text is the guide itself, not JSON, and the structured result does not repeat it.
 	guide := testutil.Text(res)
-	if !strings.HasPrefix(guide, "# ") {
+	if !strings.HasPrefix(guide, "# agent-lounge usage guide") {
 		t.Errorf("text is not the guide:\n%s", guide)
 	}
-	if raw, _ := json.Marshal(res.StructuredContent); strings.Contains(string(raw), "guide") {
-		t.Errorf("structured result has the guide: %s", raw)
+	if strings.Contains(guide, "\nUnread messages:") {
+		t.Errorf("text has an unread line before joining")
 	}
 	for _, want := range append(toolNames, "wait_seconds", "at most 45 seconds", "## Snippet for instruction files", "shutting down",
 		"1 to 64 normalized Unicode letters, digits, combining marks, or ASCII . _ - @ and preserve case") {
@@ -86,11 +80,10 @@ func TestHelpAfterJoining(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := decode[help](t, res)
-	if unreadOf(t, out.Unread) != 1 {
-		t.Errorf("unread = %d", *out.Unread)
+	if res.StructuredContent != nil {
+		t.Errorf("structured result = %v, want none", res.StructuredContent)
 	}
-	if !strings.HasPrefix(testutil.Text(res), "# ") || !strings.HasSuffix(testutil.Text(res), "\n~~~\n\nUnread messages: 1 (call chat_inbox to read them)") {
+	if !strings.HasPrefix(testutil.Text(res), "# agent-lounge usage guide") || !strings.HasSuffix(testutil.Text(res), "\n~~~\n\nUnread messages: 1 (call chat_inbox to read them)") {
 		t.Errorf("text does not end with the unread line:\n%s", testutil.Text(res))
 	}
 }
@@ -118,6 +111,8 @@ func TestHelpIsPointedTo(t *testing.T) {
 	}
 	if h := found["lounge_help"]; h == nil || h.Annotations == nil || !h.Annotations.ReadOnlyHint {
 		t.Errorf("lounge_help is missing or not read-only: %+v", h)
+	} else if h.OutputSchema != nil {
+		t.Errorf("lounge_help has an output schema: %v", h.OutputSchema)
 	}
 	if j := found["lounge_join"]; j == nil || !strings.Contains(j.Description, "lounge_help") {
 		t.Errorf("lounge_join description does not mention lounge_help")
