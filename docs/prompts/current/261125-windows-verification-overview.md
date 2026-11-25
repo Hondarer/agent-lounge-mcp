@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-25 19:25:00 JST
+最終更新日時: 2026-11-25 19:51:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261124-help-text-result-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
@@ -19,7 +19,7 @@
 
 検討 ID: `windows-verification`
 
-検討用 Markdown の版: 2
+検討用 Markdown の版: 4
 
 状態: 作業中
 
@@ -42,18 +42,18 @@
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 最終仕様の承認の受付 (第 2 ゲート)
 - 🔄 4. 承認された最終仕様に従った作業の実施
-    - 🔄 4.1. 作業ブランチ `verify/windows-verification` の作成と作業前の記録のコミット ← **CURRENT**
-    - ⏸️ 4.2. Windows 担当への手順の送付と、Windows の側での実行ファイルのビルド (最終仕様の 6 章)
-    - ⏸️ 4.3. Windows の側の確認 (Windows 担当の報告を受けて記録)
-        - ⏸️ 4.3.1. 日本語の名前とブランチの申告 (BL-014 (1)、BL-044 d・e・f。最終仕様の 3.1)
-        - ⏸️ 4.3.2. 日本語のファイル名の書き出し (BL-014 (2)。3.2)
-        - ⏸️ 4.3.3. MCP を使わない CLI の方式 (BL-047 (1)。3.3)
-        - ⏸️ 4.3.4. Windows の Codex の作業中の表示 (BL-042。3.4)
-        - ⏸️ 4.3.5. agy 1.5.17 の確かめ直し (BL-040。3.5)
-    - ⏸️ 4.4. WSL の側の確認
-        - ⏸️ 4.4.1. agy 1.5.16 の確かめ直し (BL-040。4.1)
-        - ⏸️ 4.4.2. `shared` とルーム (BL-048。4.2)
-        - ⏸️ 4.4.3. Codex のサンドボックスの `--detach` (BL-047 (2)。4.3)
+    - ✅ 4.1. 作業ブランチ `verify/windows-verification` の作成と作業前の記録のコミット (`1bbfcfb`)
+    - ✅ 4.2. Windows 担当への手順の送付と、Windows の側での実行ファイルのビルド (最終仕様の 6 章。Windows の側で `1bbfcfb` からビルド)
+    - 🔄 4.3. Windows の側の確認 (Windows 担当の報告を受けて記録)
+        - ✅ 4.3.1. 日本語の名前とブランチの申告 (BL-014 (1)、BL-044 d・e・f。最終仕様の 3.1) (Claude Code、Copilot CLI、agy は検証済。Codex は PowerShell を起動できず、プロフィールが空。Grok は利用の上限で未検証)
+        - ✅ 4.3.2. 日本語のファイル名の書き出し (BL-014 (2)。3.2)
+        - ✅ 4.3.3. MCP を使わない CLI の方式 (BL-047 (1)。3.3)
+        - 🔄 4.3.4. Windows の Codex の作業中の表示 (BL-042。3.4。[Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) の A により、検証の基盤に完了の後だけ出る文字列を足す) ← **CURRENT**
+        - 🔄 4.3.5. agy 1.5.17 の確かめ直し (BL-040。3.5。Windows の側の利用者が実行を許可した。WSL の側の確認とポートが重なったため、127.0.0.1:7811 で実行中)
+    - ✅ 4.4. WSL の側の確認
+        - ✅ 4.4.1. agy の確かめ直し (BL-040。4.1。確認の時点で 1.5.17 に上がっていた。1 回目の指示は 6 回とも `unknown tool`。直っていない)
+        - ✅ 4.4.2. `shared` とルーム (BL-048。4.2。Codex、Copilot CLI、agy で 4 つの操作が通った。Grok は利用の上限で未検証)
+        - ✅ 4.4.3. Codex のサンドボックスの `--detach` (BL-047 (2)。4.3。常駐プロセスは、起動したシェルの呼び出しの終わりで残らなかった)
     - ⏸️ 4.5. 文書の「検証済みの範囲」の更新 (`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md`、`docs/ja/interactive-verification.md`。最終仕様の 5 章)
     - ⏸️ 4.6. 確認の記録 `261125-windows-verification-validation.md` の作成
     - ⏸️ 4.7. 受入条件への適合確認 (確認用の登録、サーバー、常駐プロセスの片付けを含む)
@@ -86,18 +86,19 @@
 | 範囲・境界 | 確認済み | [Q-001](261125-windows-verification-discussion.md#q-001-この案件で扱う残課題) |
 | 入力・根拠 | 確認済み | [Q-002](261125-windows-verification-discussion.md#q-002-windows-向けの実行ファイルの用意)、[Q-004](261125-windows-verification-discussion.md#q-004-windows-の-claude-code-の版) |
 | 整合性・依存関係 | 確認済み | [Q-003](261125-windows-verification-discussion.md#q-003-2-つのセッションの役割の分担) |
-| 実現性・例外 | 確認済み | [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) |
+| 実現性・例外 | 確認済み | [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合)、[Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) (BL-042 の作業中の表示が見つからない) |
 | 受入条件・検証 | 確認済み | 最終仕様の 8 章 (課題ごとの結果の記録、文書の更新、片付け) |
 
 ## 質問一覧
 
 | Q-ID | 論点 | 状態 | 依存・関連 | 反映先の決定 |
 | --- | --- | --- | --- | --- |
-| [Q-001](261125-windows-verification-discussion.md#q-001-この案件で扱う残課題) | この案件で扱う残課題 | 未回答 | なし | 未反映 |
-| [Q-002](261125-windows-verification-discussion.md#q-002-windows-向けの実行ファイルの用意) | Windows 向けの実行ファイルの用意 | 未回答 | なし | 未反映 |
-| [Q-003](261125-windows-verification-discussion.md#q-003-2-つのセッションの役割の分担) | 2 つのセッションの役割の分担 | 未回答 | なし | 未反映 |
+| [Q-001](261125-windows-verification-discussion.md#q-001-この案件で扱う残課題) | この案件で扱う残課題 | 解決済み | なし | LADR-001 |
+| [Q-002](261125-windows-verification-discussion.md#q-002-windows-向けの実行ファイルの用意) | Windows 向けの実行ファイルの用意 | 解決済み | なし | LADR-002 |
+| [Q-003](261125-windows-verification-discussion.md#q-003-2-つのセッションの役割の分担) | 2 つのセッションの役割の分担 | 解決済み | なし | LADR-003 |
 | [Q-004](261125-windows-verification-discussion.md#q-004-windows-の-claude-code-の版) | Windows の Claude Code の版 | 解決済み | なし | LADR-004 |
-| [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) | CLI の利用の上限に達した場合 | 未回答 | なし | 未反映 |
+| [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) | CLI の利用の上限に達した場合 | 解決済み | なし | LADR-004 |
+| [Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) | Codex の応答の完了の判定 (BL-042) | 解決済み | 最終仕様の 3.4、7 章 | LADR-005 |
 
 ## 対象成果物と合意版
 
@@ -121,6 +122,12 @@
 | 2026-11-25 19:20 | 回答の受付 | Q-001 から Q-005 が解決済み (検討用 Markdown の版 2)。簡易 ADR の LADR-001 から LADR-004 を記録 |
 | 2026-11-25 19:23 | 第 1 ゲートの通過 | 残懸念がないことを確認し、最終仕様 `261125-windows-verification-design.md` を作成。第 2 ゲートの承認を求めた |
 | 2026-11-25 19:24 | 第 2 ゲートの通過 | 利用者の「承認」。作業に着手 |
+| 2026-11-25 19:28 | Windows の側の確認の中断 | Windows 担当のセッションの権限の判定が、CLI へのトークン付きの登録を拒否した。Windows の側の利用者の判断を待ち、WSL の側の確認 (4.4) を先に進める |
+| 2026-11-25 19:35 | Windows の側の確認の再開 | Windows の側の利用者が、Windows 担当のセッションで登録と実行を許可した (Windows 担当の報告) |
+| 2026-11-25 19:45 | 作業の中断 (BL-042) | 作業中だけ出る文字列が見つからなかった (最終仕様の 7 章)。Q-006 を提示 (検討用 Markdown の版 3) |
+| 2026-11-25 19:45 | Windows の側の確認の中断 (BL-040) | Windows 担当のセッションの権限の判定が、agy の確認のスクリプトの実行を拒否した。Windows の側の利用者の判断待ち |
+| 2026-11-25 19:50 | 作業の再開 (BL-042) | Q-006 が解決済み (A。検討用 Markdown の版 4、簡易 ADR の LADR-005)。最終仕様の 3.4 に、基盤の直し方を書き足した |
+| 2026-11-25 19:50 | Windows の側の確認の再開 (BL-040) | Windows の側の利用者が実行を許可した (Windows 担当の報告)。ポート 7793 が WSL の側の確認と重なったため、127.0.0.1:7811 で実行 |
 
 ## 反映と検証の記録
 

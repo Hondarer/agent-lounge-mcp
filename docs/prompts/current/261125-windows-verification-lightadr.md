@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 簡易 ADR (lightadr)
-最終更新日時: 2026-11-25 19:23:00 JST
+最終更新日時: 2026-11-25 19:51:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261125-windows-verification-overview.md` (全体管理文書)、`261125-windows-verification-discussion.md` (検討用 Markdown)。いずれも削除されている場合があります。
@@ -23,6 +23,7 @@
 | [LADR-002](#ladr-002-windows-向けの実行ファイル) | Windows 向けの実行ファイル | 2026-11-25 | [Q-002](261125-windows-verification-discussion.md#q-002-windows-向けの実行ファイルの用意) |
 | [LADR-003](#ladr-003-2-つのセッションの役割) | 2 つのセッションの役割 | 2026-11-25 | [Q-003](261125-windows-verification-discussion.md#q-003-2-つのセッションの役割の分担) |
 | [LADR-004](#ladr-004-確かめる-cli-の版と利用の上限) | 確かめる CLI の版と利用の上限 | 2026-11-25 | [Q-004](261125-windows-verification-discussion.md#q-004-windows-の-claude-code-の版)、[Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) |
+| [LADR-005](#ladr-005-codex-の応答の完了の判定) | Codex の応答の完了の判定 | 2026-11-25 | [Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) |
 
 ## LADR-001 案件の対象
 
@@ -121,3 +122,27 @@ Windows の Claude Code の版が WSL の側と違います。また、CLI が�
 | --- | --- | --- | --- | --- |
 | 2026-11-25 19:20 | [Q-004](261125-windows-verification-discussion.md#q-004-windows-の-claude-code-の版) | A (2.1.330 のまま確かめる) | なし | 新規に決定 |
 | 2026-11-25 19:20 | [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) | A (未検証として記録し、先へ進む) | なし | 決定に追加 |
+
+## LADR-005 Codex の応答の完了の判定
+
+決定者: Tetsuo Honda  
+最終更新日: 2026-11-25
+
+### 背景と課題
+
+検証の基盤は、作業中だけ出る文字列 (`busy`) で、CLI の作業中を見分けます。Windows の Codex で、長い出力の途中にこの文字列が画面にないことが分かっていました (BL-042)。
+
+### 得られた事実
+
+- Codex 0.171.0 の対話の画面を 1 秒ごとに保存すると、`esc to interrupt` は、WSL では 72 枚のうち 2 枚、Windows では 68 枚のうち 2 枚 (どちらも始めの数秒) だけにありました (Windows は Windows 担当の報告)。
+- 完了の後の画面にだけ、`Worked for 1m 6s • 7:42 PM` (WSL)、`Worked for 1m 0s • 19:44` (Windows) の行がありました。
+
+### 決定
+
+検証の基盤の定義に「完了の後だけ出る文字列」の項目を足し、Codex に `Worked for` を設定します。この項目がある CLI では、指示の後の出力で、完了の語に続いてこの文字列が出たことを、応答の完了の条件に加えます。`busy` の判定は残します。
+
+### 経緯
+
+| 日時 (JST) | 源泉 | ユーザーの選択 | ユーザーのコメント | 決定への反映 |
+| --- | --- | --- | --- | --- |
+| 2026-11-25 19:50 | [Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) | A (定義に完了の後だけ出る文字列を足す) | 「q006は推奨のAで」 | 新規に決定 |

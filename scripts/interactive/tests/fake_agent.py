@@ -9,7 +9,8 @@ answers "ivdone" followed by "<token>" with IVDONE<TOKEN>. An instruction contai
 "permission" asks for permission before the reply (a prompt that leaves the screen once it is
 answered with Enter, as many times as the word occurs). "pause" shows the completion word,
 then works on without output for longer than a short settle time under the status "esc to
-interrupt", and writes LATEWORK when it is done. "stuck" shows a permission prompt that no
+interrupt", and writes LATEWORK when it is done. "delay" pauses 3 seconds after the word without
+any busy text, then writes LATEWORK and a line "Worked for 3s" that stays on the screen. "stuck" shows a permission prompt that no
 key answers.
 
 "twin" asks for permission for the same command once per occurrence of the word, like two
@@ -121,6 +122,9 @@ def main() -> None:
             out("esc to interrupt")
             time.sleep(3)
             out("\r\x1b[2KLATEWORK\r\n")
+        if "delay" in line:
+            time.sleep(3)
+            out("LATEWORK\r\nWorked for 3s\r\n")
         # An idle animation of symbols only.
         for frame in "◐◓◑◒":
             out(f"\x1b7\x1b[1;40H{frame}\x1b8")

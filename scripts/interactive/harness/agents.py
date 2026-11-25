@@ -76,6 +76,10 @@ class Definition:
     approvals: Sequence[tuple[str, Sequence[str]]] = ()
     # Texts the screen shows only while the CLI works on an instruction.
     busy: Sequence[str] = ()
+    # Texts the CLI shows only after it finished an instruction. When given, a reply is complete
+    # only after one of them appeared in the output after the completion word (a CLI may show
+    # its busy text only for the first seconds of a long reply).
+    done: Sequence[str] = ()
     # Keys that empty the input field, sent before an instruction is typed again.
     clear_keys: Sequence[str] = (CTRL_U,)
     quit_keys: Sequence[str] = (CTRL_C, CTRL_C, CTRL_D)
@@ -147,6 +151,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
                  ("Yes, allow Codex to work in this folder", [ENTER])],
         instruction_files=["AGENTS.md"],
         busy=["esc to interrupt"],
+        done=["Worked for"],
     ),
     Definition(
         name="copilot", title="Copilot CLI", executable="copilot",
@@ -337,7 +342,10 @@ class Agent:
         seconds, and the screen shows none of the texts of work in progress (busy): some CLIs
         show the word in their reasoning before they reply, and a CLI can pause its output for
         longer than settle while a tool runs. Permission prompts of the definition (approvals)
-        are answered on the way and counted.
+        are answered on the way and counted. When the definition lists texts shown after
+        an instruction is finished (done), one of them must also have appeared in the output
+        after the word: a line of an earlier instruction that is still on the screen does not
+        count.
         """
         assert self.term
         word, ask = screen.completion()
@@ -367,7 +375,7 @@ class Agent:
                 hit = prompts.new(now)
                 if hit:
                     approvals += self._approve(prompts, hit)
-                elif quiet and not any(screen.contains(now, b, 0) for b in self.d.busy):
+                elif quiet and not any(screen.contains(now, b, 0) for b in self.d.busy) and self._finished(start, word):
                     complete = True
                 elif quiet:
                     time.sleep(1)  # still working without output: look again
@@ -375,6 +383,22 @@ class Agent:
             complete = False  # the CLI ended while it was asked
         self.approvals += approvals
         return Reply(complete, self.term.transcript() + "\n" + self.term.text(start), time.monotonic() - began, approvals)
+
+    def _finished(self, start: int, word: str) -> bool:
+        """Whether the CLI shows it finished: no done texts are defined, or one of them was
+        written after the last completion word, in the output from offset start (a value of mark).
+        The text after the word is taken from the whole output of the instruction, as the done
+        text may arrive in the same piece of output as the word. The last word counts, as a CLI
+        that draws its whole screen again writes the lines above the word (an earlier
+        instruction's done text) before it."""
+        assert self.term
+        if not self.d.done:
+            return True
+        written = self.term.text(start)
+        at = written.rfind(word)
+        if at >= 0:
+            written = written[at + len(word):]
+        return any(screen.contains(written, t, 0) for t in self.d.done)
 
     def _approve(self, prompts: "_Prompts", prompt: str) -> int:
         """Answer a permission prompt that is on the screen. Returns the number answered (1)."""

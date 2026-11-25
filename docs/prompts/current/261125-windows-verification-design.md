@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 最終決定事項 (最終仕様)
-最終更新日時: 2026-11-25 19:23:00 JST
+最終更新日時: 2026-11-25 19:51:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261125-windows-verification-overview.md` (全体管理文書)、`261125-windows-verification-discussion.md` (検討用 Markdown)、`261125-windows-verification-lightadr.md` (簡易 ADR)。いずれも削除されている場合があります。
@@ -93,6 +93,11 @@ S2 に対して、Windows 担当が、PowerShell から次を実行します (�
 2. 作業の間、1 秒ごとに画面の全体を保存します (確認用のデータの下)。
 3. 保存した画面から、作業の間だけ出る文字列 (または、作業の終わりにだけ出る文字列) を探します。
 4. 見つかった場合は、その文字列で `scripts/interactive/harness/agents.py` の Codex の作業中の判定を直し、基盤の自己試験 (WSL と Windows) と、Windows の Codex のシナリオ (2 と 3) で確かめます。見つからない場合は、作業を止めて利用者に扱いを確かめます ([7 章](#7-作業を止める条件))。
+5. 作業中だけ出る文字列はなく、完了の後だけ `Worked for` の行が出ることが分かったため (WSL と Windows の Codex 0.171.0)、次のように直します。
+    - 定義 (`Definition`) に、完了の後だけ出る文字列の項目 (`done`) を足し、Codex に `Worked for` を設定します。
+    - `Agent.ask` は、この項目がある CLI では、指示の後の出力で、完了の語に続いてこの文字列が出たことを、完了の条件に加えます (前の指示の行が画面に残るため、指示の後の出力だけを見ます)。`busy` の判定は残します。
+    - 基盤の自己試験 (模擬の CLI) に、完了の語の後に出力が止まっても `done` が出るまで完了にしないこと、`done` が出れば完了にすることを足します。
+    - `docs/ja/interactive-verification.md` の定義の表に `done` を足し、検証済みの範囲の作業中の表示の行を直します。
 
 ### 3.5. agy 1.5.17 の確かめ直し (BL-040、Windows)
 
@@ -127,7 +132,7 @@ S4 を利用者の側 (このセッション) で起動し、Codex を `-s works
 | --- | --- |
 | `docs/ja/user-guide.md` | Windows のブランチの申告・大文字と小文字・往復、Windows の日本語の名前の受け渡し、Windows の日本語のファイル名の `export`、agy の閉じられた接続の後の動作、Codex・Copilot CLI・Grok・agy での `shared` とルーム |
 | `docs/ja/cli-without-mcp.md` | Windows での実機の動作、`--detach` の常駐プロセスが残るか (70 行の「未検証です」の文も合わせる) |
-| `docs/ja/interactive-verification.md` | Windows の Codex の作業中の表示 (3.4 で直した場合) |
+| `docs/ja/interactive-verification.md` | 定義の表の `done`、Codex の作業中の表示 (3.4) |
 
 Table: 文書の更新
 
@@ -166,4 +171,4 @@ Table: 文書の更新
 - BL-044 f の往復は、Windows の Claude Code 1 つで行います (他の CLI は、d の申告だけ)。
 - BL-047 (1) は、エージェントの CLI を使わず、Windows 担当が PowerShell からコマンドを実行して確かめます。
 - 確認用のユーザー名とセッション名は、前の確認と同じ形 (`確認者２`、`担当-<CLI>２`) にします。
-- 3.4 で作業中の文字列が見つかった場合の基盤の直しは、この案件で行います (それ以外の基盤の直しは行いません)。
+- 3.4 の基盤の直し (完了の後だけ出る文字列) は、この案件で行います (それ以外の基盤の直しは行いません)。
