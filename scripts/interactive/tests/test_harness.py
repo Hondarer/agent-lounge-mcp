@@ -554,6 +554,38 @@ class AgentTest(unittest.TestCase):
         self.assertIn("LATEWORK", reply.text)
         a.quit()
 
+    def test_reply_waits_for_the_done_text(self):
+        d = Definition(**{**fake().__dict__, "done": ["Worked for"]})
+        a = self.start(d)
+        reply = a.ask("Say hello and delay.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertIn("LATEWORK", reply.text)
+        self.assertGreaterEqual(reply.seconds, 3)
+        a.quit()
+
+    def test_without_the_done_text_the_reply_settles_early(self):
+        a = self.start()
+        reply = a.ask("Say hello and delay.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertLess(reply.seconds, 3)
+        a.quit()
+
+    def test_done_text_that_never_appears_is_not_complete(self):
+        d = Definition(**{**fake().__dict__, "done": ["a text it never shows"]})
+        a = self.start(d)
+        reply = a.ask("Say hello.", timeout=4, settle=1)
+        self.assertFalse(reply.complete)
+        a.quit()
+
+    def test_done_text_of_an_earlier_instruction_does_not_count(self):
+        d = Definition(**{**fake().__dict__, "done": ["Worked for"]})
+        a = self.start(d)
+        self.assertTrue(a.ask("Say hello and delay.", timeout=30, settle=1).complete)
+        reply = a.ask("Say hello and delay.", timeout=30, settle=1)
+        self.assertTrue(reply.complete, reply.text)
+        self.assertGreaterEqual(reply.seconds, 3)
+        a.quit()
+
     def test_busy_until_the_timeout_is_not_complete(self):
         d = fake()
         d = Definition(**{**d.__dict__, "busy": ["Fake Agent"]})  # a text that stays on the screen
