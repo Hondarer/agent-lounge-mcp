@@ -13,7 +13,7 @@
 | `gofmt -l .` | 差分なし | 同上 |
 | `go test -race ./...` | 通過 | 同上 |
 | 変更したテストの繰り返し (`-count=20`) | 通過 | 同上 |
-| CI (3 つの OS) | 未実施 (push の前) | GitHub Actions の `ubuntu-latest`、`windows-latest`、`macos-latest` |
+| CI (3 つの OS) | 通過 | GitHub Actions の `ubuntu-latest`、`windows-latest`、`macos-latest` (run 45501094105、`main` のマージのコミット `682959e`) |
 
 Table: 自動テストの結果
 
