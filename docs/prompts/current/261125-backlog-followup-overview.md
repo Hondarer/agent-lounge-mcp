@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-25 20:40:00 JST
+最終更新日時: 2026-11-25 20:47:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261125-windows-verification-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
@@ -42,12 +42,12 @@
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 最終仕様の承認の受付 (第 2 ゲート)
 - 🔄 4. 承認された最終仕様に従った作業の実施
-    - 🔄 4.1. 作業ブランチ `fix/backlog-followup` の作成と作業前の記録のコミット ← **CURRENT**
-    - ⏸️ 4.2. BL-052: 基盤の Codex の起動のオプションと自己試験 (`scripts/interactive/harness/agents.py`、`scripts/interactive/tests/`。最終仕様の 2.1)
-    - ⏸️ 4.3. BL-051: Windows の Codex での 5 回の確認 (Windows 担当。3.1)
+    - ✅ 4.1. 作業ブランチ `fix/backlog-followup` の作成と作業前の記録のコミット (`9277028`)
+    - 🔄 4.2. BL-052: 基盤の Codex の起動のオプションと自己試験 (`scripts/interactive/harness/agents.py`、`scripts/interactive/tests/`。最終仕様の 2.1)
+    - 🔄 4.3. BL-051: Windows の Codex での 5 回の確認 (Windows 担当。3.1) ← **CURRENT**
     - ⏸️ 4.4. BL-051: 案内の変更と自動テスト (`internal/tools/help.go`、`internal/tools/*_test.go`。3.2。4.3 で空の値があった場合だけ)
     - ⏸️ 4.5. 実機の確認 (2.2 の起動の確認、3.2 の Windows の CLI での確認)
-    - ⏸️ 4.6. BL-040: agy の開発元への報告の文面 (4 章)
+    - ✅ 4.6. BL-040: agy の開発元への報告の文面 (4 章。確認の記録の 1 章)
     - ⏸️ 4.7. 文書の更新 (`docs/ja/interactive-verification.md`、`docs/ja/user-guide.md`) と確認の記録 `261125-backlog-followup-validation.md`
     - ⏸️ 4.8. `go vet ./...`、`go test ./...`、基盤の自己試験、受入条件への適合確認
     - ⏸️ 4.9. 簡易 ADR の最終確認
@@ -98,7 +98,7 @@
 
 検討用 Markdown の合意版 (第 1 ゲート): 版 3 (2026-11-25 20:38)
 
-最終仕様 (design.md) の合意版 (第 2 ゲート): 2026-11-25 20:38 版 (2026-11-25 20:40 に承認)
+最終仕様 (design.md) の合意版 (第 2 ゲート): 2026-11-25 20:38 版 (2026-11-25 20:46 に承認)
 
 更新予定の成果物: 対象成果物のとおり
 
@@ -113,7 +113,7 @@
 | 2026-11-25 20:31 | 回答の受付 | Q-001 が解決済み (A、B、C)。Q-002 は記入がなかった。課題ごとの進め方の Q-003 から Q-005 を追加 (検討用 Markdown の版 2) |
 | 2026-11-25 20:37 | 回答の受付 | Q-002 から Q-005 が解決済み (検討用 Markdown の版 3)。簡易 ADR の LADR-002 から LADR-005 を記録 |
 | 2026-11-25 20:38 | 第 1 ゲートの通過 | 残懸念がないことを確認し、最終仕様 `261125-backlog-followup-design.md` を作成。第 2 ゲートの承認を求めた |
-| 2026-11-25 20:40 | 第 2 ゲートの通過 | 利用者の「承認」。作業に着手 |
+| 2026-11-25 20:46 | 第 2 ゲートの通過 | 利用者の「承認」。作業に着手 |
 
 ## 反映と検証の記録
 
