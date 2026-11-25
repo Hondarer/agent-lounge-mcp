@@ -129,6 +129,11 @@ def _agy_register(url: str, token: str) -> list[str]:
 # .cmd launcher of Codex on Windows.
 _CODEX_APPROVE = f"mcp_servers.{SERVER}.default_tools_approval_mode=approve"
 
+# Codex shows an update prompt at start-up when a newer version exists. The harness answers start-up
+# screens, which made Codex update itself in the middle of a check, so the interactive screen
+# starts with the update check off.
+_CODEX_NO_UPDATE_CHECK = "check_for_update_on_startup=false"
+
 DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
     Definition(
         name="claude", title="Claude Code", executable="claude",
@@ -143,7 +148,7 @@ DEFINITIONS: dict[str, Definition] = {d.name: d for d in [
     ),
     Definition(
         name="codex", title="Codex", executable="codex",
-        interactive=["-c", _CODEX_APPROVE, "--sandbox", "workspace-write", "--ask-for-approval", "never"],
+        interactive=["-c", _CODEX_APPROVE, "-c", _CODEX_NO_UPDATE_CHECK, "--sandbox", "workspace-write", "--ask-for-approval", "never"],
         one_shot=lambda prompt: ["exec", "--skip-git-repo-check", "-s", "read-only", "-c", _CODEX_APPROVE, prompt],
         register=_codex_register, unregister=["mcp", "remove", SERVER], list_servers=["mcp", "list"],
         ready=["Ask Codex to do anything", "? for shortcuts"],

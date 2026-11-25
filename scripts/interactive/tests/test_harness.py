@@ -470,6 +470,16 @@ class PromptsTest(unittest.TestCase):
             self.assertEqual(prompts.new(rewritten), question)
 
 
+class DefinitionTest(unittest.TestCase):
+    def test_codex_interactive_starts_with_the_update_check_off_and_one_shot_does_not(self):
+        pair = ["-c", "check_for_update_on_startup=false"]
+        codex = DEFINITIONS["codex"]
+        args = codex.interactive
+        self.assertTrue(any(args[i:i + 2] == pair for i in range(len(args) - 1)), args)
+        one_shot = codex.one_shot("hello")
+        self.assertFalse(any(one_shot[i:i + 2] == pair for i in range(len(one_shot) - 1)), one_shot)
+
+
 class AgentTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

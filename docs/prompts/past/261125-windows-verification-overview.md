@@ -1,10 +1,10 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-25 20:21:00 JST
+最終更新日時: 2026-11-25 20:30:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
-上流文書: `../past/261124-help-text-result-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
+上流文書: `261124-help-text-result-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
 下流文書: `261125-windows-verification-discussion.md` (検討用 Markdown)、`261125-windows-verification-lightadr.md` (簡易 ADR)、`261125-windows-verification-design.md` (最終仕様)、`261125-windows-verification-backlog.md` (残課題一覧)、`261125-windows-verification-validation.md` (確認の記録)。未作成の場合や、削除されている場合があります。
 再開手順: このファイルを開いたエージェントは、作業の前に agree-before-implement スキルを読み込んでください。この文書と、ユーザーが編集した最新の検討用 Markdown を読み直し、作業 WBS の `← **CURRENT**` の項目から再開します。最終更新エージェントのセッション情報や稼働 OS・最終更新日時が参照可能であれば再開時のコンテキストや環境差分の把握に利用し、別エージェントや別環境・別 OS からの引き継ぎ、担当変更によりセッションが見つからない場合も異常とせず、文書の記載から継続してください。`← **CURRENT**` の項目は処理が中止された項目である場合があり、どこまで進んでいたかは文書だけでは分かりません。対象成果物の内容を確認して実施済みの範囲を特定してから、作業を再開してください。`← **CURRENT**` がなく、作業 WBS がすべて完了 (✅) であれば、この案件の合意フローは完了しています。
 -->
@@ -30,7 +30,7 @@
 凡例: ⏸️ 未着手、🔄 実施中、🚫 ブロック中、⚠️ 要注意、✅ 完了。現在取り組んでいる項目の末尾に `← **CURRENT**` を付けます。
 
 - ✅ 1. 検討用 Markdown のための情報収集と質問の実施
-    - ✅ 1.1. 前提条件と要求事項の調査 (Windows の側のセッションとの疎通の確認、両方の環境の CLI の版、対策元 `../past/261124-help-text-result-backlog.md` の候補の状態を「検討中」へ更新)
+    - ✅ 1.1. 前提条件と要求事項の調査 (Windows の側のセッションとの疎通の確認、両方の環境の CLI の版、対策元 `261124-help-text-result-backlog.md` の候補の状態を「検討中」へ更新)
     - ✅ 1.2. 確認項目 [Q-001](261125-windows-verification-discussion.md#q-001-この案件で扱う残課題) から [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) の作成
     - ✅ 1.3. Q&A ターンごとのユーザー回答の受付と記録
     - ✅ 1.4. 回答に基づく前提・制約の検証、簡易 ADR (`261125-windows-verification-lightadr.md`) への決定事項の反映、WBS の見直し、対策元 `backlog.md` への方針の反映
@@ -67,7 +67,7 @@
 
 対象成果物: `docs/ja/user-guide.md` などの「検証済みの範囲」、確認の記録。確認で問題が見つかった場合の直しの扱いは、見つかった時点で確かめます。
 
-今回の対象範囲: 残課題一覧 `../past/261124-help-text-result-backlog.md` のうち、BL-014、BL-044、BL-047 の (1) と (2)、BL-042、BL-040、BL-048 ([LADR-001](261125-windows-verification-lightadr.md#ladr-001-案件の対象))。
+今回の対象範囲: 残課題一覧 `261124-help-text-result-backlog.md` のうち、BL-014、BL-044、BL-047 の (1) と (2)、BL-042、BL-040、BL-048 ([LADR-001](261125-windows-verification-lightadr.md#ladr-001-案件の対象))。
 
 書き込み可能な検討文書: この文書、検討用 Markdown (`261125-windows-verification-discussion.md`)、簡易 ADR (`261125-windows-verification-lightadr.md`)
 
@@ -76,7 +76,7 @@
 - リポジトリ: `main` の `d7959b6` (WSL の側と Windows の側で同じ)。
 - WSL の側: Linux x86_64 (WSL 2)、Go 1.27.4、Claude Code 2.1.331、Codex 0.171.0、Copilot CLI 1.0.114、Grok 1.0.92 (利用の上限)、agy 1.5.16。
 - Windows の側 (Windows 担当の報告): Windows 11 Pro for Workstations 10.0.26300、PowerShell 7.7.0、Go 1.27.4、Claude Code 2.1.330、Codex 0.171.0、Copilot CLI 1.0.114、Grok 1.0.92、agy 1.5.17、Python 3.14.3。
-- 各課題の確認の手順: `../past/261121-branch-scope-design.md` の 5.3、`261123-backlog-batch-design.md` の 7 章・9.2、`../past/261124-shared-space-rooms-design.md` の 9.2 ほか (対策元の残課題一覧の参考情報)。
+- 各課題の確認の手順: `261121-branch-scope-design.md` の 5.3、`261123-backlog-batch-design.md` の 7 章・9.2、`261124-shared-space-rooms-design.md` の 9.2 ほか (対策元の残課題一覧の参考情報)。
 
 ## 観点別の確認
 
@@ -129,8 +129,9 @@
 | 2026-11-25 19:50 | 作業の再開 (BL-042) | Q-006 が解決済み (A。検討用 Markdown の版 4、簡易 ADR の LADR-005)。最終仕様の 3.4 に、基盤の直し方を書き足した |
 | 2026-11-25 19:50 | Windows の側の確認の再開 (BL-040) | Windows の側の利用者が実行を許可した (Windows 担当の報告)。ポート 7793 が WSL の側の確認と重なったため、127.0.0.1:7811 で実行 |
 | 2026-11-25 20:12 | 確認の完了 | Windows の側と WSL の側の確認を終え、確認用のサーバーと登録を片付けた (確認の記録の 5 章) |
-| 2026-11-25 20:13 | 残課題の整理 | 残課題一覧 `261125-windows-verification-backlog.md` を作成。対策元の残課題一覧の全項目が対応済みまたは次フェーズへ転記になったため、案件 `help-text-result` の記録を `../past/` へ移した |
+| 2026-11-25 20:13 | 残課題の整理 | 残課題一覧 `261125-windows-verification-backlog.md` を作成。対策元の残課題一覧の全項目が対応済みまたは次フェーズへ転記になったため、案件 `help-text-result` の記録を `` へ移した |
 | 2026-11-25 20:21 | 第 3 ゲートの通過 | 利用者の「承認。mainにマージして」。`main` へマージ |
+| 2026-11-25 20:29 | CI の確認 | `main` の CI (run 45603748655) が 3 つの OS とビルドで通過 |
 
 ## 反映と検証の記録
 
@@ -139,7 +140,7 @@
 | 1. 7 つの課題ごとの結果 | 適合。確認の記録 `261125-windows-verification-validation.md` の 2 章から 4 章 |
 | 2. 文書の検証済みの範囲 | 適合。`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md`、`docs/ja/interactive-verification.md` |
 | 3. 登録、サーバー、常駐プロセスの片付け | 適合 (両方の側。確認の記録の 5 章) |
-| 4. 基盤の自己試験と CI | 自己試験は WSL (50 件) と Windows (49 件、1 件は省略) で通過。CI は push の後に確かめる |
+| 4. 基盤の自己試験と CI | 適合。自己試験は WSL (50 件) と Windows (49 件、1 件は省略) で通過。CI は 3 つの OS で通過 (run 45603748655、`535709d`) |
 | 5. 残課題一覧 | 適合。`261125-windows-verification-backlog.md` (10 件) |
 
 Table: 受入条件への適合
