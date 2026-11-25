@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 簡易 ADR (lightadr)
-最終更新日時: 2026-11-25 20:38:00 JST
+最終更新日時: 2026-11-25 21:15:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `261125-backlog-followup-overview.md` (全体管理文書)、`261125-backlog-followup-discussion.md` (検討用 Markdown)。いずれも削除されている場合があります。
@@ -22,7 +22,7 @@
 | [LADR-001](#ladr-001-案件の対象) | 案件の対象 | 2026-11-25 | 対話での指示、[Q-001](261125-backlog-followup-discussion.md#q-001-この案件で扱う残課題) |
 | [LADR-002](#ladr-002-進め方) | 進め方 | 2026-11-25 | [Q-002](261125-backlog-followup-discussion.md#q-002-前の案件の進め方の引き継ぎ) |
 | [LADR-003](#ladr-003-bl-040-の対処) | BL-040 の対処 | 2026-11-25 | [Q-003](261125-backlog-followup-discussion.md#q-003-bl-040-の対処) |
-| [LADR-004](#ladr-004-bl-051-の対処) | BL-051 の対処 | 2026-11-25 | [Q-004](261125-backlog-followup-discussion.md#q-004-bl-051-の対処) |
+| [LADR-004](#ladr-004-bl-051-の対処) | BL-051 の対処 | 2026-11-25 | [Q-004](261125-backlog-followup-discussion.md#q-004-bl-051-の対処)、[Q-006](261125-backlog-followup-discussion.md#q-006-bl-051-で案内を足しても効かない場合の扱い)、[Q-007](261125-backlog-followup-discussion.md#q-007-bl-051-の原因を受けた文書の変え方) |
 | [LADR-005](#ladr-005-bl-052-の対処) | BL-052 の対処 | 2026-11-25 | [Q-005](261125-backlog-followup-discussion.md#q-005-bl-052-の対処) |
 
 ## LADR-001 案件の対象
@@ -32,7 +32,7 @@
 
 ### 背景と課題
 
-残課題一覧 `261125-windows-verification-backlog.md` の 10 件のうち、次の案件で扱う項目を選ぶ必要がありました。
+残課題一覧 `../past/261125-windows-verification-backlog.md` の 10 件のうち、次の案件で扱う項目を選ぶ必要がありました。
 
 ### 得られた事実
 
@@ -61,7 +61,7 @@
 
 ### 得られた事実
 
-- 前の案件では、4 つの進め方 (`261125-windows-verification-lightadr.md` の LADR-002 から LADR-004) で支障なく進みました。
+- 前の案件では、4 つの進め方 (`../past/261125-windows-verification-lightadr.md` の LADR-002 から LADR-004) で支障なく進みました。
 
 ### 決定
 
@@ -87,7 +87,7 @@ agy は、閉じられた MCP の接続の後とサーバーの起動し直し�
 
 ### 得られた事実
 
-- agy 1.5.12 から 1.5.17 で再現し、1.5.17 では WSL と Windows の 12 回とも 1 回目の指示が `unknown tool` でした (`261125-windows-verification-validation.md` の 2.5)。
+- agy 1.5.12 から 1.5.17 で再現し、1.5.17 では WSL と Windows の 12 回とも 1 回目の指示が `unknown tool` でした (`../past/261125-windows-verification-validation.md` の 2.5)。
 - agy は、新しい接続の初期化とツールの一覧の取得を終えています。
 
 ### 決定
@@ -113,17 +113,21 @@ Windows のサンドボックスの中の Codex が PowerShell を起動でき�
 
 - 使い方の案内は、WSL ではサンドボックスの中で失敗した場合の手順を書き、Windows では書いていません (`internal/tools/help.go`)。
 - Codex 0.170.0 は `cmd.exe /c` に切り替え、Codex 0.171.0 は切り替えませんでした (1 回ずつ)。
+- Codex 0.172.0 (`-s read-only`) は、Windows で 5 回とも、プロフィールを調べるコマンドがすべて `CreateProcessAsUserW failed: 5` で失敗し、空の値で参加しました。`cmd.exe /c` も `pwsh.exe -Command` で包んで起動され、同じエラーで失敗しました (Windows 担当の報告。`261125-backlog-followup-validation.md`)。
+- 原因の調査 (Windows 担当の報告): Codex は `PATH` で最初に見つかる `pwsh` (なければ `powershell.exe` 5.1) でコマンドを包みます。この機械の `pwsh` は Microsoft Store 版の実行エイリアスで、サンドボックスの中から起動できません (`read-only` と `workspace-write` の両方)。その実行の `PATH` から `WindowsApps` を外すと、`powershell.exe` 5.1 が使われ、3 回とも申告できました。
 - 使い方の案内は、既定の設定で 19,222 バイト (改行を含む `call lounge_help` の出力) で、上限 `maxGuideBytes` は 19,300 バイトです (2026-11-25 に確認)。
 
 ### 決定
 
-Windows 担当が、今の案内のまま Codex で 5 回実行し、`cmd.exe` に切り替える割合を確かめます。1 回でも空の値で参加した場合は、使い方の案内の Windows の手順に、シェルを起動できない場合の手順を足し、自動テストと Windows の CLI で確かめます。
+使い方の案内は変えません。原因 (Microsoft Store 版の PowerShell 7 の実行エイリアスを、Codex のサンドボックスの中で起動できない) と回避の手順 (Codex を起動するときの `PATH` から `WindowsApps` を外す。Git for Windows の `usr\bin` より `System32` を先に置く) を、利用ガイドに書きます。Codex の開発元への報告の文面と、インストーラー版の PowerShell 7 での確認は、残課題に残します。
 
 ### 経緯
 
 | 日時 (JST) | 源泉 | ユーザーの選択 | ユーザーのコメント | 決定への反映 |
 | --- | --- | --- | --- | --- |
 | 2026-11-25 20:37 | [Q-004](261125-backlog-followup-discussion.md#q-004-bl-051-の対処) | A (5 回確かめ、空の値の場合に案内を足す) | なし | 新規に決定 |
+| 2026-11-25 21:01 | [Q-006](261125-backlog-followup-discussion.md#q-006-bl-051-で案内を足しても効かない場合の扱い) | B (この案件で原因を調べる) | 「回答した。B」 | 案内を足すことをやめ、原因の調査に書き換え |
+| 2026-11-25 21:15 | [Q-007](261125-backlog-followup-discussion.md#q-007-bl-051-の原因を受けた文書の変え方) | A (利用ガイドに注意と回避の手順を書き、案内は変えない) | なし | 原因と回避の手順の文書化に書き換え |
 
 ## LADR-005 BL-052 の対処
 

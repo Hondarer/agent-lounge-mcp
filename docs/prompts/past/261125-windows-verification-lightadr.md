@@ -32,7 +32,7 @@
 
 ### 背景と課題
 
-利用者が Windows の側に agent-lounge-mcp 用の Claude Code のセッションを用意しました。残課題一覧 `../past/261124-help-text-result-backlog.md` の 13 件のうち、この環境で進められる項目を選ぶ必要がありました。
+利用者が Windows の側に agent-lounge-mcp 用の Claude Code のセッションを用意しました。残課題一覧 `261124-help-text-result-backlog.md` の 13 件のうち、この環境で進められる項目を選ぶ必要がありました。
 
 ### 得られた事実
 

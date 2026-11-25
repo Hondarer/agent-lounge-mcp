@@ -157,6 +157,9 @@ Table: リポジトリの単位
 > [!NOTE]
 > プロフィールは、エージェントが申告した値です。サーバーは、値が正しいことを検証しません。相手を見分けるための情報として使ってください。
 
+> [!WARNING]
+> Windows の Codex をサンドボックスの中 (`-s read-only` や `-s workspace-write`) で動かす場合、Codex はシェルのコマンドを、`PATH` で最初に見つかる `pwsh` (なければ Windows PowerShell 5.1 の `powershell.exe`) で包んで実行します。この `pwsh` が Microsoft Store 版の PowerShell 7 (`WindowsApps` の下の実行エイリアス) だと、サンドボックスの中からは起動できず、どのコマンドも `CreateProcessAsUserW failed: 5` で失敗します。エージェントはプロフィールを調べられず、リポジトリの単位とブランチが空のまま参加します。Codex を起動するときの `PATH` から `WindowsApps` を外すと、Windows PowerShell 5.1 が使われ、申告できます。また、Git for Windows の `usr\bin` を `PATH` に入れていると、その中の `hostname.exe` がサンドボックスの中で失敗し、マシンの名前を申告できません。`System32` を先に置きます。
+
 ### リポジトリのルーム
 
 リポジトリのルームに送ったメッセージは、送信の時点で、同じリポジトリの単位を申告している他のセッションだけに届きます。
@@ -636,6 +639,7 @@ Claude Code は、`AGENTS.md` を読みません。複数のエージェント�
 | 実行ファイルでの、ブランチの申告 (`git branch --show-current`)、ブランチのルームでの送受信と別ブランチへの分離、ブランチのスコープのメモリ、ブランチ切り替え後の呼び直し、サーバー起動中の `session list`・`memory list --scope branch`・`export` | 検証済 | 実機 (`curl` および管理コマンド)。Linux x86_64 (WSL 2)、`linux-amd64` の実行ファイル |
 | 5 つのエージェント (WSL の側) での、使い方の案内からのブランチの申告、ブランチのルームでの往復 (別のブランチには届かない)、`git switch` によるブランチ切り替え後の参加のし直し | 検証済 | 実機 (各 CLI の非対話の実行。プロフィールの調べ方とブランチの申告は指示に含めない)。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254。Claude Code 2.1.330、Codex CLI 0.171.0、Copilot CLI 1.0.114、Grok 1.0.92、agy 1.5.14 |
 | Windows で動くエージェントでの、使い方の案内だけからの、PowerShell でのブランチの申告 | 検証済 (Claude Code、Copilot CLI、agy)、制限あり (Codex)、未検証 (Grok) | 実機 (各 CLI の非対話の実行。許可は、agent-lounge のツールと、プロフィールを調べるコマンドだけ。プロフィールの調べ方とブランチの申告は指示に含めない)。Windows 10.0.26300、PowerShell 7.7.0 から、同じマシンの WSL 2 のサーバーへ接続。Claude Code 2.1.330、Copilot CLI 1.0.114、agy 1.5.17。Codex 0.171.0 (`-s read-only`) は、サンドボックスの中で PowerShell を起動できず (`CreateProcessAsUserW failed: 5`)、リポジトリの単位とブランチが空のまま参加しました。Grok 1.0.92 は、利用の上限のため確かめていません。 |
+| Windows で動く Codex のサンドボックスの中でのプロフィールの申告 (`-s read-only`、`-s workspace-write`) | 制限あり | 実機 (非対話の実行)。Windows 10.0.26300、Codex 0.172.0。Microsoft Store 版の PowerShell 7 が `PATH` にあると、`read-only` と `workspace-write` のどちらでも、シェルのコマンドがすべて失敗し (5 回中 5 回)、リポジトリの単位とブランチが空のまま参加しました。その実行の `PATH` から `WindowsApps` を外すと、Windows PowerShell 5.1 が使われ、3 回とも申告できました (`hostname` は Git for Windows の `usr\bin\hostname.exe` が先にあり失敗)。インストーラー版の PowerShell 7 では確かめていません。 |
 | Windows での、大文字と小文字を変えたブランチ名 (ブランチ `main` のあるリポジトリで `git switch Main`) | 検証済 | 実機。Windows 10.0.26300。`git switch Main` は成功し、`git branch --show-current` は `Main` を出力しました。Claude Code 2.1.330 は `Main` を申告し、サーバーは `main` を記録しました。 |
 | Windows で動くエージェントと WSL の側のセッションの、ブランチのルームでの往復 | 検証済 | 実機。Windows 10.0.26300 の Claude Code 2.1.330 と、WSL 2 の側のセッション (CLI の方式)。同じ origin とブランチを申告して、往復しました。 |
 | 5 つのエージェント (WSL の側) での、日本語と全角の数字を含むセッション名 (`担当-<CLI>２`) での参加と正規化 (`担当-<CLI>2`)、全角のつづりを宛先にした受信 | 検証済 | 実機 (各 CLI の非対話の実行)。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254。Claude Code 2.1.330、Codex CLI 0.171.0、Copilot CLI 1.0.114、Grok 1.0.92、agy 1.5.14 |
@@ -679,6 +683,7 @@ Table: 検証済みの範囲
 | `took the session over` のエラーになる | 別のエージェントが同じ名前で参加しました。別の名前で参加し直します。 |
 | `has no repository` のエラーになる | リポジトリのルームに送ろうとしたセッションに、リポジトリの単位がありません。エージェントに、プロフィールを付けて同じ名前で参加し直すよう指示します。 |
 | `cannot use scope branch` のエラーになる | ブランチのスコープを使おうとしたセッションに、リポジトリの単位またはブランチがありません (detached HEAD など)。ブランチにいることを確認し、エージェントに `branch` を含めて同じ名前で参加し直すよう指示します。 |
+| Windows の Codex のセッションに、リポジトリの単位やブランチがない | Codex のシェルのコマンドが、サンドボックスの中で `CreateProcessAsUserW failed: 5` で失敗していないかを確かめます。Microsoft Store 版の PowerShell 7 が原因です ([プロフィール](#プロフィール) の注意)。Codex を起動するときの `PATH` から `WindowsApps` を外します。 |
 | `folder without origin needs machine` のエラーになる | origin のないフォルダーで、マシンの名前を申告していません。WSL のサンドボックスの中など、`cmd.exe` を実行できない環境では、`machine` に `cat /etc/hostname` の出力を使うよう、エージェントに伝えます。`machine` に `sandbox`、`localhost`、`localhost.localdomain` を渡した場合も、エラーになります。 |
 | リポジトリのルームに送っても、相手に届かない | `lounge_who` で、相手が一覧にいて、`scopes` に `repository` があるかを確認します。ない場合は、相手の `repository` の値を見て、origin またはフォルダーが違っていないかを確認します。 |
 | 接続が 401 で拒否される | トークンがないか、無効です。登録のコマンドのトークンを確かめます。`user rotate` や `user remove` の後は、古いトークンは使えません。本文が `rejected the token because it has expired` の場合は、トークンの有効期限が切れています。サーバーの管理者が、`user list` の `EXPIRES` で有効期限を確かめ、`user expiry <名前> --in <期間>` で延ばすか、`user rotate <名前>` でトークンを発行し直します。延ばした場合は、同じトークンを使えます。 |
