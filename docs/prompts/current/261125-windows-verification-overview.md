@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-25 20:21:00 JST
+最終更新日時: 2026-11-25 20:30:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `../past/261124-help-text-result-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
@@ -131,6 +131,7 @@
 | 2026-11-25 20:12 | 確認の完了 | Windows の側と WSL の側の確認を終え、確認用のサーバーと登録を片付けた (確認の記録の 5 章) |
 | 2026-11-25 20:13 | 残課題の整理 | 残課題一覧 `261125-windows-verification-backlog.md` を作成。対策元の残課題一覧の全項目が対応済みまたは次フェーズへ転記になったため、案件 `help-text-result` の記録を `../past/` へ移した |
 | 2026-11-25 20:21 | 第 3 ゲートの通過 | 利用者の「承認。mainにマージして」。`main` へマージ |
+| 2026-11-25 20:29 | CI の確認 | `main` の CI (run 45603748655) が 3 つの OS とビルドで通過 |
 
 ## 反映と検証の記録
 
@@ -139,7 +140,7 @@
 | 1. 7 つの課題ごとの結果 | 適合。確認の記録 `261125-windows-verification-validation.md` の 2 章から 4 章 |
 | 2. 文書の検証済みの範囲 | 適合。`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md`、`docs/ja/interactive-verification.md` |
 | 3. 登録、サーバー、常駐プロセスの片付け | 適合 (両方の側。確認の記録の 5 章) |
-| 4. 基盤の自己試験と CI | 自己試験は WSL (50 件) と Windows (49 件、1 件は省略) で通過。CI は push の後に確かめる |
+| 4. 基盤の自己試験と CI | 適合。自己試験は WSL (50 件) と Windows (49 件、1 件は省略) で通過。CI は 3 つの OS で通過 (run 45603748655、`535709d`) |
 | 5. 残課題一覧 | 適合。`261125-windows-verification-backlog.md` (10 件) |
 
 Table: 受入条件への適合

@@ -131,6 +131,7 @@ Codex を `-s workspace-write -c sandbox_workspace_write.network_access=true` �
 | 自己試験 (同じ。Windows 担当) | 49 件が通過、1 件は省略 (`PWD` の試験)。`ResourceWarning` の行は 0 件 | Windows 10.0.26300、Python 3.14.3、`c4613ad` |
 | Codex の長い応答 (2.4 と同じ指示) | 完了と判定 (73.5 秒)。`Worked for 1m 8s • 8:11 PM` の後。`esc to interrupt` は 74 枚中 3 枚 (2 秒から 4 秒) | Linux x86_64 (WSL 2)、Codex 0.172.0 |
 | Codex のシナリオ 2 と 3 (`verify.py run --agents codex --scenarios 2,3`。Windows 担当) | どちらも `done` (シナリオ 3 は 48.5 秒、シナリオ 2 の実行し直しは 39.9 秒) | Windows 10.0.26300、Codex 0.172.0 |
+| CI (3 つの OS。自己試験を含む) | 通過 | GitHub Actions の `ubuntu-latest`、`windows-latest`、`macos-latest` (run 45603748655、`main` のマージのコミット `535709d`) |
 
 Table: 基盤の自己試験
 
