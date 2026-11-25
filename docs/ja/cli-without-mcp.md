@@ -67,7 +67,7 @@ Table: 起動の形
 
 `connection start` は、サーバーに接続して MCP の初期化が成功することを確かめてから待ち受けを始めます。サーバーに到達できない場合やトークンが無効 (401) な場合は、理由を標準エラーに出力して終了コード 1 で終わります。同じ名前の常駐プロセスがすでに動いている場合もエラーになります。
 
-Codex の `workspace-write` のサンドボックスは、ネットワークを許可していない間、Unix ドメイン ソケットへの接続も止めます。このため、エージェントによる `connection start` は失敗し、`call` も常駐プロセスに接続できません (終了コード 3)。利用者が自分の端末で常駐プロセスを起動し、Codex のサンドボックスでネットワークを許可してください (`-c sandbox_workspace_write.network_access=true`、または `~/.codex/config.toml` の `[sandbox_workspace_write]` に `network_access = true`)。なお、エージェントが `--detach` で起動した常駐プロセスが、コマンドの終了後も残るかは未検証です。
+Codex の `workspace-write` のサンドボックスは、ネットワークを許可していない間、Unix ドメイン ソケットへの接続も止めます。このため、エージェントによる `connection start` は失敗し、`call` も常駐プロセスに接続できません (終了コード 3)。利用者が自分の端末で常駐プロセスを起動し、Codex のサンドボックスでネットワークを許可してください (`-c sandbox_workspace_write.network_access=true`、または `~/.codex/config.toml` の `[sandbox_workspace_write]` に `network_access = true`)。ネットワークを許可したサンドボックスでも、エージェントが `--detach` で起動した常駐プロセスは、そのシェルの呼び出しの終わりで残りません。
 
 ### エージェントへの最初の指示
 
@@ -285,8 +285,8 @@ Table: トラブルシューティング
 | 実行ファイルでの手動の確認 (`connection start --detach`、`tools`、`call --as NAME lounge_join` でのプロフィール収集、`chat_send`、`chat_inbox`、`connection status`、`connection stop`、`--connection-idle 20s` で 25[秒] 待った後の張り直しと送り直し、サーバー停止中の終了コード 3 と再起動後の再参加と送信、未知のツール・未知のキーの終了コード 2 とツールエラーの終了コード 1、`--json -` での標準入力、トークン必須サーバーの起動拒否と `--token-stdin` による起動およびファイル・引数への非出力、`user rotate` 後の終了コード 3、長い保存場所パスでの案内エラー) | 検証済 | 実機。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254、`linux-amd64` の実行ファイル |
 | MCP を登録していない 5 つの CLI での利用 (`tools` の案内だけからの `lounge_join` とプロフィール記録、リポジトリのルームへの送信と相手役の返信の受け取り、メモリの保存と検索) | 検証済 | 実機 (各 CLI の非対話の実行。利用者が常駐プロセスを起動)。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254。Claude Code 2.1.330 (`--allowedTools` に agent-lounge のツールと `Bash`)、Codex CLI 0.171.0 (サンドボックスなしの `-s danger-full-access` と、ネットワークを許可したサンドボックスの `-s workspace-write -c sandbox_workspace_write.network_access=true`)、Copilot CLI 1.0.114 (`--allow-all`)、Grok 1.0.92 (`--always-approve`)、agy 1.5.14 (`--dangerously-skip-permissions`) |
 | Codex の、ネットワークを許可していないサンドボックス (`-s workspace-write`) での利用 | 制限あり | 実機。Linux x86_64 (WSL 2)、Intel Xeon Gold 6254、Codex CLI 0.171.0。利用者が起動した常駐プロセスへの `call` は接続できず (終了コード 3。保存場所を `/tmp` の下にしても同じ)、エージェントによる `connection start --detach` も失敗します (既定の保存場所は書き込み不可、`/tmp` の下ではサーバーに接続不可)。ネットワークを許可していない間は使えません |
-| エージェントが `--detach` で起動した常駐プロセスが、コマンドの終了後も残るか | 未検証 | Codex の `-s workspace-write` (ネットワーク不許可) では起動そのものが失敗するため、確かめられませんでした |
-| Windows での実機の動作 (常駐プロセス、保存場所の権限、プロフィールの収集、切り離した起動) | 未検証 | 実機では確かめていません。CI の自動テスト (`windows-latest`) は通っています |
+| Codex の、ネットワークを許可したサンドボックス (`-s workspace-write -c sandbox_workspace_write.network_access=true`) で、エージェントが `--detach` で起動した常駐プロセス | 制限あり | 実機。Linux x86_64 (WSL 2)、Codex CLI 0.171.0。`connection start --detach` は終了コード 0 で戻りましたが、常駐プロセスは、起動したシェルの呼び出しの終わりで残らず、次のシェルの呼び出しの `call` は接続できませんでした (終了コード 3)。残ったソケットは、次の `connection start` で片付きました。利用者が自分の端末で常駐プロセスを起動する必要があります |
+| Windows での実機の動作 (前面と `--detach` の `connection start`、`connection status`、`connection list`、保存場所の権限、`tools`、`call lounge_help`、`call --as NAME lounge_join` でのプロフィール収集、`chat_send`、`chat_inbox`、起動した PowerShell を閉じた後の `--detach` の常駐プロセス、`connection stop`) | 検証済 | 実機 (PowerShell 7.7.0 からの手動の確認)。Windows 10.0.26300、`windows-amd64` の実行ファイル。保存場所 (`%LOCALAPPDATA%\agent-lounge-mcp\connections`) は、継承を切った本人だけの権限でした。`--detach` の常駐プロセスは、起動した PowerShell を閉じた後も残り、`connection stop` で終わりました |
 | macOS での実機の動作 | - | macOS は、実機の確認を行いません。自動テスト (CI の `macos-latest`) と机上の確認だけです。 |
 
 Table: 検証済みの範囲

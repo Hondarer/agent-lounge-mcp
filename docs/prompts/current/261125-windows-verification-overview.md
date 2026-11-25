@@ -1,10 +1,10 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-25 19:51:00 JST
+最終更新日時: 2026-11-25 20:14:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
-上流文書: `261124-help-text-result-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
+上流文書: `../past/261124-help-text-result-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
 下流文書: `261125-windows-verification-discussion.md` (検討用 Markdown)、`261125-windows-verification-lightadr.md` (簡易 ADR)、`261125-windows-verification-design.md` (最終仕様)、`261125-windows-verification-backlog.md` (残課題一覧)、`261125-windows-verification-validation.md` (確認の記録)。未作成の場合や、削除されている場合があります。
 再開手順: このファイルを開いたエージェントは、作業の前に agree-before-implement スキルを読み込んでください。この文書と、ユーザーが編集した最新の検討用 Markdown を読み直し、作業 WBS の `← **CURRENT**` の項目から再開します。最終更新エージェントのセッション情報や稼働 OS・最終更新日時が参照可能であれば再開時のコンテキストや環境差分の把握に利用し、別エージェントや別環境・別 OS からの引き継ぎ、担当変更によりセッションが見つからない場合も異常とせず、文書の記載から継続してください。`← **CURRENT**` の項目は処理が中止された項目である場合があり、どこまで進んでいたかは文書だけでは分かりません。対象成果物の内容を確認して実施済みの範囲を特定してから、作業を再開してください。`← **CURRENT**` がなく、作業 WBS がすべて完了 (✅) であれば、この案件の合意フローは完了しています。
 -->
@@ -21,7 +21,7 @@
 
 検討用 Markdown の版: 4
 
-状態: 作業中
+状態: 成果物の承認待ち
 
 ## 作業 WBS と進捗管理
 
@@ -30,7 +30,7 @@
 凡例: ⏸️ 未着手、🔄 実施中、🚫 ブロック中、⚠️ 要注意、✅ 完了。現在取り組んでいる項目の末尾に `← **CURRENT**` を付けます。
 
 - ✅ 1. 検討用 Markdown のための情報収集と質問の実施
-    - ✅ 1.1. 前提条件と要求事項の調査 (Windows の側のセッションとの疎通の確認、両方の環境の CLI の版、対策元 `261124-help-text-result-backlog.md` の候補の状態を「検討中」へ更新)
+    - ✅ 1.1. 前提条件と要求事項の調査 (Windows の側のセッションとの疎通の確認、両方の環境の CLI の版、対策元 `../past/261124-help-text-result-backlog.md` の候補の状態を「検討中」へ更新)
     - ✅ 1.2. 確認項目 [Q-001](261125-windows-verification-discussion.md#q-001-この案件で扱う残課題) から [Q-005](261125-windows-verification-discussion.md#q-005-cli-の利用の上限に達した場合) の作成
     - ✅ 1.3. Q&A ターンごとのユーザー回答の受付と記録
     - ✅ 1.4. 回答に基づく前提・制約の検証、簡易 ADR (`261125-windows-verification-lightadr.md`) への決定事項の反映、WBS の見直し、対策元 `backlog.md` への方針の反映
@@ -41,33 +41,33 @@
     - ✅ 3.1. `261125-windows-verification-design.md` の作成 (対策元 `backlog.md` への反映を含む)
     - ✅ 3.2. 最終仕様における受入条件と整合性の確認
     - ✅ 3.3. 最終仕様の承認の受付 (第 2 ゲート)
-- 🔄 4. 承認された最終仕様に従った作業の実施
+- ✅ 4. 承認された最終仕様に従った作業の実施
     - ✅ 4.1. 作業ブランチ `verify/windows-verification` の作成と作業前の記録のコミット (`1bbfcfb`)
     - ✅ 4.2. Windows 担当への手順の送付と、Windows の側での実行ファイルのビルド (最終仕様の 6 章。Windows の側で `1bbfcfb` からビルド)
-    - 🔄 4.3. Windows の側の確認 (Windows 担当の報告を受けて記録)
+    - ✅ 4.3. Windows の側の確認 (Windows 担当の報告を受けて記録)
         - ✅ 4.3.1. 日本語の名前とブランチの申告 (BL-014 (1)、BL-044 d・e・f。最終仕様の 3.1) (Claude Code、Copilot CLI、agy は検証済。Codex は PowerShell を起動できず、プロフィールが空。Grok は利用の上限で未検証)
         - ✅ 4.3.2. 日本語のファイル名の書き出し (BL-014 (2)。3.2)
         - ✅ 4.3.3. MCP を使わない CLI の方式 (BL-047 (1)。3.3)
-        - 🔄 4.3.4. Windows の Codex の作業中の表示 (BL-042。3.4。[Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) の A により、検証の基盤に完了の後だけ出る文字列を足す) ← **CURRENT**
-        - 🔄 4.3.5. agy 1.5.17 の確かめ直し (BL-040。3.5。Windows の側の利用者が実行を許可した。WSL の側の確認とポートが重なったため、127.0.0.1:7811 で実行中)
+        - ✅ 4.3.4. Windows の Codex の作業中の表示 (BL-042。3.4。[Q-006](261125-windows-verification-discussion.md#q-006-codex-の応答の完了の判定-bl-042) の A により、検証の基盤に完了の後だけ出る文字列を足す。基盤を直した: `c4613ad`)
+        - ✅ 4.3.5. agy 1.5.17 の確かめ直し (BL-040。3.5。1 回目の指示は 6 回とも `unknown tool`。直っていない)
     - ✅ 4.4. WSL の側の確認
         - ✅ 4.4.1. agy の確かめ直し (BL-040。4.1。確認の時点で 1.5.17 に上がっていた。1 回目の指示は 6 回とも `unknown tool`。直っていない)
         - ✅ 4.4.2. `shared` とルーム (BL-048。4.2。Codex、Copilot CLI、agy で 4 つの操作が通った。Grok は利用の上限で未検証)
         - ✅ 4.4.3. Codex のサンドボックスの `--detach` (BL-047 (2)。4.3。常駐プロセスは、起動したシェルの呼び出しの終わりで残らなかった)
-    - ⏸️ 4.5. 文書の「検証済みの範囲」の更新 (`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md`、`docs/ja/interactive-verification.md`。最終仕様の 5 章)
-    - ⏸️ 4.6. 確認の記録 `261125-windows-verification-validation.md` の作成
-    - ⏸️ 4.7. 受入条件への適合確認 (確認用の登録、サーバー、常駐プロセスの片付けを含む)
-    - ⏸️ 4.8. 簡易 ADR の最終確認
-    - ⏸️ 4.9. 残課題一覧 `261125-windows-verification-backlog.md` の再構築と整理 (対策元 `backlog.md` の最終状態・転記先の確定)
-- ⏸️ 5. 成果物の承認の受付 (第 3 ゲート)
-    - ⏸️ 5.1. 成果物・検証結果・残課題の提示
+    - ✅ 4.5. 文書の「検証済みの範囲」の更新 (`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md`、`docs/ja/interactive-verification.md`。最終仕様の 5 章)
+    - ✅ 4.6. 確認の記録 `261125-windows-verification-validation.md` の作成
+    - ✅ 4.7. 受入条件への適合確認 (確認用の登録、サーバー、常駐プロセスの片付けを含む)
+    - ✅ 4.8. 簡易 ADR の最終確認
+    - ✅ 4.9. 残課題一覧 `261125-windows-verification-backlog.md` の再構築と整理 (対策元 `backlog.md` の最終状態・転記先の確定)
+- 🔄 5. 成果物の承認の受付 (第 3 ゲート)
+    - 🔄 5.1. 成果物・検証結果・残課題の提示 ← **CURRENT**
     - ⏸️ 5.2. 成果物の承認の受付
 
 ## 対象と参照資料
 
 対象成果物: `docs/ja/user-guide.md` などの「検証済みの範囲」、確認の記録。確認で問題が見つかった場合の直しの扱いは、見つかった時点で確かめます。
 
-今回の対象範囲: 残課題一覧 `261124-help-text-result-backlog.md` のうち、BL-014、BL-044、BL-047 の (1) と (2)、BL-042、BL-040、BL-048 ([LADR-001](261125-windows-verification-lightadr.md#ladr-001-案件の対象))。
+今回の対象範囲: 残課題一覧 `../past/261124-help-text-result-backlog.md` のうち、BL-014、BL-044、BL-047 の (1) と (2)、BL-042、BL-040、BL-048 ([LADR-001](261125-windows-verification-lightadr.md#ladr-001-案件の対象))。
 
 書き込み可能な検討文書: この文書、検討用 Markdown (`261125-windows-verification-discussion.md`)、簡易 ADR (`261125-windows-verification-lightadr.md`)
 
@@ -128,7 +128,28 @@
 | 2026-11-25 19:45 | Windows の側の確認の中断 (BL-040) | Windows 担当のセッションの権限の判定が、agy の確認のスクリプトの実行を拒否した。Windows の側の利用者の判断待ち |
 | 2026-11-25 19:50 | 作業の再開 (BL-042) | Q-006 が解決済み (A。検討用 Markdown の版 4、簡易 ADR の LADR-005)。最終仕様の 3.4 に、基盤の直し方を書き足した |
 | 2026-11-25 19:50 | Windows の側の確認の再開 (BL-040) | Windows の側の利用者が実行を許可した (Windows 担当の報告)。ポート 7793 が WSL の側の確認と重なったため、127.0.0.1:7811 で実行 |
+| 2026-11-25 20:12 | 確認の完了 | Windows の側と WSL の側の確認を終え、確認用のサーバーと登録を片付けた (確認の記録の 5 章) |
+| 2026-11-25 20:13 | 残課題の整理 | 残課題一覧 `261125-windows-verification-backlog.md` を作成。対策元の残課題一覧の全項目が対応済みまたは次フェーズへ転記になったため、案件 `help-text-result` の記録を `../past/` へ移した |
 
 ## 反映と検証の記録
 
-未着手。
+| 受入条件 (最終仕様の 8 章) | 結果 |
+| --- | --- |
+| 1. 7 つの課題ごとの結果 | 適合。確認の記録 `261125-windows-verification-validation.md` の 2 章から 4 章 |
+| 2. 文書の検証済みの範囲 | 適合。`docs/ja/user-guide.md`、`docs/ja/cli-without-mcp.md`、`docs/ja/interactive-verification.md` |
+| 3. 登録、サーバー、常駐プロセスの片付け | 適合 (両方の側。確認の記録の 5 章) |
+| 4. 基盤の自己試験と CI | 自己試験は WSL (50 件) と Windows (49 件、1 件は省略) で通過。CI は push の後に確かめる |
+| 5. 残課題一覧 | 適合。`261125-windows-verification-backlog.md` (10 件) |
+
+Table: 受入条件への適合
+
+| 課題 | 結果 |
+| --- | --- |
+| BL-014 | 対応済み (Grok は BL-050) |
+| BL-044 | 対応済み (Codex のブランチが空の件は BL-051、Grok は BL-050) |
+| BL-047 | 対応済み ((2) は制限ありとして文書に記載) |
+| BL-042 | 対応済み (検証の基盤に `done` を追加。`c4613ad`) |
+| BL-040 | 直っていない (agy 1.5.17)。転記 |
+| BL-048 | 対応済み (Grok は BL-050) |
+
+Table: 課題ごとの結果
