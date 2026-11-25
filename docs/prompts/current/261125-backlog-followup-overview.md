@@ -1,7 +1,7 @@
 <!--
 生成元: agree-before-implement スキル
 文書種別: 全体管理文書 (overview)
-最終更新日時: 2026-11-25 22:00:00 JST
+最終更新日時: 2026-11-25 22:07:00 JST
 最終更新エージェント: claude code / セッション ID: session_01KJc53ReNCYHwdPaqjNwsEV
 稼働 OS: Linux (WSL)
 上流文書: `../past/261125-windows-verification-backlog.md` (対策元の残課題一覧)。削除されている場合があります。
@@ -122,6 +122,7 @@
 | 2026-11-25 21:15 | 作業の再開 (BL-051) | Q-007 が解決済み (A。検討用 Markdown の版 7、簡易 ADR の LADR-004 を書き換え)。最終仕様の 3.4 を書き換えた |
 | 2026-11-25 21:18 | 残課題の整理 | 残課題一覧 `261125-backlog-followup-backlog.md` を作成。対策元の全項目が次フェーズへ転記になったため、案件 `windows-verification` の記録を `../past/` へ移した |
 | 2026-11-25 22:00 | 第 3 ゲートの通過 | 利用者の「案件は承認。mainにマージしてプッシュ。」。`main` へマージ。あわせて、Windows の側の確認用のデータの後片付けの指示 |
+| 2026-11-25 22:07 | CI の確認と後片付け | `main` の CI (run 45619232198) が 3 つの OS とビルドで通過。Windows 担当が `%TEMP%\alm-wv` の削除、登録の確認、作業ブランチの削除、CLI の方式の残りのファイルの削除を報告 |
 
 ## 反映と検証の記録
 
@@ -131,7 +132,7 @@
 | 2. BL-051 の 5 回と原因の調査の記録 | 適合。確認の記録の 3 章 |
 | 3. agy の報告の文面 | 適合。確認の記録の 1 章。固有の情報を含まない |
 | 4. 文書の検証済みの範囲 | 適合。`docs/ja/user-guide.md`、`docs/ja/interactive-verification.md` |
-| 5. `go vet`、`go test`、CI | `go vet ./...` (Linux と `GOOS=windows`) と `go test ./...` は通過。CI は `main` へのマージの後に確かめる |
+| 5. `go vet`、`go test`、CI | 適合。`go vet ./...` (Linux と `GOOS=windows`) と `go test ./...` は通過。CI は 3 つの OS で通過 (run 45619232198、`d418731`) |
 | 6. 残課題一覧 | 適合。`261125-backlog-followup-backlog.md` (10 件) |
 
 Table: 受入条件への適合

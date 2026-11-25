@@ -88,3 +88,12 @@ Table: 原因の調査 (Windows 担当の報告)
 
 - WSL の側: 確認用のサーバーは止めました。5 つの CLI の `mcp list` に agent-lounge はありません。
 - Windows の側 (Windows 担当の報告): Codex の登録は外し、サーバーは止め、`alm.exe` のプロセスは残っていません。確認用のデータとログは `%TEMP%\alm-wv` にあります。
+- Windows の側 (Windows 担当の報告。案件の承認の後): `%TEMP%\alm-wv` を削除しました (206 ファイル)。`%LOCALAPPDATA%\agent-lounge-mcp\connections` に残っていた `default.lock`、`win-d.lock`、`win-d.log` を削除しました。作業フォルダーは `main` の `d418731` で、マージ済みの作業ブランチを削除しました。
+
+## 5. CI
+
+| 項目 | 結果 | 環境 |
+| --- | --- | --- |
+| CI (3 つの OS とビルド。基盤の自己試験を含む) | 通過 | GitHub Actions の `ubuntu-latest`、`windows-latest`、`macos-latest` (run 45619232198、`main` のマージのコミット `d418731`) |
+
+Table: CI の結果
